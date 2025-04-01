@@ -1,0 +1,12 @@
+*.o
+*.a
+*.so
+*.exe
+*.out
+*.test
+*.log
+config.*.yaml
+!config.example.yaml
+.env
+vendor/
+build/
