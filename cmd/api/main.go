@@ -19,6 +19,7 @@ import (
 	"your_project/internal/config" // Adjust import path
 	"your_project/internal/adapter/handler/http/middleware" // Adjust import path for our custom middleware
 	httpadapter "your_project/internal/adapter/handler/http" // Alias for http handler package
+	minioadapter "your_project/internal/adapter/service/minio" // Alias for minio adapter
 	repo "your_project/internal/adapter/repository/postgres"
 	// service "your_project/internal/adapter/service" // Alias if needed for google/minio later
 	"your_project/internal/usecase"
@@ -60,7 +61,9 @@ func main() {
 	
 	// Repositories
 	userRepo := repo.NewUserRepository(dbPool, appLogger)
-	// TODO: Initialize other repositories (AudioTrack, Collection, etc.)
+	trackRepo := repo.NewAudioTrackRepository(dbPool, appLogger) // New
+	collectionRepo := repo.NewAudioCollectionRepository(dbPool, appLogger) // New
+	// TODO: Initialize ProgressRepo, BookmarkRepo (Phase 6)
 
 	// Services / Helpers
 	secHelper, err := security.NewSecurity(cfg.JWT.SecretKey, appLogger)
@@ -68,19 +71,25 @@ func main() {
 		appLogger.Error("Failed to initialize security helper", "error", err)
 		os.Exit(1)
 	}
+	storageService, err := minioadapter.NewMinioStorageService(cfg.Minio, appLogger) // New
+	if err != nil {
+		appLogger.Error("Failed to initialize MinIO storage service", "error", err)
+		os.Exit(1)
+	}
 	// TODO: Initialize ExternalAuthService (Google) - Phase 4
-	// TODO: Initialize FileStorageService (MinIO) - Phase 5
 
 	// Validator
 	validator := validation.New()
 
 	// Use Cases
 	authUseCase := usecase.NewAuthUseCase(cfg.JWT, userRepo, secHelper, nil, appLogger) // Pass nil for extAuth for now
-	// TODO: Initialize other use cases
+	audioUseCase := usecase.NewAudioContentUseCase(cfg.Minio, trackRepo, collectionRepo, storageService, appLogger) // New
+	// TODO: Initialize UserActivityUseCase (Phase 6)
 
 	// HTTP Handlers
 	authHandler := httpadapter.NewAuthHandler(authUseCase, validator)
-	// TODO: Initialize other handlers
+	audioHandler := httpadapter.NewAudioHandler(audioUseCase, validator) // New
+	// TODO: Initialize UserActivityHandler (Phase 6)
 
 	appLogger.Info("Dependencies initialized successfully")
 
@@ -120,33 +129,41 @@ func main() {
 
 	// API v1 Routes
 	router.Route("/api/v1", func(r chi.Router) {
-		// Public routes (Auth)
+		// Public routes
 		r.Group(func(r chi.Router) {
-			// No auth middleware here
 			r.Post("/auth/register", authHandler.Register)
 			r.Post("/auth/login", authHandler.Login)
-			r.Post("/auth/google/callback", authHandler.GoogleCallback) // Keep it here, handler deals with logic
+			r.Post("/auth/google/callback", authHandler.GoogleCallback)
+
+			// Public Audio Routes
+			r.Get("/audio/tracks", audioHandler.ListTracks)           // List public tracks
+			r.Get("/audio/tracks/{trackId}", audioHandler.GetTrackDetails) // Get details (auth check maybe inside usecase/handler for private)
+			// Maybe list public collections?
+			// r.Get("/audio/collections", audioHandler.ListPublicCollections)
 		})
 
-		// Protected routes (require authentication)
+		// Protected routes
 		r.Group(func(r chi.Router) {
-			// Apply JWT authentication middleware
 			r.Use(middleware.Authenticator(secHelper))
 
-			// TODO: Add protected endpoints here
-			// Example: Get current user profile
-			r.Get("/users/me", func(w http.ResponseWriter, r *http.Request) {
-				userID, ok := middleware.GetUserIDFromContext(r.Context())
-				if !ok {
-					// Should not happen if Authenticator middleware worked correctly
-					httputil.RespondError(w, r, domain.ErrUnauthenticated)
-					return
-				}
-				// TODO: Implement handler to fetch user details using userID
-				w.WriteHeader(http.StatusOK)
-				fmt.Fprintf(w, "Authenticated User ID: %s", userID)
-			})
-			// TODO: Mount other protected resource handlers (audio, bookmarks, etc.)
+			// User Profile
+			r.Get("/users/me", func(w http.ResponseWriter, r *http.Request) { /* ... Placeholder ... */ })
+			// TODO: Add PUT /users/me
+
+			// Collections (Authenticated Actions)
+			r.Post("/audio/collections", audioHandler.CreateCollection)
+			r.Get("/audio/collections/{collectionId}", audioHandler.GetCollectionDetails) // Re-add here for authenticated access/ownership check
+			r.Put("/audio/collections/{collectionId}", audioHandler.UpdateCollectionMetadata)
+			r.Delete("/audio/collections/{collectionId}", audioHandler.DeleteCollection)
+			r.Put("/audio/collections/{collectionId}/tracks", audioHandler.UpdateCollectionTracks)
+			// TODO: Add DELETE /audio/collections/{collectionId}/tracks/{trackId} ? (or handle via UpdateCollectionTracks)
+
+			// TODO: Add routes for Progress, Bookmarks (Phase 6)
+			// r.Post("/users/me/progress", ...)
+			// r.Get("/bookmarks", ...)
+			// r.Post("/bookmarks", ...)
+
+			// TODO: Maybe add protected routes for uploading tracks, managing own tracks?
 		})
 	})
 
