@@ -1,0 +1,53 @@
+# config.example.yaml
+# Example configuration file. Copy this to config.<env>.yaml (e.g., config.dev.yaml)
+# and fill in the actual values. DO NOT COMMIT sensitive data.
+# Values can also be overridden by environment variables (e.g., SERVER_PORT=9000).
+
+server:
+  port: "8080"
+  readTimeout: 5s
+  writeTimeout: 10s
+  idleTimeout: 120s
+
+database:
+  # Example DSN for PostgreSQL. Replace with your actual connection string.
+  # Use environment variable DATABASE_DSN for production.
+  dsn: "postgresql://user:password@localhost:5432/language_learner_db?sslmode=disable"
+  maxOpenConns: 25
+  maxIdleConns: 25
+  connMaxLifetime: 5m
+  connMaxIdleTime: 5m
+
+jwt:
+  # Use environment variable JWT_SECRETKEY for production.
+  # Generate a strong secret key (e.g., using openssl rand -base64 32)
+  secretKey: "your-very-strong-and-secret-jwt-key" # CHANGE THIS!
+  accessTokenExpiry: 1h
+  # refreshTokenExpiry: 720h # ~30 days
+
+minio:
+  # Use environment variables MINIO_ENDPOINT, MINIO_ACCESSKEYID, MINIO_SECRETACCESSKEY for production.
+  endpoint: "localhost:9000" # Your MinIO server endpoint
+  accessKeyId: "minioadmin" # Your MinIO access key
+  secretAccessKey: "minioadmin" # Your MinIO secret key
+  useSsl: false # Set to true if MinIO uses HTTPS
+  bucketName: "language-audio" # Name of the bucket to store audio files
+  presignExpiry: 1h # Default expiry for presigned URLs
+
+google:
+  # Use environment variables GOOGLE_CLIENTID, GOOGLE_CLIENTSECRET for production.
+  clientId: "your-google-client-id.apps.googleusercontent.com" # CHANGE THIS!
+  clientSecret: "YOUR_GOOGLE_CLIENT_SECRET" # CHANGE THIS!
+
+log:
+  level: "debug" # Set to "info" or "warn" for production
+  json: false   # Set to true for production logging
+
+cors:
+  # For development, allowing localhost is common. Adjust for your frontend URL.
+  # Use environment variable CORS_ALLOWEDORIGINS="http://your-frontend.com,https://your-frontend.com" for production.
+  allowedOrigins: ["http://localhost:3000", "http://127.0.0.1:3000"] # Example for local React dev server
+  allowedMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+  allowedHeaders: ["Accept", "Authorization", "Content-Type", "X-CSRF-Token"]
+  allowCredentials: true
+  maxAge: 300
