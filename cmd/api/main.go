@@ -12,7 +12,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-chi/chi/v5" // Import Chi
+	chimiddleware "github.com/go-chi/chi/v5/middleware" // Chi's built-in middleware
+
 	"your_project/internal/config" // Adjust import path
+	"your_project/internal/adapter/handler/http/middleware" // Adjust import path for our custom middleware
 	"your_project/pkg/logger"      // Adjust import path
 )
 
@@ -32,9 +36,8 @@ func main() {
 
 	// --- Logger ---
 	appLogger := logger.NewLogger(cfg.Log)
+	slog.SetDefault(appLogger) // Set as default logger
 	appLogger.Info("Configuration loaded")
-	// Set as default logger for slog (optional, but convenient)
-	slog.SetDefault(appLogger)
 
 	// --- Placeholder for Dependency Initialization ---
 	appLogger.Info("Initializing dependencies...")
@@ -47,27 +50,41 @@ func main() {
 	// TODO: Initialize Handlers (Phase 3+)
 	appLogger.Info("Dependencies initialized (Placeholder)")
 
-	// --- Placeholder for HTTP Router Setup ---
+	// --- HTTP Router Setup ---
 	appLogger.Info("Setting up HTTP router...")
-	// TODO: Initialize Chi router (Phase 1.10)
-	// TODO: Setup middleware (Phase 1.10 / Phase 3)
-	// TODO: Register routes and handlers (Phase 1.10 / Phase 3+)
-	// router := chi.NewRouter() // Example placeholder
-	router := http.NewServeMux() // Temporary basic mux
-	router.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+	router := chi.NewRouter()
+
+	// --- Middleware Setup ---
+	// Order matters!
+	router.Use(middleware.Recoverer)               // Recover from panics first
+	router.Use(middleware.RequestID)               // Add request ID to context and header
+	router.Use(middleware.RequestLogger)           // Log requests (uses request ID)
+	router.Use(chimiddleware.RealIP)               // Use X-Forwarded-For or X-Real-IP
+	router.Use(chimiddleware.StripSlashes)         // Remove trailing slashes
+	// TODO: Add CORS middleware (using chi/cors or custom based on config)
+	// TODO: Add Timeout middleware (chimiddleware.Timeout)
+	// TODO: Add Auth middleware (for protected routes) - Phase 3
+
+	// --- Routes ---
+	router.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, "OK")
-	}) // Basic health check
-	appLogger.Info("HTTP router setup complete (Placeholder)")
+	})
+
+	// TODO: Mount API v1 routes under /api/v1 prefix (Phase 3+)
+	// router.Mount("/api/v1", apiV1Routes())
+
+	appLogger.Info("HTTP router setup complete")
 
 	// --- HTTP Server ---
 	srv := &http.Server{
 		Addr:         ":" + cfg.Server.Port,
-		Handler:      router, // Use the actual router once initialized
+		Handler:      router, // Use Chi router
 		ReadTimeout:  cfg.Server.ReadTimeout,
 		WriteTimeout: cfg.Server.WriteTimeout,
 		IdleTimeout:  cfg.Server.IdleTimeout,
-		ErrorLog:     slog.NewLogLogger(appLogger.Handler(), slog.LevelError), // Redirect standard error log
+		ErrorLog:     slog.NewLogLogger(appLogger.Handler(), slog.LevelError),
 	}
 
 	// Initializing the server in a goroutine so that
@@ -103,3 +120,15 @@ func main() {
 
 	appLogger.Info("Server exiting")
 }
+
+// Placeholder for API routes function (to be implemented later)
+// func apiV1Routes() http.Handler {
+// 	r := chi.NewRouter()
+//  // TODO: Add middleware specific to v1 (e.g., Auth)
+//	// r.Use(middleware.Authenticator)
+//
+//  // TODO: Mount resource-specific routers (auth, audio, user, etc.)
+// 	// r.Mount("/auth", authRoutes())
+// 	// r.Mount("/audio", audioRoutes())
+// 	return r
+// }
