@@ -6,9 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings" // Import strings package
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"   // Import pgconn for PgError
+	"github.com/jackc/pgx/v5/pgerrcode" // Import pgerrcode for error codes
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"your_project/internal/domain" // Adjust import path
@@ -48,21 +51,27 @@ func (r *UserRepository) Create(ctx context.Context, user *domain.User) error {
 	)
 
 	if err != nil {
-        var pgErr *pgconn.PgError
-        if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
-            // Check which constraint was violated
-            if strings.Contains(pgErr.ConstraintName, "users_email_key") {
-                return fmt.Errorf("creating user: %w: email already exists", domain.ErrConflict)
-            }
-            if strings.Contains(pgErr.ConstraintName, "users_google_id_key") {
-                 return fmt.Errorf("creating user: %w: google ID already exists", domain.ErrConflict)
-            }
-            // Generic conflict if constraint name is unknown
-            return fmt.Errorf("creating user: %w: resource already exists", domain.ErrConflict)
-        }
-        r.logger.ErrorContext(ctx, "Error creating user", "error", err, "userID", user.ID)
-        return fmt.Errorf("creating user: %w", err) // Default internal error
-    }
+		var pgErr *pgconn.PgError
+		// Check if the error is a PostgreSQL error and specifically a unique_violation
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+			// Check which constraint was violated based on its name (defined in migration)
+			// Common constraint names are like <table_name>_<column_name>_key
+			if strings.Contains(pgErr.ConstraintName, "users_email_key") {
+				// Specific error message for email conflict
+				return fmt.Errorf("creating user: %w: email already exists", domain.ErrConflict)
+			}
+			if strings.Contains(pgErr.ConstraintName, "users_google_id_key") {
+				// Specific error message for Google ID conflict
+				return fmt.Errorf("creating user: %w: google ID already exists", domain.ErrConflict)
+			}
+			// Generic conflict if constraint name is unknown or not specifically handled
+			r.logger.WarnContext(ctx, "Unique constraint violation on user creation", "constraint", pgErr.ConstraintName, "userID", user.ID)
+			return fmt.Errorf("creating user: %w: resource conflict on unique field", domain.ErrConflict)
+		}
+		// If it's not a unique violation, log as internal error
+		r.logger.ErrorContext(ctx, "Error creating user", "error", err, "userID", user.ID)
+		return fmt.Errorf("creating user: %w", err)
+	}
 	r.logger.InfoContext(ctx, "User created successfully", "userID", user.ID, "email", user.Email.String())
 	return nil
 }
@@ -145,7 +154,18 @@ func (r *UserRepository) Update(ctx context.Context, user *domain.User) error {
 	)
 
 	if err != nil {
-		// TODO: Check for unique constraint violation (email, google_id) and return domain.ErrConflict
+		var pgErr *pgconn.PgError
+		// Check for unique constraint violation on update (e.g., changing email to an existing one)
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+			if strings.Contains(pgErr.ConstraintName, "users_email_key") {
+				return fmt.Errorf("updating user: %w: email already exists", domain.ErrConflict)
+			}
+			if strings.Contains(pgErr.ConstraintName, "users_google_id_key") {
+				return fmt.Errorf("updating user: %w: google ID already exists", domain.ErrConflict)
+			}
+			r.logger.WarnContext(ctx, "Unique constraint violation on user update", "constraint", pgErr.ConstraintName, "userID", user.ID)
+			return fmt.Errorf("updating user: %w: resource conflict on unique field", domain.ErrConflict)
+		}
 		r.logger.ErrorContext(ctx, "Error updating user", "error", err, "userID", user.ID)
 		return fmt.Errorf("updating user: %w", err)
 	}

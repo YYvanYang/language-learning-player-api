@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"   // Import
+	"github.com/jackc/pgx/v5/pgerrcode" // Import
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lib/pq" // Using lib/pq for array handling with pgx (can be tricky otherwise)
 
@@ -58,7 +60,18 @@ func (r *AudioTrackRepository) Create(ctx context.Context, track *domain.AudioTr
 	)
 
 	if err != nil {
-		// TODO: Check for unique constraint violation (minio_object_key)
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+			// Assuming the constraint name follows the pattern <table_name>_<column_name>_key
+			if strings.Contains(pgErr.ConstraintName, "audio_tracks_minio_object_key_key") {
+				return fmt.Errorf("creating audio track: %w: object key '%s' already exists", domain.ErrConflict, track.MinioObjectKey)
+			}
+			r.logger.WarnContext(ctx, "Unique constraint violation on audio track creation", "constraint", pgErr.ConstraintName, "trackID", track.ID)
+			return fmt.Errorf("creating audio track: %w: resource conflict on unique field", domain.ErrConflict)
+		}
+		// Handle FK violations if needed (e.g., uploader_id)
+		// if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.ForeignKeyViolation { ... }
+
 		r.logger.ErrorContext(ctx, "Error creating audio track", "error", err, "trackID", track.ID)
 		return fmt.Errorf("creating audio track: %w", err)
 	}
@@ -290,7 +303,15 @@ func (r *AudioTrackRepository) Update(ctx context.Context, track *domain.AudioTr
 	)
 
 	if err != nil {
-		// TODO: Check unique constraint violation
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+			if strings.Contains(pgErr.ConstraintName, "audio_tracks_minio_object_key_key") {
+				return fmt.Errorf("updating audio track: %w: object key '%s' already exists", domain.ErrConflict, track.MinioObjectKey)
+			}
+			r.logger.WarnContext(ctx, "Unique constraint violation on audio track update", "constraint", pgErr.ConstraintName, "trackID", track.ID)
+			return fmt.Errorf("updating audio track: %w: resource conflict on unique field", domain.ErrConflict)
+		}
+		// Handle FK violations if needed
 		r.logger.ErrorContext(ctx, "Error updating audio track", "error", err, "trackID", track.ID)
 		return fmt.Errorf("updating audio track: %w", err)
 	}
