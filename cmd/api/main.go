@@ -63,7 +63,8 @@ func main() {
 	userRepo := repo.NewUserRepository(dbPool, appLogger)
 	trackRepo := repo.NewAudioTrackRepository(dbPool, appLogger) // New
 	collectionRepo := repo.NewAudioCollectionRepository(dbPool, appLogger) // New
-	// TODO: Initialize ProgressRepo, BookmarkRepo (Phase 6)
+	progressRepo := repo.NewPlaybackProgressRepository(dbPool, appLogger) // New
+	bookmarkRepo := repo.NewBookmarkRepository(dbPool, appLogger)         // New
 
 	// Services / Helpers
 	secHelper, err := security.NewSecurity(cfg.JWT.SecretKey, appLogger)
@@ -84,12 +85,12 @@ func main() {
 	// Use Cases
 	authUseCase := usecase.NewAuthUseCase(cfg.JWT, userRepo, secHelper, nil, appLogger) // Pass nil for extAuth for now
 	audioUseCase := usecase.NewAudioContentUseCase(cfg.Minio, trackRepo, collectionRepo, storageService, appLogger) // New
-	// TODO: Initialize UserActivityUseCase (Phase 6)
+	activityUseCase := usecase.NewUserActivityUseCase(progressRepo, bookmarkRepo, trackRepo, appLogger) // New
 
 	// HTTP Handlers
 	authHandler := httpadapter.NewAuthHandler(authUseCase, validator)
 	audioHandler := httpadapter.NewAudioHandler(audioUseCase, validator) // New
-	// TODO: Initialize UserActivityHandler (Phase 6)
+	activityHandler := httpadapter.NewUserActivityHandler(activityUseCase, validator) // New
 
 	appLogger.Info("Dependencies initialized successfully")
 
@@ -158,10 +159,14 @@ func main() {
 			r.Put("/audio/collections/{collectionId}/tracks", audioHandler.UpdateCollectionTracks)
 			// TODO: Add DELETE /audio/collections/{collectionId}/tracks/{trackId} ? (or handle via UpdateCollectionTracks)
 
-			// TODO: Add routes for Progress, Bookmarks (Phase 6)
-			// r.Post("/users/me/progress", ...)
-			// r.Get("/bookmarks", ...)
-			// r.Post("/bookmarks", ...)
+			// User Activity Routes (New)
+			r.Post("/users/me/progress", activityHandler.RecordProgress)
+			r.Get("/users/me/progress", activityHandler.ListProgress)       // Get list of all progress
+            r.Get("/users/me/progress/{trackId}", activityHandler.GetProgress) // Get progress for specific track
+
+			r.Post("/bookmarks", activityHandler.CreateBookmark)
+			r.Get("/bookmarks", activityHandler.ListBookmarks) // List bookmarks (can filter by trackId query param)
+			r.Delete("/bookmarks/{bookmarkId}", activityHandler.DeleteBookmark)
 
 			// TODO: Maybe add protected routes for uploading tracks, managing own tracks?
 		})
