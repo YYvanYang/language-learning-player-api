@@ -47,6 +47,16 @@ func NewAudioHandler(uc AudioContentUseCase, v *validation.Validator) *AudioHand
 // --- Track Handlers ---
 
 // GetTrackDetails handles GET /api/v1/audio/tracks/{trackId}
+// @Summary Get audio track details
+// @Description Retrieves details for a specific audio track, including metadata and a temporary playback URL.
+// @Tags Audio Tracks
+// @Produce json
+// @Param trackId path string true "Audio Track UUID" Format(uuid) // Path parameter
+// @Success 200 {object} dto.AudioTrackDetailsResponseDTO "Audio track details found"
+// @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Track ID Format"
+// @Failure 404 {object} httputil.ErrorResponseDTO "Track Not Found"
+// @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
+// @Router /audio/tracks/{trackId} [get]
 func (h *AudioHandler) GetTrackDetails(w http.ResponseWriter, r *http.Request) {
 	trackIDStr := chi.URLParam(r, "trackId")
 	trackID, err := domain.TrackIDFromString(trackIDStr)
