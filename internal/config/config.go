@@ -78,9 +78,35 @@ type CorsConfig struct {
 
 // LoadConfig reads configuration from file or environment variables.
 func LoadConfig(path string) (config Config, err error) {
+	// Determine environment (e.g., from env var)
+    env := os.Getenv("APP_ENV")
+    if env == "" {
+        env = "development" // Default environment
+    }
+
 	viper.AddConfigPath(path)         // Path to look for the config file in
-	viper.SetConfigName("config")     // Name of config file (without extension)
+	viper.SetConfigName("config." + env) // e.g., config.development, config.production
 	viper.SetConfigType("yaml")       // REQUIRED if the config file does not have the extension in the name
+
+	// Also try loading the base config file (config.yaml) for shared defaults
+    viper.SetConfigName("config")
+    if errReadBase := viper.MergeInConfig(); errReadBase != nil {
+        if _, ok := errReadBase.(viper.ConfigFileNotFoundError); !ok {
+            fmt.Fprintf(os.Stderr, "Warning: could not read base config file: %v\n", errReadBase)
+        }
+        // Base file not required, might not exist
+    }
+
+    // Read environment-specific config, overriding base config
+    if errReadEnv := viper.MergeInConfig(); errReadEnv != nil {
+         if _, ok := errReadEnv.(viper.ConfigFileNotFoundError); ok {
+            // Env specific file not found, rely on base/env vars/defaults
+            fmt.Fprintf(os.Stderr, "Warning: environment config file 'config.%s.yaml' not found. Relying on base/defaults/env.\n", env)
+         } else {
+             // Other error reading env config file
+             return config, fmt.Errorf("error reading config file 'config.%s.yaml': %w", env, errReadEnv)
+         }
+    }
 
 	viper.AutomaticEnv()              // Read in environment variables that match
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_")) // Replace dots with underscores for env var names (e.g., server.port -> SERVER_PORT)
@@ -88,19 +114,16 @@ func LoadConfig(path string) (config Config, err error) {
 	// Set default values (optional but recommended)
 	setDefaultValues()
 
-	err = viper.ReadInConfig()        // Find and read the config file
-	if err != nil {
-		// If config file not found, continue (might rely solely on env vars or defaults)
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			// Config file was found but another error was produced
-			return config, err
-		}
-		// If file not found, that's okay if env vars are set or defaults are sufficient.
-		// We can add a log here later if needed.
-	}
+	// Unmarshal the final merged configuration
+    err = viper.Unmarshal(&config)
+    if err != nil {
+         return config, fmt.Errorf("failed to unmarshal configuration: %w", err)
+    }
 
-	err = viper.Unmarshal(&config)    // Unmarshal config into struct
-	return config, err
+    // Set log level based on environment if not explicitly set? (optional)
+    // if viper.GetString("log.level") == "" { ... }
+
+    return config, nil
 }
 
 func setDefaultValues() {

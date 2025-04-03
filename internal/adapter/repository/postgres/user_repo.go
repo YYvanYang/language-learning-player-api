@@ -48,19 +48,21 @@ func (r *UserRepository) Create(ctx context.Context, user *domain.User) error {
 	)
 
 	if err != nil {
-		// TODO: Check for unique constraint violation (email, google_id) and return domain.ErrConflict
-		// This often requires checking the specific error code from pgx (e.g., pgerrcode.UniqueViolation)
-		// Example:
-		// var pgErr *pgconn.PgError
-		// if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
-		//    if strings.Contains(pgErr.ConstraintName, "email") { // Check constraint name
-		// 		  return fmt.Errorf("creating user: %w: email already exists", domain.ErrConflict)
-		//    }
-		//    // Handle other unique violations if necessary
-		// }
-		r.logger.ErrorContext(ctx, "Error creating user", "error", err, "userID", user.ID)
-		return fmt.Errorf("creating user: %w", err)
-	}
+        var pgErr *pgconn.PgError
+        if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+            // Check which constraint was violated
+            if strings.Contains(pgErr.ConstraintName, "users_email_key") {
+                return fmt.Errorf("creating user: %w: email already exists", domain.ErrConflict)
+            }
+            if strings.Contains(pgErr.ConstraintName, "users_google_id_key") {
+                 return fmt.Errorf("creating user: %w: google ID already exists", domain.ErrConflict)
+            }
+            // Generic conflict if constraint name is unknown
+            return fmt.Errorf("creating user: %w: resource already exists", domain.ErrConflict)
+        }
+        r.logger.ErrorContext(ctx, "Error creating user", "error", err, "userID", user.ID)
+        return fmt.Errorf("creating user: %w", err) // Default internal error
+    }
 	r.logger.InfoContext(ctx, "User created successfully", "userID", user.ID, "email", user.Email.String())
 	return nil
 }

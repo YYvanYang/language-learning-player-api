@@ -15,11 +15,13 @@ import (
 	"github.com/go-chi/chi/v5" // Import Chi
 	chimiddleware "github.com/go-chi/chi/v5/middleware" // Chi's built-in middleware
 	"github.com/go-chi/cors" // Import chi cors
+	"golang.org/x/time/rate"
 
 	"your_project/internal/config" // Adjust import path
 	"your_project/internal/adapter/handler/http/middleware" // Adjust import path for our custom middleware
 	httpadapter "your_project/internal/adapter/handler/http" // Alias for http handler package
 	minioadapter "your_project/internal/adapter/service/minio" // Alias for minio adapter
+	googleauthadapter "your_project/internal/adapter/service/google_auth" // New import
 	repo "your_project/internal/adapter/repository/postgres"
 	// service "your_project/internal/adapter/service" // Alias if needed for google/minio later
 	"your_project/internal/usecase"
@@ -77,7 +79,13 @@ func main() {
 		appLogger.Error("Failed to initialize MinIO storage service", "error", err)
 		os.Exit(1)
 	}
-	// TODO: Initialize ExternalAuthService (Google) - Phase 4
+	googleAuthService, err := googleauthadapter.NewGoogleAuthService(cfg.Google.ClientID, appLogger) // New
+	if err != nil {
+		appLogger.Error("Failed to initialize Google Auth service", "error", err)
+		// Decide if this is fatal. If Google login is optional, maybe just log a warning?
+		// If mandatory or a core feature, exit.
+		os.Exit(1) // Assuming it's important
+	}
 
 	// Validator
 	validator := validation.New()
@@ -104,6 +112,13 @@ func main() {
 	router.Use(middleware.RequestID)               // Add request ID to context and header
 	router.Use(middleware.RequestLogger)           // Log requests (uses request ID)
 	router.Use(chimiddleware.RealIP)               // Use X-Forwarded-For or X-Real-IP
+
+	// Rate Limiter (Example: 10 requests/sec, burst of 20 per IP)
+    ipLimiter := middleware.NewIPRateLimiter(rate.Limit(10), 20)
+    // Optional: Run cleanup in background (requires better cleanup logic in limiter)
+    // go ipLimiter.CleanUpOldLimiters(10*time.Minute, 1*time.Hour)
+    router.Use(middleware.RateLimit(ipLimiter)) // Add rate limiting middleware
+	
 	router.Use(chimiddleware.StripSlashes)         // Remove trailing slashes
 	
 	router.Use(chimiddleware.Timeout(60 * time.Second)) // Example: 60s request timeout
