@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"time"
 
+	"path/filepath" // Need this
+
 	"github.com/go-chi/chi/v5" // Import Chi
 	chimiddleware "github.com/go-chi/chi/v5/middleware" // Chi's built-in middleware
 	"github.com/go-chi/cors" // Import chi cors
@@ -118,7 +120,7 @@ func main() {
     // Optional: Run cleanup in background (requires better cleanup logic in limiter)
     // go ipLimiter.CleanUpOldLimiters(10*time.Minute, 1*time.Hour)
     router.Use(middleware.RateLimit(ipLimiter)) // Add rate limiting middleware
-	
+
 	router.Use(chimiddleware.StripSlashes)         // Remove trailing slashes
 	
 	router.Use(chimiddleware.Timeout(60 * time.Second)) // Example: 60s request timeout
@@ -185,6 +187,25 @@ func main() {
 
 			// TODO: Maybe add protected routes for uploading tracks, managing own tracks?
 		})
+	})
+
+	// Serve OpenAPI spec and Swagger UI
+	docsDir := "./docs" // Path to your docs folder
+	specFile := "/openapi.yaml"
+	uiPath := "/docs/swagger-ui/"
+
+	// Route for the spec file
+	router.Get(specFile, func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(docsDir, specFile))
+	})
+
+	// Route for Swagger UI static files
+	fs := http.FileServer(http.Dir(filepath.Join(docsDir, "swagger-ui")))
+	router.Handle(uiPath+"*", http.StripPrefix(uiPath, fs))
+
+	// Optional: Redirect /docs to /docs/swagger-ui/
+	router.Get("/docs", func(w http.ResponseWriter, r *http.Request){
+	   http.Redirect(w, r, uiPath, http.StatusMovedPermanently)
 	})
 
 	appLogger.Info("HTTP router setup complete")
