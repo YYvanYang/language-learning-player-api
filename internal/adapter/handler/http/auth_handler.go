@@ -38,7 +38,17 @@ func NewAuthHandler(uc AuthUseCase, v *validation.Validator) *AuthHandler {
 }
 
 // Register handles user registration requests.
-// POST /api/v1/auth/register
+// @Summary Register a new user
+// @Description Registers a new user account using email and password.
+// @Tags Authentication
+// @Accept json                   // Consumes JSON
+// @Produce json                  // Produces JSON
+// @Param register body dto.RegisterRequestDTO true "User Registration Info" // Input parameter: name, in, type, required, description
+// @Success 201 {object} dto.AuthResponseDTO "Registration successful, returns JWT" // Success response: code, type, description
+// @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Input"                // Failure response: code, type, description
+// @Failure 409 {object} httputil.ErrorResponseDTO "Conflict - Email Exists"
+// @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
+// @Router /auth/register [post]  // Route path and method
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req dto.RegisterRequestDTO
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -67,7 +77,17 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 }
 
 // Login handles user login requests.
-// POST /api/v1/auth/login
+// @Summary Login a user
+// @Description Authenticates a user with email and password, returns a JWT token.
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param login body dto.LoginRequestDTO true "User Login Credentials"
+// @Success 200 {object} dto.AuthResponseDTO "Login successful, returns JWT"
+// @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Input"
+// @Failure 401 {object} httputil.ErrorResponseDTO "Authentication Failed"
+// @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
+// @Router /auth/login [post]
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req dto.LoginRequestDTO
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

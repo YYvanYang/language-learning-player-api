@@ -208,6 +208,8 @@ func main() {
 	   http.Redirect(w, r, uiPath, http.StatusMovedPermanently)
 	})
 
+	router.Get("/swagger/*", httpSwagger.WrapHandler) // Use httpSwagger
+
 	appLogger.Info("HTTP router setup complete")
 
 	// --- HTTP Server ---

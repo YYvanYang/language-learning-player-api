@@ -232,6 +232,18 @@ func (h *UserActivityHandler) ListBookmarks(w http.ResponseWriter, r *http.Reque
 }
 
 // DeleteBookmark handles DELETE /api/v1/bookmarks/{bookmarkId}
+// @Summary Delete a bookmark
+// @Description Deletes a specific bookmark owned by the current user.
+// @Tags User Activity
+// @Produce json
+// @Security BearerAuth // Apply the security definition defined in main.go
+// @Param bookmarkId path string true "Bookmark UUID" Format(uuid)
+// @Success 204 "Bookmark deleted successfully"
+// @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
+// @Failure 403 {object} httputil.ErrorResponseDTO "Forbidden (Not Owner)"
+// @Failure 404 {object} httputil.ErrorResponseDTO "Bookmark Not Found"
+// @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
+// @Router /bookmarks/{bookmarkId} [delete]
 func (h *UserActivityHandler) DeleteBookmark(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserIDFromContext(r.Context())
 	if !ok {

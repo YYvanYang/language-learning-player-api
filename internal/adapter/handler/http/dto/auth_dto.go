@@ -5,9 +5,9 @@ package dto
 
 // RegisterRequestDTO defines the expected JSON body for user registration.
 type RegisterRequestDTO struct {
-	Email    string `json:"email" validate:"required,email"`
-	Password string `json:"password" validate:"required,min=8"` // Min length validation
-	Name     string `json:"name" validate:"required,max=100"`
+    Email    string `json:"email" validate:"required,email" example:"user@example.com"` // Add example tag
+    Password string `json:"password" validate:"required,min=8" format:"password" example:"Str0ngP@ssw0rd"` // Add format tag
+    Name     string `json:"name" validate:"required,max=100" example:"John Doe"`
 }
 
 // LoginRequestDTO defines the expected JSON body for user login.
