@@ -37,7 +37,19 @@ func NewUploadHandler(uc UploadUseCase, v *validation.Validator) *UploadHandler 
 }
 
 // RequestUpload handles POST /api/v1/uploads/audio/request
-// Requires authentication.
+// @Summary Request presigned URL for audio upload
+// @Description Requests a presigned URL from the object storage (MinIO/S3) that can be used by the client to directly upload an audio file.
+// @ID request-audio-upload
+// @Tags Uploads
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param uploadRequest body dto.RequestUploadRequestDTO true "Upload Request Info (filename, content type)"
+// @Success 200 {object} dto.RequestUploadResponseDTO "Presigned URL and object key generated"
+// @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Input"
+// @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
+// @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error (e.g., failed to generate URL)"
+// @Router /uploads/audio/request [post]
 func (h *UploadHandler) RequestUpload(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserIDFromContext(r.Context())
 	if !ok {
@@ -73,8 +85,20 @@ func (h *UploadHandler) RequestUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 // CompleteUploadAndCreateTrack handles POST /api/v1/audio/tracks
-// This reuses the track creation endpoint conceptually, but specifically for uploaded files.
-// Requires authentication.
+// @Summary Complete audio upload and create track metadata
+// @Description After the client successfully uploads a file using the presigned URL, this endpoint is called to create the corresponding audio track metadata record in the database.
+// @ID complete-audio-upload
+// @Tags Uploads
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param completeUpload body dto.CompleteUploadRequestDTO true "Track metadata and object key"
+// @Success 201 {object} dto.AudioTrackResponseDTO "Track metadata created successfully"
+// @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Input (e.g., validation errors, object key not found)"
+// @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
+// @Failure 409 {object} httputil.ErrorResponseDTO "Conflict (e.g., object key already used)" // Depending on use case logic
+// @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
+// @Router /audio/tracks [post] // Reuses POST on /audio/tracks conceptually
 func (h *UploadHandler) CompleteUploadAndCreateTrack(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserIDFromContext(r.Context())
 	if !ok {

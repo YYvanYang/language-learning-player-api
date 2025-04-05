@@ -61,3 +61,9 @@ type SecurityHelper interface {
 
 	 // TODO: Add methods for Refresh Token generation/validation if implementing that flow.
 }
+
+// UserUseCase defines the interface for user-related operations (e.g., profile)
+type UserUseCase interface {
+	GetUserProfile(ctx context.Context, userID domain.UserID) (*domain.User, error)
+	// Add UpdateUserProfile, etc. here later
+}

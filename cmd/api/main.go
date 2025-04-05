@@ -43,9 +43,27 @@ import (
 // @license.name Apache 2.0
 // @license.url http://www.apache.org/licenses/LICENSE-2.0.html
 
+// @tag.name Authentication
+// @tag.description Operations related to user signup, login, and external authentication (e.g., Google).
+// @tag.name Users
+// @tag.description Operations related to user profiles.
+// @tag.name Audio Tracks
+// @tag.description Operations related to individual audio tracks, including retrieval and listing.
+// @tag.name Audio Collections
+// @tag.description Operations related to managing audio collections (playlists, courses).
+// @tag.name User Activity
+// @tag.description Operations related to tracking user interactions like playback progress and bookmarks.
+// @tag.name Uploads
+// @tag.description Operations related to requesting upload URLs and finalizing uploads.
+
 // @host localhost:8080                   // API host (usually without scheme)
 // @BasePath /api/v1                      // Base path for all routes defined AFTER this block
 // @schemes http https                    // Supported schemes (optional, defaults may vary)
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token. Example: "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 func main() {
 	// Create a context that listens for the interrupt signal from the OS.
 	// This is used for graceful shutdown.
@@ -111,12 +129,14 @@ func main() {
 	audioUseCase := uc.NewAudioContentUseCase(cfg.Minio, trackRepo, collectionRepo, storageService, appLogger)
 	activityUseCase := uc.NewUserActivityUseCase(progressRepo, bookmarkRepo, trackRepo, appLogger)
 	uploadUseCase := uc.NewUploadUseCase(cfg.Minio, trackRepo, storageService, appLogger) // New
+	userUseCase := uc.NewUserUseCase(userRepo, appLogger) // New User UseCase
 
 	// HTTP Handlers
 	authHandler := httpadapter.NewAuthHandler(authUseCase, validator)
 	audioHandler := httpadapter.NewAudioHandler(audioUseCase, validator)
 	activityHandler := httpadapter.NewUserActivityHandler(activityUseCase, validator)
 	uploadHandler := httpadapter.NewUploadHandler(uploadUseCase, validator) // New
+	userHandler := httpadapter.NewUserHandler(userUseCase) // New User Handler
 
 	appLogger.Info("Dependencies initialized successfully")
 
@@ -172,8 +192,8 @@ func main() {
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.Authenticator(secHelper))
 
-			// User Profile (Placeholder)
-			r.Get("/users/me", func(w http.ResponseWriter, r *http.Request) { /* ... */ })
+			// User Profile (Replaced Placeholder)
+			r.Get("/users/me", userHandler.GetMyProfile)
 
 			// Collections (Authenticated Actions)
 			r.Post("/audio/collections", audioHandler.CreateCollection)

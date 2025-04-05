@@ -34,6 +34,20 @@ func NewUserActivityHandler(uc port.UserActivityUseCase, v *validation.Validator
 // --- Progress Handlers ---
 
 // RecordProgress handles POST /api/v1/users/me/progress
+// @Summary Record playback progress
+// @Description Records or updates the playback progress for a specific audio track for the authenticated user.
+// @ID record-playback-progress
+// @Tags User Activity
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param progress body dto.RecordProgressRequestDTO true "Playback progress details"
+// @Success 204 "Progress recorded successfully"
+// @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Input / Track ID Format"
+// @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
+// @Failure 404 {object} httputil.ErrorResponseDTO "Track Not Found"
+// @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
+// @Router /users/me/progress [post]
 func (h *UserActivityHandler) RecordProgress(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserIDFromContext(r.Context())
 	if !ok {
@@ -72,12 +86,25 @@ func (h *UserActivityHandler) RecordProgress(w http.ResponseWriter, r *http.Requ
 }
 
 // GetProgress handles GET /api/v1/users/me/progress/{trackId}
+// @Summary Get playback progress for a track
+// @Description Retrieves the playback progress for a specific audio track for the authenticated user.
+// @ID get-playback-progress
+// @Tags User Activity
+// @Produce json
+// @Security BearerAuth
+// @Param trackId path string true "Audio Track UUID" Format(uuid)
+// @Success 200 {object} dto.PlaybackProgressResponseDTO "Playback progress found"
+// @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Track ID Format"
+// @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
+// @Failure 404 {object} httputil.ErrorResponseDTO "Progress Not Found (or Track Not Found)"
+// @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
+// @Router /users/me/progress/{trackId} [get]
 func (h *UserActivityHandler) GetProgress(w http.ResponseWriter, r *http.Request) {
-    userID, ok := middleware.GetUserIDFromContext(r.Context())
-    if !ok {
-        httputil.RespondError(w, r, domain.ErrUnauthenticated)
-        return
-    }
+	userID, ok := middleware.GetUserIDFromContext(r.Context())
+	if !ok {
+		httputil.RespondError(w, r, domain.ErrUnauthenticated)
+		return
+	}
 
 	trackIDStr := chi.URLParam(r, "trackId")
 	trackID, err := domain.TrackIDFromString(trackIDStr)
@@ -87,36 +114,48 @@ func (h *UserActivityHandler) GetProgress(w http.ResponseWriter, r *http.Request
 	}
 
 	progress, err := h.activityUseCase.GetPlaybackProgress(r.Context(), userID, trackID)
-    if err != nil {
+	if err != nil {
 		// Handles ErrNotFound correctly via RespondError
-        httputil.RespondError(w, r, err)
-        return
-    }
+		httputil.RespondError(w, r, err)
+		return
+	}
 
 	resp := dto.MapDomainProgressToResponseDTO(progress)
 	httputil.RespondJSON(w, r, http.StatusOK, resp)
 }
 
 // ListProgress handles GET /api/v1/users/me/progress
+// @Summary List user's playback progress
+// @Description Retrieves a paginated list of playback progress records for the authenticated user.
+// @ID list-playback-progress
+// @Tags User Activity
+// @Produce json
+// @Security BearerAuth
+// @Param limit query int false "Pagination limit" default(50) minimum(1) maximum(100)
+// @Param offset query int false "Pagination offset" default(0) minimum(0)
+// @Success 200 {object} dto.PaginatedProgressResponseDTO "Paginated list of playback progress"
+// @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
+// @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
+// @Router /users/me/progress [get]
 func (h *UserActivityHandler) ListProgress(w http.ResponseWriter, r *http.Request) {
-    userID, ok := middleware.GetUserIDFromContext(r.Context())
-    if !ok {
-        httputil.RespondError(w, r, domain.ErrUnauthenticated)
-        return
-    }
+	userID, ok := middleware.GetUserIDFromContext(r.Context())
+	if !ok {
+		httputil.RespondError(w, r, domain.ErrUnauthenticated)
+		return
+	}
 
 	q := r.URL.Query()
 	limit, _ := strconv.Atoi(q.Get("limit"))
 	offset, _ := strconv.Atoi(q.Get("offset"))
-    if limit <= 0 { limit = 50 }
-    if offset < 0 { offset = 0 }
+	if limit <= 0 { limit = 50 }
+	if offset < 0 { offset = 0 }
 	page := port.Page{Limit: limit, Offset: offset}
 
 	progressList, total, err := h.activityUseCase.ListUserProgress(r.Context(), userID, page)
-    if err != nil {
-        httputil.RespondError(w, r, err)
-        return
-    }
+	if err != nil {
+		httputil.RespondError(w, r, err)
+		return
+	}
 
 	respData := make([]dto.PlaybackProgressResponseDTO, len(progressList))
 	for i, p := range progressList {
@@ -136,6 +175,20 @@ func (h *UserActivityHandler) ListProgress(w http.ResponseWriter, r *http.Reques
 // --- Bookmark Handlers ---
 
 // CreateBookmark handles POST /api/v1/bookmarks
+// @Summary Create a bookmark
+// @Description Creates a new bookmark at a specific timestamp within an audio track for the authenticated user.
+// @ID create-bookmark
+// @Tags User Activity
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param bookmark body dto.CreateBookmarkRequestDTO true "Bookmark details"
+// @Success 201 {object} dto.BookmarkResponseDTO "Bookmark created successfully"
+// @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Input / Track ID Format"
+// @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
+// @Failure 404 {object} httputil.ErrorResponseDTO "Track Not Found"
+// @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
+// @Router /bookmarks [post]
 func (h *UserActivityHandler) CreateBookmark(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserIDFromContext(r.Context())
 	if !ok {
@@ -174,6 +227,20 @@ func (h *UserActivityHandler) CreateBookmark(w http.ResponseWriter, r *http.Requ
 }
 
 // ListBookmarks handles GET /api/v1/bookmarks
+// @Summary List user's bookmarks
+// @Description Retrieves a paginated list of bookmarks for the authenticated user, optionally filtered by track ID.
+// @ID list-bookmarks
+// @Tags User Activity
+// @Produce json
+// @Security BearerAuth
+// @Param trackId query string false "Filter by Audio Track UUID" Format(uuid)
+// @Param limit query int false "Pagination limit" default(50) minimum(1) maximum(100)
+// @Param offset query int false "Pagination offset" default(0) minimum(0)
+// @Success 200 {object} dto.PaginatedBookmarksResponseDTO "Paginated list of bookmarks"
+// @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Track ID Format (if provided)"
+// @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
+// @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
+// @Router /bookmarks [get]
 func (h *UserActivityHandler) ListBookmarks(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserIDFromContext(r.Context())
 	if !ok {
@@ -184,8 +251,8 @@ func (h *UserActivityHandler) ListBookmarks(w http.ResponseWriter, r *http.Reque
 	q := r.URL.Query()
 	limit, _ := strconv.Atoi(q.Get("limit"))
 	offset, _ := strconv.Atoi(q.Get("offset"))
-    if limit <= 0 { limit = 50 }
-    if offset < 0 { offset = 0 }
+	if limit <= 0 { limit = 50 }
+	if offset < 0 { offset = 0 }
 	page := port.Page{Limit: limit, Offset: offset}
 
 	// Check for optional trackId filter
@@ -198,7 +265,6 @@ func (h *UserActivityHandler) ListBookmarks(w http.ResponseWriter, r *http.Reque
 		}
 		trackIDFilter = &tid
 	}
-
 
 	bookmarks, total, err := h.activityUseCase.ListBookmarks(r.Context(), userID, trackIDFilter, page)
 	if err != nil {
@@ -224,6 +290,7 @@ func (h *UserActivityHandler) ListBookmarks(w http.ResponseWriter, r *http.Reque
 // DeleteBookmark handles DELETE /api/v1/bookmarks/{bookmarkId}
 // @Summary Delete a bookmark
 // @Description Deletes a specific bookmark owned by the current user.
+// @ID delete-bookmark
 // @Tags User Activity
 // @Produce json
 // @Security BearerAuth // Apply the security definition defined in main.go

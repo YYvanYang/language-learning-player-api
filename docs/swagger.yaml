@@ -1,6 +1,30 @@
 basePath: /api/v1                      // Base path for all routes defined AFTER this
   block
 definitions:
+  dto.AudioCollectionResponseDTO:
+    properties:
+      createdAt:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      ownerId:
+        type: string
+      title:
+        type: string
+      tracks:
+        description: |-
+          Optionally include track details or just IDs:
+          TrackIDs []string `json:"trackIds"` // Just the ordered IDs
+        items:
+          $ref: '#/definitions/dto.AudioTrackResponseDTO'
+        type: array
+      type:
+        type: string
+      updatedAt:
+        type: string
+    type: object
   dto.AudioTrackDetailsResponseDTO:
     properties:
       coverImageUrl:
@@ -36,6 +60,38 @@ definitions:
         description: Use string UUID
         type: string
     type: object
+  dto.AudioTrackResponseDTO:
+    properties:
+      coverImageUrl:
+        type: string
+      createdAt:
+        description: Use time.Time, will marshal to RFC3339
+        type: string
+      description:
+        type: string
+      durationMs:
+        description: Use int64 for milliseconds
+        type: integer
+      id:
+        type: string
+      isPublic:
+        type: boolean
+      languageCode:
+        type: string
+      level:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      title:
+        type: string
+      updatedAt:
+        type: string
+      uploaderId:
+        description: Use string UUID
+        type: string
+    type: object
   dto.AuthResponseDTO:
     properties:
       isNewUser:
@@ -44,6 +100,105 @@ definitions:
       token:
         description: The JWT access token
         type: string
+    type: object
+  dto.BookmarkResponseDTO:
+    properties:
+      createdAt:
+        type: string
+      id:
+        type: string
+      note:
+        type: string
+      timestampSeconds:
+        type: number
+      trackId:
+        type: string
+      userId:
+        type: string
+    type: object
+  dto.CompleteUploadRequestDTO:
+    properties:
+      coverImageUrl:
+        type: string
+      description:
+        type: string
+      durationMs:
+        description: Duration in Milliseconds, must be positive
+        type: integer
+      isPublic:
+        description: Defaults to false if omitted? Define behavior.
+        type: boolean
+      languageCode:
+        type: string
+      level:
+        description: Allow empty or valid level
+        enum:
+        - A1
+        - A2
+        - B1
+        - B2
+        - C1
+        - C2
+        - NATIVE
+        type: string
+      objectKey:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      title:
+        maxLength: 255
+        type: string
+    required:
+    - durationMs
+    - languageCode
+    - objectKey
+    - title
+    type: object
+  dto.CreateBookmarkRequestDTO:
+    properties:
+      note:
+        description: Optional note
+        type: string
+      timestampSeconds:
+        description: Use float64 for seconds from JSON
+        minimum: 0
+        type: number
+      trackId:
+        type: string
+    required:
+    - timestampSeconds
+    - trackId
+    type: object
+  dto.CreateCollectionRequestDTO:
+    properties:
+      description:
+        type: string
+      initialTrackIds:
+        description: Optional list of track UUIDs
+        items:
+          type: string
+        type: array
+      title:
+        maxLength: 255
+        type: string
+      type:
+        description: Matches domain.CollectionType
+        enum:
+        - COURSE
+        - PLAYLIST
+        type: string
+    required:
+    - title
+    - type
+    type: object
+  dto.GoogleCallbackRequestDTO:
+    properties:
+      idToken:
+        type: string
+    required:
+    - idToken
     type: object
   dto.LoginRequestDTO:
     properties:
@@ -54,6 +209,68 @@ definitions:
     required:
     - email
     - password
+    type: object
+  dto.PaginatedBookmarksResponseDTO:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/dto.BookmarkResponseDTO'
+        type: array
+      limit:
+        type: integer
+      offset:
+        type: integer
+      total:
+        type: integer
+    type: object
+  dto.PaginatedProgressResponseDTO:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/dto.PlaybackProgressResponseDTO'
+        type: array
+      limit:
+        type: integer
+      offset:
+        type: integer
+      total:
+        type: integer
+    type: object
+  dto.PaginatedTracksResponseDTO:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/dto.AudioTrackResponseDTO'
+        type: array
+      limit:
+        type: integer
+      offset:
+        type: integer
+      total:
+        type: integer
+    type: object
+  dto.PlaybackProgressResponseDTO:
+    properties:
+      lastListenedAt:
+        type: string
+      progressSeconds:
+        type: number
+      trackId:
+        type: string
+      userId:
+        type: string
+    type: object
+  dto.RecordProgressRequestDTO:
+    properties:
+      progressSeconds:
+        description: Use float64 for seconds from JSON
+        minimum: 0
+        type: number
+      trackId:
+        type: string
+    required:
+    - progressSeconds
+    - trackId
     type: object
   dto.RegisterRequestDTO:
     properties:
@@ -75,6 +292,62 @@ definitions:
     - email
     - name
     - password
+    type: object
+  dto.RequestUploadRequestDTO:
+    properties:
+      contentType:
+        description: e.g., "audio/mpeg"
+        type: string
+      filename:
+        type: string
+    required:
+    - contentType
+    - filename
+    type: object
+  dto.RequestUploadResponseDTO:
+    properties:
+      objectKey:
+        description: The key the client should use/report back
+        type: string
+      uploadUrl:
+        description: The presigned PUT URL
+        type: string
+    type: object
+  dto.UpdateCollectionRequestDTO:
+    properties:
+      description:
+        type: string
+      title:
+        maxLength: 255
+        type: string
+    required:
+    - title
+    type: object
+  dto.UpdateCollectionTracksRequestDTO:
+    properties:
+      orderedTrackIds:
+        description: Full ordered list of track UUIDs
+        items:
+          type: string
+        type: array
+    type: object
+  dto.UserResponseDTO:
+    properties:
+      authProvider:
+        type: string
+      createdAt:
+        description: Use string format like RFC3339
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      profileImageUrl:
+        type: string
+      updatedAt:
+        type: string
     type: object
   httputil.ErrorResponseDTO:
     properties:
@@ -105,10 +378,342 @@ info:
   title: Language Learning Audio Player API
   version: 1.0.0
 paths:
+  /audio/collections:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new audio collection (playlist or course) for the authenticated
+        user.
+      operationId: create-audio-collection
+      parameters:
+      - description: Collection details
+        in: body
+        name: collection
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateCollectionRequestDTO'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Collection created successfully
+          schema:
+            $ref: '#/definitions/dto.AudioCollectionResponseDTO'
+        "400":
+          description: Invalid Input / Track ID Format / Collection Type
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      security:
+      - BearerAuth: []
+      summary: Create an audio collection
+      tags:
+      - Audio Collections
+  /audio/collections/{collectionId}:
+    delete:
+      description: Deletes an audio collection owned by the authenticated user.
+      operationId: delete-audio-collection
+      parameters:
+      - description: Audio Collection UUID
+        format: uuid
+        in: path
+        name: collectionId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Collection deleted successfully
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "403":
+          description: Forbidden (Not Owner)
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "404":
+          description: Collection Not Found
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      security:
+      - BearerAuth: []
+      summary: Delete an audio collection
+      tags:
+      - Audio Collections
+    get:
+      description: Retrieves details for a specific audio collection, including its
+        metadata and ordered list of tracks.
+      operationId: get-collection-details
+      parameters:
+      - description: Audio Collection UUID
+        format: uuid
+        in: path
+        name: collectionId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Audio collection details found
+          schema:
+            $ref: '#/definitions/dto.AudioCollectionResponseDTO'
+        "400":
+          description: Invalid Collection ID Format
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "404":
+          description: Collection Not Found
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error (e.g., failed to fetch tracks)
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      summary: Get audio collection details
+      tags:
+      - Audio Collections
+    put:
+      consumes:
+      - application/json
+      description: Updates the title and description of an audio collection owned
+        by the authenticated user.
+      operationId: update-collection-metadata
+      parameters:
+      - description: Audio Collection UUID
+        format: uuid
+        in: path
+        name: collectionId
+        required: true
+        type: string
+      - description: Updated collection metadata
+        in: body
+        name: collection
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateCollectionRequestDTO'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Collection metadata updated successfully
+        "400":
+          description: Invalid Input / Collection ID Format
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "403":
+          description: Forbidden (Not Owner)
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "404":
+          description: Collection Not Found
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      security:
+      - BearerAuth: []
+      summary: Update collection metadata
+      tags:
+      - Audio Collections
+  /audio/collections/{collectionId}/tracks:
+    put:
+      consumes:
+      - application/json
+      description: Updates the ordered list of tracks within a specific collection
+        owned by the authenticated user. Replaces the entire list.
+      operationId: update-collection-tracks
+      parameters:
+      - description: Audio Collection UUID
+        format: uuid
+        in: path
+        name: collectionId
+        required: true
+        type: string
+      - description: Ordered list of track UUIDs
+        in: body
+        name: tracks
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateCollectionTracksRequestDTO'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Collection tracks updated successfully
+        "400":
+          description: Invalid Input / Collection or Track ID Format
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "403":
+          description: Forbidden (Not Owner)
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "404":
+          description: Collection Not Found / Track Not Found
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      security:
+      - BearerAuth: []
+      summary: Update collection tracks
+      tags:
+      - Audio Collections
+  /audio/tracks:
+    get:
+      description: Retrieves a paginated list of audio tracks, supporting filtering
+        and sorting.
+      operationId: list-audio-tracks
+      parameters:
+      - description: Search query (searches title, description)
+        in: query
+        name: q
+        type: string
+      - description: Filter by language code (e.g., en-US)
+        in: query
+        name: lang
+        type: string
+      - description: Filter by audio level (e.g., A1, B2)
+        enum:
+        - A1
+        - A2
+        - B1
+        - B2
+        - C1
+        - C2
+        - NATIVE
+        in: query
+        name: level
+        type: string
+      - description: Filter by public status (true or false)
+        in: query
+        name: isPublic
+        type: boolean
+      - collectionFormat: multi
+        description: Filter by tags (e.g., ?tags=news&tags=podcast)
+        in: query
+        items:
+          type: string
+        name: tags
+        type: array
+      - default: createdAt
+        description: Sort field (e.g., createdAt, title, durationMs)
+        in: query
+        name: sortBy
+        type: string
+      - default: desc
+        description: Sort direction (asc or desc)
+        enum:
+        - asc
+        - desc
+        in: query
+        name: sortDir
+        type: string
+      - default: 20
+        description: Pagination limit
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      - default: 0
+        description: Pagination offset
+        in: query
+        minimum: 0
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated list of audio tracks
+          schema:
+            $ref: '#/definitions/dto.PaginatedTracksResponseDTO'
+        "400":
+          description: Invalid Query Parameter Format
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      summary: List audio tracks
+      tags:
+      - Audio Tracks
+    post:
+      consumes:
+      - application/json
+      description: After the client successfully uploads a file using the presigned
+        URL, this endpoint is called to create the corresponding audio track metadata
+        record in the database.
+      operationId: complete-audio-upload
+      parameters:
+      - description: Track metadata and object key
+        in: body
+        name: completeUpload
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CompleteUploadRequestDTO'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Track metadata created successfully
+          schema:
+            $ref: '#/definitions/dto.AudioTrackResponseDTO'
+        "400":
+          description: Invalid Input (e.g., validation errors, object key not found)
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "409":
+          description: Conflict (e.g., object key already used)" // Depending on use
+            case logic
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      security:
+      - BearerAuth: []
+      summary: Complete audio upload and create track metadata
+      tags:
+      - Uploads
   /audio/tracks/{trackId}:
     get:
       description: Retrieves details for a specific audio track, including metadata
         and a temporary playback URL.
+      operationId: get-track-details
       parameters:
       - description: Audio Track UUID
         format: uuid
@@ -138,11 +743,53 @@ paths:
       summary: Get audio track details
       tags:
       - Audio Tracks
+  /auth/google/callback:
+    post:
+      consumes:
+      - application/json
+      description: Receives the ID token from the frontend after Google sign-in, verifies
+        it, and performs user registration or login, returning a JWT.
+      operationId: google-callback
+      parameters:
+      - description: Google ID Token
+        in: body
+        name: googleCallback
+        required: true
+        schema:
+          $ref: '#/definitions/dto.GoogleCallbackRequestDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Authentication successful, returns JWT. isNewUser field indicates
+            if a new account was created.
+          schema:
+            $ref: '#/definitions/dto.AuthResponseDTO'
+        "400":
+          description: Invalid Input (Missing or Invalid ID Token)
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "401":
+          description: Authentication Failed (Invalid Google Token)
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "409":
+          description: Conflict - Email already exists with a different login method
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      summary: Handle Google OAuth callback
+      tags:
+      - Authentication
   /auth/login:
     post:
       consumes:
       - application/json
       description: Authenticates a user with email and password, returns a JWT token.
+      operationId: login-user
       parameters:
       - description: User Login Credentials
         in: body
@@ -177,6 +824,7 @@ paths:
       consumes:
       - application/json
       description: Registers a new user account using email and password.
+      operationId: register-user
       parameters:
       - description: User Registration Info
         in: body
@@ -208,9 +856,99 @@ paths:
       summary: Register a new user
       tags:
       - Authentication
+  /bookmarks:
+    get:
+      description: Retrieves a paginated list of bookmarks for the authenticated user,
+        optionally filtered by track ID.
+      operationId: list-bookmarks
+      parameters:
+      - description: Filter by Audio Track UUID
+        format: uuid
+        in: query
+        name: trackId
+        type: string
+      - default: 50
+        description: Pagination limit
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      - default: 0
+        description: Pagination offset
+        in: query
+        minimum: 0
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated list of bookmarks
+          schema:
+            $ref: '#/definitions/dto.PaginatedBookmarksResponseDTO'
+        "400":
+          description: Invalid Track ID Format (if provided)
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      security:
+      - BearerAuth: []
+      summary: List user's bookmarks
+      tags:
+      - User Activity
+    post:
+      consumes:
+      - application/json
+      description: Creates a new bookmark at a specific timestamp within an audio
+        track for the authenticated user.
+      operationId: create-bookmark
+      parameters:
+      - description: Bookmark details
+        in: body
+        name: bookmark
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateBookmarkRequestDTO'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Bookmark created successfully
+          schema:
+            $ref: '#/definitions/dto.BookmarkResponseDTO'
+        "400":
+          description: Invalid Input / Track ID Format
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "404":
+          description: Track Not Found
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      security:
+      - BearerAuth: []
+      summary: Create a bookmark
+      tags:
+      - User Activity
   /bookmarks/{bookmarkId}:
     delete:
       description: Deletes a specific bookmark owned by the current user.
+      operationId: delete-bookmark
       parameters:
       - description: Bookmark UUID
         format: uuid
@@ -244,6 +982,191 @@ paths:
       summary: Delete a bookmark
       tags:
       - User Activity
+  /uploads/audio/request:
+    post:
+      consumes:
+      - application/json
+      description: Requests a presigned URL from the object storage (MinIO/S3) that
+        can be used by the client to directly upload an audio file.
+      operationId: request-audio-upload
+      parameters:
+      - description: Upload Request Info (filename, content type)
+        in: body
+        name: uploadRequest
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RequestUploadRequestDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Presigned URL and object key generated
+          schema:
+            $ref: '#/definitions/dto.RequestUploadResponseDTO'
+        "400":
+          description: Invalid Input
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error (e.g., failed to generate URL)
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      security:
+      - BearerAuth: []
+      summary: Request presigned URL for audio upload
+      tags:
+      - Uploads
+  /users/me:
+    get:
+      description: Retrieves the profile information for the currently authenticated
+        user.
+      operationId: get-my-profile
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User profile retrieved successfully
+          schema:
+            $ref: '#/definitions/dto.UserResponseDTO'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "404":
+          description: User Not Found
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      security:
+      - BearerAuth: []
+      summary: Get current user's profile
+      tags:
+      - Users
+  /users/me/progress:
+    get:
+      description: Retrieves a paginated list of playback progress records for the
+        authenticated user.
+      operationId: list-playback-progress
+      parameters:
+      - default: 50
+        description: Pagination limit
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      - default: 0
+        description: Pagination offset
+        in: query
+        minimum: 0
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated list of playback progress
+          schema:
+            $ref: '#/definitions/dto.PaginatedProgressResponseDTO'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      security:
+      - BearerAuth: []
+      summary: List user's playback progress
+      tags:
+      - User Activity
+    post:
+      consumes:
+      - application/json
+      description: Records or updates the playback progress for a specific audio track
+        for the authenticated user.
+      operationId: record-playback-progress
+      parameters:
+      - description: Playback progress details
+        in: body
+        name: progress
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RecordProgressRequestDTO'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Progress recorded successfully
+        "400":
+          description: Invalid Input / Track ID Format
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "404":
+          description: Track Not Found
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      security:
+      - BearerAuth: []
+      summary: Record playback progress
+      tags:
+      - User Activity
+  /users/me/progress/{trackId}:
+    get:
+      description: Retrieves the playback progress for a specific audio track for
+        the authenticated user.
+      operationId: get-playback-progress
+      parameters:
+      - description: Audio Track UUID
+        format: uuid
+        in: path
+        name: trackId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Playback progress found
+          schema:
+            $ref: '#/definitions/dto.PlaybackProgressResponseDTO'
+        "400":
+          description: Invalid Track ID Format
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "404":
+          description: Progress Not Found (or Track Not Found)
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      security:
+      - BearerAuth: []
+      summary: Get playback progress for a track
+      tags:
+      - User Activity
 schemes:
 - http
 - https
@@ -273,4 +1196,27 @@ schemes:
 - defaults
 - may
 - vary)
+securityDefinitions:
+  BearerAuth:
+    description: 'Type "Bearer" followed by a space and JWT token. Example: "Bearer
+      eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."'
+    in: header
+    name: Authorization
+    type: apiKey
 swagger: "2.0"
+tags:
+- description: Operations related to user signup, login, and external authentication
+    (e.g., Google).
+  name: Authentication
+- description: Operations related to user profiles.
+  name: Users
+- description: Operations related to individual audio tracks, including retrieval
+    and listing.
+  name: Audio Tracks
+- description: Operations related to managing audio collections (playlists, courses).
+  name: Audio Collections
+- description: Operations related to tracking user interactions like playback progress
+    and bookmarks.
+  name: User Activity
+- description: Operations related to requesting upload URLs and finalizing uploads.
+  name: Uploads

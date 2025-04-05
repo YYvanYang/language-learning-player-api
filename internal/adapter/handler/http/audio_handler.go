@@ -35,9 +35,10 @@ func NewAudioHandler(uc port.AudioContentUseCase, v *validation.Validator) *Audi
 // GetTrackDetails handles GET /api/v1/audio/tracks/{trackId}
 // @Summary Get audio track details
 // @Description Retrieves details for a specific audio track, including metadata and a temporary playback URL.
+// @ID get-track-details
 // @Tags Audio Tracks
 // @Produce json
-// @Param trackId path string true "Audio Track UUID" Format(uuid) // Path parameter
+// @Param trackId path string true "Audio Track UUID" Format(uuid)
 // @Success 200 {object} dto.AudioTrackDetailsResponseDTO "Audio track details found"
 // @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Track ID Format"
 // @Failure 404 {object} httputil.ErrorResponseDTO "Track Not Found"
@@ -66,6 +67,24 @@ func (h *AudioHandler) GetTrackDetails(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListTracks handles GET /api/v1/audio/tracks
+// @Summary List audio tracks
+// @Description Retrieves a paginated list of audio tracks, supporting filtering and sorting.
+// @ID list-audio-tracks
+// @Tags Audio Tracks
+// @Produce json
+// @Param q query string false "Search query (searches title, description)"
+// @Param lang query string false "Filter by language code (e.g., en-US)"
+// @Param level query string false "Filter by audio level (e.g., A1, B2)" Enums(A1, A2, B1, B2, C1, C2, NATIVE)
+// @Param isPublic query boolean false "Filter by public status (true or false)"
+// @Param tags query []string false "Filter by tags (e.g., ?tags=news&tags=podcast)" collectionFormat(multi)
+// @Param sortBy query string false "Sort field (e.g., createdAt, title, durationMs)" default(createdAt)
+// @Param sortDir query string false "Sort direction (asc or desc)" default(desc) Enums(asc, desc)
+// @Param limit query int false "Pagination limit" default(20) minimum(1) maximum(100)
+// @Param offset query int false "Pagination offset" default(0) minimum(0)
+// @Success 200 {object} dto.PaginatedTracksResponseDTO "Paginated list of audio tracks"
+// @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Query Parameter Format"
+// @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
+// @Router /audio/tracks [get]
 func (h *AudioHandler) ListTracks(w http.ResponseWriter, r *http.Request) {
 	// Parse query parameters manually or using a library like schema
 	q := r.URL.Query()
@@ -129,6 +148,19 @@ func (h *AudioHandler) ListTracks(w http.ResponseWriter, r *http.Request) {
 // --- Collection Handlers ---
 
 // CreateCollection handles POST /api/v1/audio/collections
+// @Summary Create an audio collection
+// @Description Creates a new audio collection (playlist or course) for the authenticated user.
+// @ID create-audio-collection
+// @Tags Audio Collections
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param collection body dto.CreateCollectionRequestDTO true "Collection details"
+// @Success 201 {object} dto.AudioCollectionResponseDTO "Collection created successfully"
+// @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Input / Track ID Format / Collection Type"
+// @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
+// @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
+// @Router /audio/collections [post]
 func (h *AudioHandler) CreateCollection(w http.ResponseWriter, r *http.Request) {
 	var req dto.CreateCollectionRequestDTO
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -170,6 +202,17 @@ func (h *AudioHandler) CreateCollection(w http.ResponseWriter, r *http.Request) 
 
 
 // GetCollectionDetails handles GET /api/v1/audio/collections/{collectionId}
+// @Summary Get audio collection details
+// @Description Retrieves details for a specific audio collection, including its metadata and ordered list of tracks.
+// @ID get-collection-details
+// @Tags Audio Collections
+// @Produce json
+// @Param collectionId path string true "Audio Collection UUID" Format(uuid)
+// @Success 200 {object} dto.AudioCollectionResponseDTO "Audio collection details found"
+// @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Collection ID Format"
+// @Failure 404 {object} httputil.ErrorResponseDTO "Collection Not Found"
+// @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error (e.g., failed to fetch tracks)"
+// @Router /audio/collections/{collectionId} [get]
 func (h *AudioHandler) GetCollectionDetails(w http.ResponseWriter, r *http.Request) {
 	collectionIDStr := chi.URLParam(r, "collectionId")
 	collectionID, err := domain.CollectionIDFromString(collectionIDStr)
@@ -203,6 +246,22 @@ func (h *AudioHandler) GetCollectionDetails(w http.ResponseWriter, r *http.Reque
 }
 
 // UpdateCollectionMetadata handles PUT /api/v1/audio/collections/{collectionId}
+// @Summary Update collection metadata
+// @Description Updates the title and description of an audio collection owned by the authenticated user.
+// @ID update-collection-metadata
+// @Tags Audio Collections
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param collectionId path string true "Audio Collection UUID" Format(uuid)
+// @Param collection body dto.UpdateCollectionRequestDTO true "Updated collection metadata"
+// @Success 204 "Collection metadata updated successfully"
+// @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Input / Collection ID Format"
+// @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
+// @Failure 403 {object} httputil.ErrorResponseDTO "Forbidden (Not Owner)"
+// @Failure 404 {object} httputil.ErrorResponseDTO "Collection Not Found"
+// @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
+// @Router /audio/collections/{collectionId} [put]
 func (h *AudioHandler) UpdateCollectionMetadata(w http.ResponseWriter, r *http.Request) {
 	collectionIDStr := chi.URLParam(r, "collectionId")
 	collectionID, err := domain.CollectionIDFromString(collectionIDStr)
@@ -233,6 +292,22 @@ func (h *AudioHandler) UpdateCollectionMetadata(w http.ResponseWriter, r *http.R
 }
 
 // UpdateCollectionTracks handles PUT /api/v1/audio/collections/{collectionId}/tracks
+// @Summary Update collection tracks
+// @Description Updates the ordered list of tracks within a specific collection owned by the authenticated user. Replaces the entire list.
+// @ID update-collection-tracks
+// @Tags Audio Collections
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param collectionId path string true "Audio Collection UUID" Format(uuid)
+// @Param tracks body dto.UpdateCollectionTracksRequestDTO true "Ordered list of track UUIDs"
+// @Success 204 "Collection tracks updated successfully"
+// @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Input / Collection or Track ID Format"
+// @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
+// @Failure 403 {object} httputil.ErrorResponseDTO "Forbidden (Not Owner)"
+// @Failure 404 {object} httputil.ErrorResponseDTO "Collection Not Found / Track Not Found"
+// @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
+// @Router /audio/collections/{collectionId}/tracks [put]
 func (h *AudioHandler) UpdateCollectionTracks(w http.ResponseWriter, r *http.Request) {
 	collectionIDStr := chi.URLParam(r, "collectionId")
 	collectionID, err := domain.CollectionIDFromString(collectionIDStr)
@@ -273,6 +348,19 @@ func (h *AudioHandler) UpdateCollectionTracks(w http.ResponseWriter, r *http.Req
 
 
 // DeleteCollection handles DELETE /api/v1/audio/collections/{collectionId}
+// @Summary Delete an audio collection
+// @Description Deletes an audio collection owned by the authenticated user.
+// @ID delete-audio-collection
+// @Tags Audio Collections
+// @Produce json
+// @Security BearerAuth
+// @Param collectionId path string true "Audio Collection UUID" Format(uuid)
+// @Success 204 "Collection deleted successfully"
+// @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
+// @Failure 403 {object} httputil.ErrorResponseDTO "Forbidden (Not Owner)"
+// @Failure 404 {object} httputil.ErrorResponseDTO "Collection Not Found"
+// @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
+// @Router /audio/collections/{collectionId} [delete]
 func (h *AudioHandler) DeleteCollection(w http.ResponseWriter, r *http.Request) {
 	collectionIDStr := chi.URLParam(r, "collectionId")
 	collectionID, err := domain.CollectionIDFromString(collectionIDStr)

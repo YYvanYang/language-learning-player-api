@@ -30,6 +30,7 @@ func NewAuthHandler(uc port.AuthUseCase, v *validation.Validator) *AuthHandler {
 // Register handles user registration requests.
 // @Summary Register a new user
 // @Description Registers a new user account using email and password.
+// @ID register-user
 // @Tags Authentication
 // @Accept json
 // @Produce json
@@ -69,6 +70,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 // Login handles user login requests.
 // @Summary Login a user
 // @Description Authenticates a user with email and password, returns a JWT token.
+// @ID login-user
 // @Tags Authentication
 // @Accept json
 // @Produce json
@@ -106,7 +108,19 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 // GoogleCallback handles the callback from Google OAuth flow.
-// POST /api/v1/auth/google/callback
+// @Summary Handle Google OAuth callback
+// @Description Receives the ID token from the frontend after Google sign-in, verifies it, and performs user registration or login, returning a JWT.
+// @ID google-callback
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param googleCallback body dto.GoogleCallbackRequestDTO true "Google ID Token"
+// @Success 200 {object} dto.AuthResponseDTO "Authentication successful, returns JWT. isNewUser field indicates if a new account was created."
+// @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Input (Missing or Invalid ID Token)"
+// @Failure 401 {object} httputil.ErrorResponseDTO "Authentication Failed (Invalid Google Token)"
+// @Failure 409 {object} httputil.ErrorResponseDTO "Conflict - Email already exists with a different login method"
+// @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
+// @Router /auth/google/callback [post]
 func (h *AuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 	var req dto.GoogleCallbackRequestDTO
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

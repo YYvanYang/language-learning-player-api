@@ -24,6 +24,491 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/audio/collections": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a new audio collection (playlist or course) for the authenticated user.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Audio Collections"
+                ],
+                "summary": "Create an audio collection",
+                "operationId": "create-audio-collection",
+                "parameters": [
+                    {
+                        "description": "Collection details",
+                        "name": "collection",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreateCollectionRequestDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Collection created successfully",
+                        "schema": {
+                            "$ref": "#/definitions/dto.AudioCollectionResponseDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid Input / Track ID Format / Collection Type",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/audio/collections/{collectionId}": {
+            "get": {
+                "description": "Retrieves details for a specific audio collection, including its metadata and ordered list of tracks.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Audio Collections"
+                ],
+                "summary": "Get audio collection details",
+                "operationId": "get-collection-details",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Audio Collection UUID",
+                        "name": "collectionId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Audio collection details found",
+                        "schema": {
+                            "$ref": "#/definitions/dto.AudioCollectionResponseDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid Collection ID Format",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "404": {
+                        "description": "Collection Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error (e.g., failed to fetch tracks)",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Updates the title and description of an audio collection owned by the authenticated user.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Audio Collections"
+                ],
+                "summary": "Update collection metadata",
+                "operationId": "update-collection-metadata",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Audio Collection UUID",
+                        "name": "collectionId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Updated collection metadata",
+                        "name": "collection",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateCollectionRequestDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Collection metadata updated successfully"
+                    },
+                    "400": {
+                        "description": "Invalid Input / Collection ID Format",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden (Not Owner)",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "404": {
+                        "description": "Collection Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes an audio collection owned by the authenticated user.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Audio Collections"
+                ],
+                "summary": "Delete an audio collection",
+                "operationId": "delete-audio-collection",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Audio Collection UUID",
+                        "name": "collectionId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Collection deleted successfully"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden (Not Owner)",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "404": {
+                        "description": "Collection Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/audio/collections/{collectionId}/tracks": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Updates the ordered list of tracks within a specific collection owned by the authenticated user. Replaces the entire list.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Audio Collections"
+                ],
+                "summary": "Update collection tracks",
+                "operationId": "update-collection-tracks",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Audio Collection UUID",
+                        "name": "collectionId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Ordered list of track UUIDs",
+                        "name": "tracks",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateCollectionTracksRequestDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Collection tracks updated successfully"
+                    },
+                    "400": {
+                        "description": "Invalid Input / Collection or Track ID Format",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden (Not Owner)",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "404": {
+                        "description": "Collection Not Found / Track Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/audio/tracks": {
+            "get": {
+                "description": "Retrieves a paginated list of audio tracks, supporting filtering and sorting.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Audio Tracks"
+                ],
+                "summary": "List audio tracks",
+                "operationId": "list-audio-tracks",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Search query (searches title, description)",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by language code (e.g., en-US)",
+                        "name": "lang",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "A1",
+                            "A2",
+                            "B1",
+                            "B2",
+                            "C1",
+                            "C2",
+                            "NATIVE"
+                        ],
+                        "type": "string",
+                        "description": "Filter by audio level (e.g., A1, B2)",
+                        "name": "level",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Filter by public status (true or false)",
+                        "name": "isPublic",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Filter by tags (e.g., ?tags=news\u0026tags=podcast)",
+                        "name": "tags",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "default": "createdAt",
+                        "description": "Sort field (e.g., createdAt, title, durationMs)",
+                        "name": "sortBy",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "default": "desc",
+                        "description": "Sort direction (asc or desc)",
+                        "name": "sortDir",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Pagination limit",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "default": 0,
+                        "description": "Pagination offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated list of audio tracks",
+                        "schema": {
+                            "$ref": "#/definitions/dto.PaginatedTracksResponseDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid Query Parameter Format",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "After the client successfully uploads a file using the presigned URL, this endpoint is called to create the corresponding audio track metadata record in the database.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Uploads"
+                ],
+                "summary": "Complete audio upload and create track metadata",
+                "operationId": "complete-audio-upload",
+                "parameters": [
+                    {
+                        "description": "Track metadata and object key",
+                        "name": "completeUpload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CompleteUploadRequestDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Track metadata created successfully",
+                        "schema": {
+                            "$ref": "#/definitions/dto.AudioTrackResponseDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid Input (e.g., validation errors, object key not found)",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict (e.g., object key already used)\" // Depending on use case logic",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    }
+                }
+            }
+        },
         "/audio/tracks/{trackId}": {
             "get": {
                 "description": "Retrieves details for a specific audio track, including metadata and a temporary playback URL.",
@@ -34,6 +519,7 @@ const docTemplate = `{
                     "Audio Tracks"
                 ],
                 "summary": "Get audio track details",
+                "operationId": "get-track-details",
                 "parameters": [
                     {
                         "type": "string",
@@ -72,6 +558,65 @@ const docTemplate = `{
                 }
             }
         },
+        "/auth/google/callback": {
+            "post": {
+                "description": "Receives the ID token from the frontend after Google sign-in, verifies it, and performs user registration or login, returning a JWT.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Handle Google OAuth callback",
+                "operationId": "google-callback",
+                "parameters": [
+                    {
+                        "description": "Google ID Token",
+                        "name": "googleCallback",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.GoogleCallbackRequestDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Authentication successful, returns JWT. isNewUser field indicates if a new account was created.",
+                        "schema": {
+                            "$ref": "#/definitions/dto.AuthResponseDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid Input (Missing or Invalid ID Token)",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Authentication Failed (Invalid Google Token)",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict - Email already exists with a different login method",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/login": {
             "post": {
                 "description": "Authenticates a user with email and password, returns a JWT token.",
@@ -85,6 +630,7 @@ const docTemplate = `{
                     "Authentication"
                 ],
                 "summary": "Login a user",
+                "operationId": "login-user",
                 "parameters": [
                     {
                         "description": "User Login Credentials",
@@ -137,6 +683,7 @@ const docTemplate = `{
                     "Authentication"
                 ],
                 "summary": "Register a new user",
+                "operationId": "register-user",
                 "parameters": [
                     {
                         "description": "User Registration Info",
@@ -176,6 +723,138 @@ const docTemplate = `{
                 }
             }
         },
+        "/bookmarks": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieves a paginated list of bookmarks for the authenticated user, optionally filtered by track ID.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "User Activity"
+                ],
+                "summary": "List user's bookmarks",
+                "operationId": "list-bookmarks",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Filter by Audio Track UUID",
+                        "name": "trackId",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 50,
+                        "description": "Pagination limit",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "default": 0,
+                        "description": "Pagination offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated list of bookmarks",
+                        "schema": {
+                            "$ref": "#/definitions/dto.PaginatedBookmarksResponseDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid Track ID Format (if provided)",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a new bookmark at a specific timestamp within an audio track for the authenticated user.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "User Activity"
+                ],
+                "summary": "Create a bookmark",
+                "operationId": "create-bookmark",
+                "parameters": [
+                    {
+                        "description": "Bookmark details",
+                        "name": "bookmark",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreateBookmarkRequestDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Bookmark created successfully",
+                        "schema": {
+                            "$ref": "#/definitions/dto.BookmarkResponseDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid Input / Track ID Format",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "404": {
+                        "description": "Track Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    }
+                }
+            }
+        },
         "/bookmarks/{bookmarkId}": {
             "delete": {
                 "security": [
@@ -191,6 +870,7 @@ const docTemplate = `{
                     "User Activity"
                 ],
                 "summary": "Delete a bookmark",
+                "operationId": "delete-bookmark",
                 "parameters": [
                     {
                         "type": "string",
@@ -231,9 +911,320 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/uploads/audio/request": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Requests a presigned URL from the object storage (MinIO/S3) that can be used by the client to directly upload an audio file.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Uploads"
+                ],
+                "summary": "Request presigned URL for audio upload",
+                "operationId": "request-audio-upload",
+                "parameters": [
+                    {
+                        "description": "Upload Request Info (filename, content type)",
+                        "name": "uploadRequest",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.RequestUploadRequestDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Presigned URL and object key generated",
+                        "schema": {
+                            "$ref": "#/definitions/dto.RequestUploadResponseDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid Input",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error (e.g., failed to generate URL)",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieves the profile information for the currently authenticated user.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Get current user's profile",
+                "operationId": "get-my-profile",
+                "responses": {
+                    "200": {
+                        "description": "User profile retrieved successfully",
+                        "schema": {
+                            "$ref": "#/definitions/dto.UserResponseDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "404": {
+                        "description": "User Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/me/progress": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieves a paginated list of playback progress records for the authenticated user.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "User Activity"
+                ],
+                "summary": "List user's playback progress",
+                "operationId": "list-playback-progress",
+                "parameters": [
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 50,
+                        "description": "Pagination limit",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "default": 0,
+                        "description": "Pagination offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated list of playback progress",
+                        "schema": {
+                            "$ref": "#/definitions/dto.PaginatedProgressResponseDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Records or updates the playback progress for a specific audio track for the authenticated user.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "User Activity"
+                ],
+                "summary": "Record playback progress",
+                "operationId": "record-playback-progress",
+                "parameters": [
+                    {
+                        "description": "Playback progress details",
+                        "name": "progress",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.RecordProgressRequestDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Progress recorded successfully"
+                    },
+                    "400": {
+                        "description": "Invalid Input / Track ID Format",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "404": {
+                        "description": "Track Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/me/progress/{trackId}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieves the playback progress for a specific audio track for the authenticated user.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "User Activity"
+                ],
+                "summary": "Get playback progress for a track",
+                "operationId": "get-playback-progress",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Audio Track UUID",
+                        "name": "trackId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Playback progress found",
+                        "schema": {
+                            "$ref": "#/definitions/dto.PlaybackProgressResponseDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid Track ID Format",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "404": {
+                        "description": "Progress Not Found (or Track Not Found)",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
+        "dto.AudioCollectionResponseDTO": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "ownerId": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "tracks": {
+                    "description": "Optionally include track details or just IDs:\nTrackIDs []string ` + "`" + `json:\"trackIds\"` + "`" + ` // Just the ordered IDs",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AudioTrackResponseDTO"
+                    }
+                },
+                "type": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.AudioTrackDetailsResponseDTO": {
             "type": "object",
             "properties": {
@@ -285,6 +1276,53 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.AudioTrackResponseDTO": {
+            "type": "object",
+            "properties": {
+                "coverImageUrl": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "description": "Use time.Time, will marshal to RFC3339",
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "durationMs": {
+                    "description": "Use int64 for milliseconds",
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "isPublic": {
+                    "type": "boolean"
+                },
+                "languageCode": {
+                    "type": "string"
+                },
+                "level": {
+                    "type": "string"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "uploaderId": {
+                    "description": "Use string UUID",
+                    "type": "string"
+                }
+            }
+        },
         "dto.AuthResponseDTO": {
             "type": "object",
             "properties": {
@@ -294,6 +1332,146 @@ const docTemplate = `{
                 },
                 "token": {
                     "description": "The JWT access token",
+                    "type": "string"
+                }
+            }
+        },
+        "dto.BookmarkResponseDTO": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "timestampSeconds": {
+                    "type": "number"
+                },
+                "trackId": {
+                    "type": "string"
+                },
+                "userId": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.CompleteUploadRequestDTO": {
+            "type": "object",
+            "required": [
+                "durationMs",
+                "languageCode",
+                "objectKey",
+                "title"
+            ],
+            "properties": {
+                "coverImageUrl": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "durationMs": {
+                    "description": "Duration in Milliseconds, must be positive",
+                    "type": "integer"
+                },
+                "isPublic": {
+                    "description": "Defaults to false if omitted? Define behavior.",
+                    "type": "boolean"
+                },
+                "languageCode": {
+                    "type": "string"
+                },
+                "level": {
+                    "description": "Allow empty or valid level",
+                    "type": "string",
+                    "enum": [
+                        "A1",
+                        "A2",
+                        "B1",
+                        "B2",
+                        "C1",
+                        "C2",
+                        "NATIVE"
+                    ]
+                },
+                "objectKey": {
+                    "type": "string"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 255
+                }
+            }
+        },
+        "dto.CreateBookmarkRequestDTO": {
+            "type": "object",
+            "required": [
+                "timestampSeconds",
+                "trackId"
+            ],
+            "properties": {
+                "note": {
+                    "description": "Optional note",
+                    "type": "string"
+                },
+                "timestampSeconds": {
+                    "description": "Use float64 for seconds from JSON",
+                    "type": "number",
+                    "minimum": 0
+                },
+                "trackId": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.CreateCollectionRequestDTO": {
+            "type": "object",
+            "required": [
+                "title",
+                "type"
+            ],
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "initialTrackIds": {
+                    "description": "Optional list of track UUIDs",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "type": {
+                    "description": "Matches domain.CollectionType",
+                    "type": "string",
+                    "enum": [
+                        "COURSE",
+                        "PLAYLIST"
+                    ]
+                }
+            }
+        },
+        "dto.GoogleCallbackRequestDTO": {
+            "type": "object",
+            "required": [
+                "idToken"
+            ],
+            "properties": {
+                "idToken": {
                     "type": "string"
                 }
             }
@@ -309,6 +1487,100 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.PaginatedBookmarksResponseDTO": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.BookmarkResponseDTO"
+                    }
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "offset": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.PaginatedProgressResponseDTO": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.PlaybackProgressResponseDTO"
+                    }
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "offset": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.PaginatedTracksResponseDTO": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AudioTrackResponseDTO"
+                    }
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "offset": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.PlaybackProgressResponseDTO": {
+            "type": "object",
+            "properties": {
+                "lastListenedAt": {
+                    "type": "string"
+                },
+                "progressSeconds": {
+                    "type": "number"
+                },
+                "trackId": {
+                    "type": "string"
+                },
+                "userId": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.RecordProgressRequestDTO": {
+            "type": "object",
+            "required": [
+                "progressSeconds",
+                "trackId"
+            ],
+            "properties": {
+                "progressSeconds": {
+                    "description": "Use float64 for seconds from JSON",
+                    "type": "number",
+                    "minimum": 0
+                },
+                "trackId": {
                     "type": "string"
                 }
             }
@@ -340,6 +1612,89 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.RequestUploadRequestDTO": {
+            "type": "object",
+            "required": [
+                "contentType",
+                "filename"
+            ],
+            "properties": {
+                "contentType": {
+                    "description": "e.g., \"audio/mpeg\"",
+                    "type": "string"
+                },
+                "filename": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.RequestUploadResponseDTO": {
+            "type": "object",
+            "properties": {
+                "objectKey": {
+                    "description": "The key the client should use/report back",
+                    "type": "string"
+                },
+                "uploadUrl": {
+                    "description": "The presigned PUT URL",
+                    "type": "string"
+                }
+            }
+        },
+        "dto.UpdateCollectionRequestDTO": {
+            "type": "object",
+            "required": [
+                "title"
+            ],
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 255
+                }
+            }
+        },
+        "dto.UpdateCollectionTracksRequestDTO": {
+            "type": "object",
+            "properties": {
+                "orderedTrackIds": {
+                    "description": "Full ordered list of track UUIDs",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "dto.UserResponseDTO": {
+            "type": "object",
+            "properties": {
+                "authProvider": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "description": "Use string format like RFC3339",
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "profileImageUrl": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                }
+            }
+        },
         "httputil.ErrorResponseDTO": {
             "type": "object",
             "properties": {
@@ -357,7 +1712,41 @@ const docTemplate = `{
                 }
             }
         }
-    }
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "description": "Type \"Bearer\" followed by a space and JWT token. Example: \"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        }
+    },
+    "tags": [
+        {
+            "description": "Operations related to user signup, login, and external authentication (e.g., Google).",
+            "name": "Authentication"
+        },
+        {
+            "description": "Operations related to user profiles.",
+            "name": "Users"
+        },
+        {
+            "description": "Operations related to individual audio tracks, including retrieval and listing.",
+            "name": "Audio Tracks"
+        },
+        {
+            "description": "Operations related to managing audio collections (playlists, courses).",
+            "name": "Audio Collections"
+        },
+        {
+            "description": "Operations related to tracking user interactions like playback progress and bookmarks.",
+            "name": "User Activity"
+        },
+        {
+            "description": "Operations related to requesting upload URLs and finalizing uploads.",
+            "name": "Uploads"
+        }
+    ]
 }`
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
