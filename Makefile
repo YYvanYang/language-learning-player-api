@@ -17,6 +17,15 @@ PG_PASSWORD ?= password
 PG_DB ?= language_learner_db
 PG_PORT ?= 5432
 PG_VERSION ?= 16
+PG_READY_TIMEOUT ?= 30 # Seconds to wait for PostgreSQL to be ready
+# MinIO Docker settings
+MINIO_CONTAINER_NAME ?= language-learner-minio
+MINIO_ROOT_USER ?= minioadmin
+MINIO_ROOT_PASSWORD ?= minioadmin
+MINIO_API_PORT ?= 9000
+MINIO_CONSOLE_PORT ?= 9001
+MINIO_BUCKET_NAME ?= language-audio # Ensure this matches config.development.yaml
+MINIO_READY_TIMEOUT ?= 30 # Seconds to wait for MinIO to be ready
 # Migrate CLI path relative to project root
 MIGRATIONS_PATH=migrations
 # Swag CLI variables (if using swaggo/swag)
@@ -142,7 +151,15 @@ run: tools
 	@APP_ENV=development go run $(CMD_PATH)/main.go
 
 # --- Database Migrations ---
-.PHONY: migrate-create migrate-up migrate-down migrate-force
+.PHONY: migrate-create migrate-up migrate-down migrate-force check-db-url
+
+# Internal target to check if DATABASE_URL is set
+check-db-url:
+	@if [ -z "$(DATABASE_URL)" ]; then \
+		echo ">>> ERROR: DATABASE_URL environment variable is not set."; \
+		echo ">>> Please set it before running migrations, e.g.: export DATABASE_URL='postgresql://user:password@host:port/db?sslmode=disable'"; \
+		exit 1; \
+	fi
 
 # Create a new migration file
 # Usage: make migrate-create name=your_migration_name
@@ -152,20 +169,20 @@ migrate-create: tools
 	@echo ">>> Migration file created."
 
 # Apply all up migrations
-migrate-up: tools
+migrate-up: tools check-db-url
 	@echo ">>> Applying database migrations..."
 	@$(MIGRATE) -database "$(DATABASE_URL)" -path $(MIGRATIONS_PATH) up
 	@echo ">>> Migrations applied."
 
 # Roll back the last migration
-migrate-down: tools
+migrate-down: tools check-db-url
 	@echo ">>> Reverting last database migration..."
 	@$(MIGRATE) -database "$(DATABASE_URL)" -path $(MIGRATIONS_PATH) down 1
 	@echo ">>> Last migration reverted."
 
 # Force set migration version (Use with caution!)
 # Usage: make migrate-force version=YYYYMMDDHHMMSS
-migrate-force: tools
+migrate-force: tools check-db-url
 	@echo ">>> Forcing migration version to $(version)..."
 	@$(MIGRATE) -database "$(DATABASE_URL)" -path $(MIGRATIONS_PATH) force $(version)
 	@echo ">>> Migration version forced."
@@ -239,31 +256,12 @@ check-vuln: tools
 	@$(GOVULNCHECK) ./...
 
 
-# --- Docker Support Check ---
-.PHONY: check-docker
-
-# Check if Docker is available
-check-docker:
-	@echo ">>> 检查Docker可用性..."
-	@# Use 'docker version' as 'docker info' might require more permissions or fail in some envs
-	@if ! docker version &> /dev/null; then \
-		echo ">>> Docker 命令似乎不可用或无法执行!"; \
-		echo ">>> 如果您使用WSL 2，请按照以下步骤操作:"; \
-		echo ">>>   1. 确保Docker Desktop已运行"; \
-		echo ">>>   2. 确认已经在Docker Desktop设置中启用WSL 2集成"; \
-		echo ">>>   3. 尝试直接运行 'docker ps' 确认Docker是否响应"; \
-		echo ">>> 如果权限问题，请将用户添加到docker组 (然后需要重新登录或使用 'newgrp docker'):"; \
-		echo ">>>   sudo usermod -aG docker $USER"; \
-		echo ">>> 更多详情，请访问: https://docs.docker.com/go/wsl2/"; \
-		exit 1; \
-	fi
-	@echo ">>> Docker可用，继续执行..."
-
 # --- Docker ---
-.PHONY: docker-build docker-run docker-stop docker-push docker-postgres-run docker-postgres-stop
+# Update .PHONY to include new MinIO targets
+.PHONY: docker-build docker-run docker-stop docker-push docker-postgres-run docker-postgres-stop docker-minio-run docker-minio-stop
 
 # Build Docker image
-docker-build: check-docker
+docker-build:
 	@echo ">>> Building Docker image [$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)]..."
 	@docker build -t $(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG) .
 	@echo ">>> Docker image built."
@@ -271,8 +269,8 @@ docker-build: check-docker
 # Run Docker container locally (using env vars from .env file if present)
 docker-run: docker-build
 	@echo ">>> Running Docker container [$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)]..."
-	# Load .env file if it exists (requires .env file with variable assignments)
-	@$(if $(wildcard .env), $(eval include .env) $(eval export))
+	@# Docker will read variables directly from .env file using --env-file
+	@# Ensure .env file exists if you rely on it, or pass env vars directly with -e
 	@docker run -d --name $(BINARY_NAME) \
 		-p 8080:8080 \
 		--env-file .env \
@@ -280,59 +278,96 @@ docker-run: docker-build
 	@echo ">>> Container started. Use 'make docker-stop' to stop."
 
 # Stop and remove the running container
-docker-stop: check-docker
+docker-stop:
 	@echo ">>> Stopping and removing Docker container [$(BINARY_NAME)]..."
 	@docker stop $(BINARY_NAME) || true
 	@docker rm $(BINARY_NAME) || true
 	@echo ">>> Container stopped and removed."
 
 # Push Docker image to registry (requires docker login)
-docker-push: check-docker
+docker-push:
 	@echo ">>> Pushing Docker image [$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)]..."
+	@echo ">>> Note: Ensure DOCKER_IMAGE_NAME variable is set correctly for your registry."
 	@docker push $(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)
 	@echo ">>> Image pushed."
 
 # --- PostgreSQL Docker ---
-# Run PostgreSQL in Docker container
-docker-postgres-run: check-docker
-	@echo ">>> 正在启动PostgreSQL容器 [$(PG_CONTAINER_NAME)]..."
-	@echo ">>> 检查是否有同名容器..."
-	@if docker ps -a --format '{{.Names}}' | grep -q "^$(PG_CONTAINER_NAME)$$"; then \
-		echo ">>> 发现同名容器，尝试删除..."; \
-		docker stop $(PG_CONTAINER_NAME) || true; \
-		docker rm $(PG_CONTAINER_NAME) || true; \
-	fi
-	@echo ">>> 检查端口 $(PG_PORT) 是否已被占用..."
-	@if lsof -i:$(PG_PORT) > /dev/null 2>&1; then \
-		echo ">>> 警告：端口 $(PG_PORT) 已被占用，可能会导致启动失败"; \
-	fi
-	@echo ">>> 正在运行PostgreSQL容器..."
-	docker run --name $(PG_CONTAINER_NAME) \
+# Run PostgreSQL in Docker container (Simplified)
+docker-postgres-run:
+	@echo ">>> Ensuring PostgreSQL container [$(PG_CONTAINER_NAME)] is running..."
+	@# Stop and remove existing container if it exists
+	@docker stop $(PG_CONTAINER_NAME) > /dev/null 2>&1 || true
+	@docker rm $(PG_CONTAINER_NAME) > /dev/null 2>&1 || true
+	@echo ">>> Starting PostgreSQL container..."
+	@docker run --name $(PG_CONTAINER_NAME) \
 		-e POSTGRES_USER=$(PG_USER) \
 		-e POSTGRES_PASSWORD=$(PG_PASSWORD) \
 		-e POSTGRES_DB=$(PG_DB) \
 		-p $(PG_PORT):5432 \
-		-d postgres:$(PG_VERSION)-alpine
-	@echo ">>> 验证容器是否成功启动..."
-	@if docker ps | grep -q $(PG_CONTAINER_NAME); then \
-		echo ">>> PostgreSQL容器启动成功!"; \
-		echo ">>> 容器ID: $$(docker ps -q -f name=$(PG_CONTAINER_NAME))"; \
-		echo ">>> 连接字符串: $(DATABASE_URL)"; \
-	else \
-		echo ">>> 错误：PostgreSQL容器启动失败"; \
-		echo ">>> 查看最近的容器日志:"; \
-		docker logs $(PG_CONTAINER_NAME) 2>&1 || echo ">>> 无法获取容器日志"; \
-		echo ">>> 请检查Docker错误信息:"; \
-		docker ps -a | grep $(PG_CONTAINER_NAME) || echo ">>> 找不到容器"; \
-		exit 1; \
-	fi
+		-d postgres:$(PG_VERSION)-alpine > /dev/null
+	@echo ">>> Waiting for PostgreSQL to be ready (max $(PG_READY_TIMEOUT)s)..."
+	@timeout=$(PG_READY_TIMEOUT); \
+	while ! docker exec $(PG_CONTAINER_NAME) pg_isready -U $(PG_USER) -d $(PG_DB) -q; do \
+		timeout=$$((timeout-1)); \
+		if [ $$timeout -eq 0 ]; then \
+			echo ">>> ERROR: PostgreSQL did not become ready in time."; \
+			docker logs $(PG_CONTAINER_NAME); \
+			exit 1; \
+		fi; \
+		sleep 1; \
+	done
+	@echo ">>> PostgreSQL container [$(PG_CONTAINER_NAME)] started successfully."
+	@echo ">>> Connection string: $(DATABASE_URL)"
+
 
 # Stop and remove PostgreSQL container
-docker-postgres-stop: check-docker
+docker-postgres-stop:
 	@echo ">>> Stopping and removing PostgreSQL container [$(PG_CONTAINER_NAME)]..."
 	@docker stop $(PG_CONTAINER_NAME) || true
 	@docker rm $(PG_CONTAINER_NAME) || true
 	@echo ">>> PostgreSQL container stopped and removed."
+
+# --- MinIO Docker ---
+# Run MinIO in Docker container
+docker-minio-run:
+	@echo ">>> Ensuring MinIO container [$(MINIO_CONTAINER_NAME)] is running..."
+	@# Stop and remove existing container if it exists
+	@docker stop $(MINIO_CONTAINER_NAME) > /dev/null 2>&1 || true
+	@docker rm $(MINIO_CONTAINER_NAME) > /dev/null 2>&1 || true
+	@echo ">>> Starting MinIO container..."
+	@docker run --name $(MINIO_CONTAINER_NAME) \
+		-p $(MINIO_API_PORT):9000 \
+		-p $(MINIO_CONSOLE_PORT):9001 \
+		-e MINIO_ROOT_USER=$(MINIO_ROOT_USER) \
+		-e MINIO_ROOT_PASSWORD=$(MINIO_ROOT_PASSWORD) \
+		-d minio/minio server /data --console-address ":9001" > /dev/null
+	@echo ">>> Waiting for MinIO to be ready (max $(MINIO_READY_TIMEOUT)s)..."
+	@timeout=$(MINIO_READY_TIMEOUT); \
+	until curl -s --max-time 1 "http://localhost:$(MINIO_API_PORT)/minio/health/live" | grep -q 'OK'; do \
+		timeout=$$((timeout-1)); \
+		if [ $$timeout -eq 0 ]; then \
+			echo ">>> ERROR: MinIO did not become ready in time."; \
+			docker logs $(MINIO_CONTAINER_NAME); \
+			exit 1; \
+		fi; \
+		sleep 1; \
+	done
+	@echo ">>> MinIO container [$(MINIO_CONTAINER_NAME)] started successfully."
+	@echo ">>> MinIO API: http://localhost:$(MINIO_API_PORT)"
+	@echo ">>> MinIO Console: http://localhost:$(MINIO_CONSOLE_PORT) (Login: $(MINIO_ROOT_USER)/$(MINIO_ROOT_PASSWORD))"
+	@# Automatically create the bucket if it doesn't exist
+	@echo ">>> Ensuring bucket '$(MINIO_BUCKET_NAME)' exists..."
+	@sleep 5 # Give MinIO extra time before creating bucket
+	@docker exec $(MINIO_CONTAINER_NAME) mc alias set local http://localhost:9000 $(MINIO_ROOT_USER) $(MINIO_ROOT_PASSWORD) > /dev/null || true
+	@docker exec $(MINIO_CONTAINER_NAME) mc mb local/$(MINIO_BUCKET_NAME) > /dev/null || echo ">>> Bucket '$(MINIO_BUCKET_NAME)' likely already exists."
+
+
+# Stop and remove MinIO container
+docker-minio-stop:
+	@echo ">>> Stopping and removing MinIO container [$(MINIO_CONTAINER_NAME)]..."
+	@docker stop $(MINIO_CONTAINER_NAME) || true
+	@docker rm $(MINIO_CONTAINER_NAME) || true
+	@echo ">>> MinIO container stopped and removed."
 
 # --- Help ---
 .PHONY: help
@@ -341,32 +376,57 @@ docker-postgres-stop: check-docker
 help:
 	@echo "Usage: make [target]"
 	@echo ""
-	@echo "Targets:"
-	@echo "  build             Build the Go binary for linux/amd64"
-	@echo "  clean             Remove build artifacts"
-	@echo "  run               Run the application locally using go run (needs dependencies)"
-	@echo "  tools             Install necessary Go CLI tools (migrate, sqlc, swag, lint, vulncheck)"
+	@echo "Local Development:"
+	@echo "  run               Run the application locally (requires dependencies: use 'make deps-run')"
+	@echo "  deps-run          Start local PostgreSQL and MinIO containers"
+	@echo "  deps-stop         Stop local PostgreSQL and MinIO containers"
+	@echo "  tools             Install necessary Go CLI tools"
+	@echo ""
+	@echo "Database Migrations:"
 	@echo "  migrate-create name=<name> Create a new migration file"
-	@echo "  migrate-up        Apply database migrations"
-	@echo "  migrate-down      Revert the last database migration"
-	@echo "  migrate-force version=<ver> Force migration version (use with caution)"
+	@echo "  migrate-up        Apply database migrations (requires DB running and DATABASE_URL set/exported)"
+	@echo "  migrate-down      Revert the last database migration (requires DB running and DATABASE_URL set/exported)"
+	@echo "  migrate-force version=<ver> Force migration version (requires DB running and DATABASE_URL set/exported)"
+	@echo ""
+	@echo "Code Generation & Formatting:"
 	@echo "  generate          Run all code generators (sqlc, swag)"
 	@echo "  generate-sqlc     Generate Go code from SQL using sqlc"
 	@echo "  generate-swag     Generate OpenAPI docs using swag"
-	@echo "  test              Run all tests (unit + integration) and generate coverage"
+	@echo "  fmt               Format Go code using go fmt and goimports"
+	@echo ""
+	@echo "Testing & Linting:"
+	@echo "  test              Run all tests and generate coverage"
 	@echo "  test-unit         Run unit tests (placeholder)"
 	@echo "  test-integration  Run integration tests (requires Docker)"
 	@echo "  test-cover        Show test coverage report in browser"
 	@echo "  lint              Run golangci-lint"
-	@echo "  fmt               Format Go code using go fmt and goimports"
-	@echo "  check-vuln        Check for known vulnerabilities using govulncheck"
-	@echo "  docker-build      Build the Docker image"
-	@echo "  docker-run        Build and run the Docker container locally (uses .env file)"
-	@echo "  docker-stop       Stop and remove the running Docker container"
-	@echo "  docker-push       Push the Docker image to registry (requires login)"
+	@echo "  check-vuln        Check for known vulnerabilities"
+	@echo ""
+	@echo "Docker - Application:"
+	@echo "  docker-build      Build the application Docker image"
+	@echo "  docker-run        Build and run the application container locally (uses .env file)"
+	@echo "  docker-stop       Stop and remove the running application container"
+	@echo "  docker-push       Push the application Docker image to registry (Note: Customize DOCKER_IMAGE_NAME)"
+	@echo ""
+	@echo "Docker - Dependencies:"
 	@echo "  docker-postgres-run Start PostgreSQL in Docker container"
 	@echo "  docker-postgres-stop Stop and remove PostgreSQL Docker container"
+	@echo "  docker-minio-run    Start MinIO in Docker container"
+	@echo "  docker-minio-stop   Stop and remove MinIO Docker container"
+	@echo ""
+	@echo "Other:"
+	@echo "  build             Build the Go binary for linux/amd64"
+	@echo "  clean             Remove build artifacts"
 	@echo "  help              Show this help message"
 
 # Default target
 .DEFAULT_GOAL := help
+
+# --- Convenience Targets ---
+.PHONY: deps-run deps-stop
+
+# Start local development dependencies (PostgreSQL + MinIO)
+deps-run: docker-postgres-run docker-minio-run
+
+# Stop local development dependencies
+deps-stop: docker-postgres-stop docker-minio-stop
