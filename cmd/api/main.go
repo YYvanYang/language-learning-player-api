@@ -175,6 +175,11 @@ func main() {
 		fmt.Fprintln(w, "OK")
 	})
 
+	// Redirect root to Swagger docs
+	router.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/swagger/index.html", http.StatusFound) // 302 Found
+	})
+
 	// API v1 Routes
 	router.Route("/api/v1", func(r chi.Router) {
 		// Public routes
