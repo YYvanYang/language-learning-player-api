@@ -10,6 +10,13 @@ GO_TEST_FLAGS=./... -coverprofile=coverage.out
 # DSN for local database operations (Can be overridden by environment variable)
 # Example: export DATABASE_URL="postgresql://user:password@localhost:5432/language_learner_db?sslmode=disable"
 DATABASE_URL ?= postgresql://user:password@localhost:5432/language_learner_db?sslmode=disable
+# PostgreSQL Docker settings
+PG_CONTAINER_NAME ?= language-learner-postgres
+PG_USER ?= user
+PG_PASSWORD ?= password
+PG_DB ?= language_learner_db
+PG_PORT ?= 5432
+PG_VERSION ?= 15
 # Migrate CLI path relative to project root
 MIGRATIONS_PATH=migrations
 # Swag CLI variables (if using swaggo/swag)
@@ -212,11 +219,28 @@ check-vuln: tools
 	@$(GOVULNCHECK) ./...
 
 
+# --- Docker Support Check ---
+.PHONY: check-docker
+
+# Check if Docker is available
+check-docker:
+	@if ! command -v docker &> /dev/null; then \
+		echo ">>> Docker 命令未找到!"; \
+		echo ">>> 如果您使用WSL 2，请按照以下步骤操作:"; \
+		echo ">>>   1. 确保已安装Docker Desktop"; \
+		echo ">>>   2. 在Docker Desktop设置中启用WSL 2集成"; \
+		echo ">>>   3. 打开Docker Desktop -> Settings -> Resources -> WSL Integration"; \
+		echo ">>>   4. 确保您当前使用的WSL发行版已启用"; \
+		echo ">>>   5. 重启Docker Desktop"; \
+		echo ">>> 更多详情，请访问: https://docs.docker.com/go/wsl2/"; \
+		exit 1; \
+	fi
+
 # --- Docker ---
-.PHONY: docker-build docker-run docker-stop docker-push
+.PHONY: docker-build docker-run docker-stop docker-push docker-postgres-run docker-postgres-stop
 
 # Build Docker image
-docker-build:
+docker-build: check-docker
 	@echo ">>> Building Docker image [$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)]..."
 	@docker build -t $(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG) .
 	@echo ">>> Docker image built."
@@ -233,17 +257,37 @@ docker-run: docker-build
 	@echo ">>> Container started. Use 'make docker-stop' to stop."
 
 # Stop and remove the running container
-docker-stop:
+docker-stop: check-docker
 	@echo ">>> Stopping and removing Docker container [$(BINARY_NAME)]..."
 	@docker stop $(BINARY_NAME) || true
 	@docker rm $(BINARY_NAME) || true
 	@echo ">>> Container stopped and removed."
 
 # Push Docker image to registry (requires docker login)
-docker-push:
+docker-push: check-docker
 	@echo ">>> Pushing Docker image [$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)]..."
 	@docker push $(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)
 	@echo ">>> Image pushed."
+
+# --- PostgreSQL Docker ---
+# Run PostgreSQL in Docker container
+docker-postgres-run: check-docker
+	@echo ">>> Running PostgreSQL in Docker container [$(PG_CONTAINER_NAME)]..."
+	@docker run --name $(PG_CONTAINER_NAME) \
+		-e POSTGRES_USER=$(PG_USER) \
+		-e POSTGRES_PASSWORD=$(PG_PASSWORD) \
+		-e POSTGRES_DB=$(PG_DB) \
+		-p $(PG_PORT):5432 \
+		-d postgres:$(PG_VERSION)-alpine
+	@echo ">>> PostgreSQL container started. Use 'make docker-postgres-stop' to stop."
+	@echo ">>> Connection string: $(DATABASE_URL)"
+
+# Stop and remove PostgreSQL container
+docker-postgres-stop: check-docker
+	@echo ">>> Stopping and removing PostgreSQL container [$(PG_CONTAINER_NAME)]..."
+	@docker stop $(PG_CONTAINER_NAME) || true
+	@docker rm $(PG_CONTAINER_NAME) || true
+	@echo ">>> PostgreSQL container stopped and removed."
 
 # --- Help ---
 .PHONY: help
@@ -275,6 +319,8 @@ help:
 	@echo "  docker-run        Build and run the Docker container locally (uses .env file)"
 	@echo "  docker-stop       Stop and remove the running Docker container"
 	@echo "  docker-push       Push the Docker image to registry (requires login)"
+	@echo "  docker-postgres-run Start PostgreSQL in Docker container"
+	@echo "  docker-postgres-stop Stop and remove PostgreSQL Docker container"
 	@echo "  help              Show this help message"
 
 # Default target
