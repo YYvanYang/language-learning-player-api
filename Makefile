@@ -37,14 +37,17 @@ DOCKER_IMAGE_TAG ?= latest
 
 # --- Go Tools Installation ---
 # Define paths for Go tools
-GOPATH := $(shell go env GOPATH)
-GOBIN ?= $(shell go env GOPATH)/bin
+# Explicitly use full path to go for shell commands to avoid PATH issues during variable parsing
+GOPATH := $(shell /usr/local/go/bin/go env GOPATH)
+# Define GOBIN, prioritize go env GOBIN, fallback to GOPATH/bin, then $HOME/go/bin
+GOBIN ?= $(firstword $(shell /usr/local/go/bin/go env GOBIN) $(GOPATH)/bin $(HOME)/go/bin)
 
 # Tool binaries
 MIGRATE := $(GOBIN)/migrate
 SQLC := $(GOBIN)/sqlc
 # SWAG := $(shell go env GOPATH)/bin/swag # Temporarily comment out the dynamic path
-SWAG := /home/yvan/go/bin/swag # Temporarily hardcode the path - CHANGE IF YOURS IS DIFFERENT!
+# SWAG := /home/yvan/go/bin/swag # Temporarily hardcode the path - CHANGE IF YOURS IS DIFFERENT!
+SWAG := $(GOBIN)/swag
 GOLANGCILINT := $(GOBIN)/golangci-lint
 GOVULNCHECK := $(GOBIN)/govulncheck
 
