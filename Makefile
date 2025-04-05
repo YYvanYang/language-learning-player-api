@@ -38,14 +38,13 @@ DOCKER_IMAGE_TAG ?= latest
 # --- Go Tools Installation ---
 # Define paths for Go tools
 GOPATH := $(shell go env GOPATH)
-GOBIN ?= $(firstword $(subst :, ,${GOPATH}))/bin
-# Ensure GOBIN is in PATH for Make to find the tools
-export PATH := $(GOBIN):$(PATH)
+GOBIN ?= $(shell go env GOPATH)/bin
 
 # Tool binaries
 MIGRATE := $(GOBIN)/migrate
 SQLC := $(GOBIN)/sqlc
-SWAG := $(GOBIN)/swag
+# SWAG := $(shell go env GOPATH)/bin/swag # Temporarily comment out the dynamic path
+SWAG := /home/yvan/go/bin/swag # Temporarily hardcode the path - CHANGE IF YOURS IS DIFFERENT!
 GOLANGCILINT := $(GOBIN)/golangci-lint
 GOVULNCHECK := $(GOBIN)/govulncheck
 
@@ -203,6 +202,7 @@ generate-sqlc: tools
 # Generate OpenAPI docs using swag (Optional)
 generate-swag: tools
 	@echo ">>> Generating OpenAPI docs using swag..."
+	@echo ">>> Using swag command: $(SWAG)"
 	@$(SWAG) init -g $(SWAG_ENTRY_POINT) --output $(SWAG_OUTPUT_DIR)
 	@echo ">>> OpenAPI docs generated in $(SWAG_OUTPUT_DIR)."
 

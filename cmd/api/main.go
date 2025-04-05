@@ -12,14 +12,13 @@ import (
 	"syscall"
 	"time"
 
-	"path/filepath" // Need this
-
 	"github.com/go-chi/chi/v5" // Import Chi
 	chimiddleware "github.com/go-chi/chi/v5/middleware" // Chi's built-in middleware
 	"github.com/go-chi/cors" // Import chi cors
-	httpSwagger "github.com/swaggo/http-swagger" // 添加Swagger UI处理器
+	httpSwagger "github.com/swaggo/http-swagger" // RE-ADD THIS - Correct handler for chi/net/http
 	"golang.org/x/time/rate"
 
+	_ "github.com/yvanyang/language-learning-player-backend/docs" // Keep this - Import generated docs
 	"github.com/yvanyang/language-learning-player-backend/internal/config" // Adjust import path
 	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware" // Adjust import path for our custom middleware
 	httpadapter "github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http" // Alias for http handler package
@@ -184,26 +183,8 @@ func main() {
 		})
 	})
 
-	// Serve OpenAPI spec and Swagger UI
-	docsDir := "./docs" // Path to your docs folder
-	specFile := "/openapi.yaml"
-	uiPath := "/docs/swagger-ui/"
-
-	// Route for the spec file
-	router.Get(specFile, func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, filepath.Join(docsDir, specFile))
-	})
-
-	// Route for Swagger UI static files
-	fs := http.FileServer(http.Dir(filepath.Join(docsDir, "swagger-ui")))
-	router.Handle(uiPath+"*", http.StripPrefix(uiPath, fs))
-
-	// Optional: Redirect /docs to /docs/swagger-ui/
-	router.Get("/docs", func(w http.ResponseWriter, r *http.Request){
-	   http.Redirect(w, r, uiPath, http.StatusMovedPermanently)
-	})
-
-	router.Get("/swagger/*", httpSwagger.WrapHandler)
+	// Use httpSwagger wrapper for chi
+	router.Get("/swagger/*", httpSwagger.WrapHandler) // CHANGE BACK to this
 
 	appLogger.Info("HTTP router setup complete")
 

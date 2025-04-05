@@ -31,8 +31,8 @@ func NewAuthHandler(uc port.AuthUseCase, v *validation.Validator) *AuthHandler {
 // @Summary Register a new user
 // @Description Registers a new user account using email and password.
 // @Tags Authentication
-// @Accept json                   // Consumes JSON
-// @Produce json                  // Produces JSON
+// @Accept json
+// @Produce json
 // @Param register body dto.RegisterRequestDTO true "User Registration Info" // Input parameter: name, in, type, required, description
 // @Success 201 {object} dto.AuthResponseDTO "Registration successful, returns JWT" // Success response: code, type, description
 // @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Input"                // Failure response: code, type, description

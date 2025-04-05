@@ -1,0 +1,231 @@
+definitions:
+  dto.AudioTrackDetailsResponseDTO:
+    properties:
+      coverImageUrl:
+        type: string
+      createdAt:
+        description: Use time.Time, will marshal to RFC3339
+        type: string
+      description:
+        type: string
+      durationMs:
+        description: Use int64 for milliseconds
+        type: integer
+      id:
+        type: string
+      isPublic:
+        type: boolean
+      languageCode:
+        type: string
+      level:
+        type: string
+      playUrl:
+        description: Presigned URL
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      title:
+        type: string
+      updatedAt:
+        type: string
+      uploaderId:
+        description: Use string UUID
+        type: string
+    type: object
+  dto.AuthResponseDTO:
+    properties:
+      isNewUser:
+        description: Pointer, only included for Google callback if user is new
+        type: boolean
+      token:
+        description: The JWT access token
+        type: string
+    type: object
+  dto.LoginRequestDTO:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  dto.RegisterRequestDTO:
+    properties:
+      email:
+        description: Add example tag
+        example: user@example.com
+        type: string
+      name:
+        example: John Doe
+        maxLength: 100
+        type: string
+      password:
+        description: Add format tag
+        example: Str0ngP@ssw0rd
+        format: password
+        minLength: 8
+        type: string
+    required:
+    - email
+    - name
+    - password
+    type: object
+  httputil.ErrorResponseDTO:
+    properties:
+      code:
+        description: Application-specific error code (e.g., "INVALID_INPUT", "NOT_FOUND")
+        type: string
+      message:
+        description: User-friendly error message
+        type: string
+      requestId:
+        description: Include request ID for tracing
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /audio/tracks/{trackId}:
+    get:
+      description: Retrieves details for a specific audio track, including metadata
+        and a temporary playback URL.
+      parameters:
+      - description: Audio Track UUID
+        format: uuid
+        in: path
+        name: trackId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Audio track details found
+          schema:
+            $ref: '#/definitions/dto.AudioTrackDetailsResponseDTO'
+        "400":
+          description: Invalid Track ID Format
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "404":
+          description: Track Not Found
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      summary: Get audio track details
+      tags:
+      - Audio Tracks
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticates a user with email and password, returns a JWT token.
+      parameters:
+      - description: User Login Credentials
+        in: body
+        name: login
+        required: true
+        schema:
+          $ref: '#/definitions/dto.LoginRequestDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Login successful, returns JWT
+          schema:
+            $ref: '#/definitions/dto.AuthResponseDTO'
+        "400":
+          description: Invalid Input
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "401":
+          description: Authentication Failed
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      summary: Login a user
+      tags:
+      - Authentication
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Registers a new user account using email and password.
+      parameters:
+      - description: User Registration Info
+        in: body
+        name: register
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RegisterRequestDTO'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 'Registration successful, returns JWT" // Success response:
+            code, type, description'
+          schema:
+            $ref: '#/definitions/dto.AuthResponseDTO'
+        "400":
+          description: 'Invalid Input"                // Failure response: code, type,
+            description'
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "409":
+          description: Conflict - Email Exists
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      summary: Register a new user
+      tags:
+      - Authentication
+  /bookmarks/{bookmarkId}:
+    delete:
+      description: Deletes a specific bookmark owned by the current user.
+      parameters:
+      - description: Bookmark UUID
+        format: uuid
+        in: path
+        name: bookmarkId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Bookmark deleted successfully
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "403":
+          description: Forbidden (Not Owner)
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "404":
+          description: Bookmark Not Found
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      security:
+      - BearerAuth // Apply the security definition defined in main.go: []
+      summary: Delete a bookmark
+      tags:
+      - User Activity
+swagger: "2.0"
