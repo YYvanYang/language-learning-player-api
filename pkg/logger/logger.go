@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
-	"your_project/internal/config" // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/internal/config" // Adjust import path
 )
 
 // NewLogger creates and returns a new slog.Logger based on the provided configuration.

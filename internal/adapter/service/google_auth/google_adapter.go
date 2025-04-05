@@ -10,8 +10,8 @@ import (
 	// Use the official Google idtoken verifier
 	"google.golang.org/api/idtoken"
 
-	"your_project/internal/domain" // Adjust import path
-	"your_project/internal/port"   // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
 )
 
 // GoogleAuthService implements the port.ExternalAuthService interface for Google.

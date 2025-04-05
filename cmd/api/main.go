@@ -19,17 +19,17 @@ import (
 	"github.com/go-chi/cors" // Import chi cors
 	"golang.org/x/time/rate"
 
-	"your_project/internal/config" // Adjust import path
-	"your_project/internal/adapter/handler/http/middleware" // Adjust import path for our custom middleware
-	httpadapter "your_project/internal/adapter/handler/http" // Alias for http handler package
-	minioadapter "your_project/internal/adapter/service/minio" // Alias for minio adapter
-	googleauthadapter "your_project/internal/adapter/service/google_auth" // New import
-	repo "your_project/internal/adapter/repository/postgres"
-	// service "your_project/internal/adapter/service" // Alias if needed for google/minio later
-	"your_project/internal/usecase"
-	"your_project/pkg/logger"      // Adjust import path
-	"your_project/pkg/security"
-	"your_project/pkg/validation"
+	"github.com/yvanyang/language-learning-player-backend/internal/config" // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware" // Adjust import path for our custom middleware
+	httpadapter "github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http" // Alias for http handler package
+	minioadapter "github.com/yvanyang/language-learning-player-backend/internal/adapter/service/minio" // Alias for minio adapter
+	googleauthadapter "github.com/yvanyang/language-learning-player-backend/internal/adapter/service/google_auth" // New import
+	repo "github.com/yvanyang/language-learning-player-backend/internal/adapter/repository/postgres"
+	// service "github.com/yvanyang/language-learning-player-backend/internal/adapter/service" // Alias if needed for google/minio later
+	"github.com/yvanyang/language-learning-player-backend/internal/usecase"
+	"github.com/yvanyang/language-learning-player-backend/pkg/logger"      // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/pkg/security"
+	"github.com/yvanyang/language-learning-player-backend/pkg/validation"
 )
 
 func main() {

@@ -8,9 +8,9 @@ import (
 	"log/slog"
 	"time"
 
-	"your_project/internal/config" // Adjust import path (needed for JWT expiry)
-	"your_project/internal/domain" // Adjust import path
-	"your_project/internal/port"   // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/internal/config" // Adjust import path (needed for JWT expiry)
+	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
 )
 
 type AuthUseCase struct {

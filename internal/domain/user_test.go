@@ -3,7 +3,7 @@ package domain_test
 
 import (
 	"testing"
-	"your_project/internal/domain"
+	"github.com/yvanyang/language-learning-player-backend/internal/domain"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

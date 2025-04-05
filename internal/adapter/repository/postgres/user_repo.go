@@ -14,8 +14,8 @@ import (
 	"github.com/jackc/pgx/v5/pgerrcode" // Import pgerrcode for error codes
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"your_project/internal/domain" // Adjust import path
-	"your_project/internal/port"   // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
 )
 
 type UserRepository struct {

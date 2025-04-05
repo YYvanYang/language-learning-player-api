@@ -7,9 +7,9 @@ import (
 	"time"
     "slices" // For checking list order
 
-	"your_project/internal/adapter/repository/postgres"
-	"your_project/internal/domain"
-    "your_project/internal/port" // For ListParams, Page
+	"github.com/yvanyang/language-learning-player-backend/internal/adapter/repository/postgres"
+	"github.com/yvanyang/language-learning-player-backend/internal/domain"
+    "github.com/yvanyang/language-learning-player-backend/internal/port" // For ListParams, Page
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

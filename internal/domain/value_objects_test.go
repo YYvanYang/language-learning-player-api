@@ -3,7 +3,7 @@ package domain_test // Use _test package to test only exported identifiers
 
 import (
 	"testing"
-	"your_project/internal/domain" // Import the actual package
+	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Import the actual package
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

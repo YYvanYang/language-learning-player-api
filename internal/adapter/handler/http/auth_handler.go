@@ -6,11 +6,11 @@ import (
 	"errors"
 	"net/http"
 
-	"your_project/internal/domain" // Adjust import path
-	"your_project/internal/port"   // Adjust import path (for Usecase interface)
-	"your_project/internal/adapter/handler/http/dto" // Adjust import path
-	"your_project/pkg/httputil"    // Adjust import path
-	"your_project/pkg/validation"  // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path (for Usecase interface)
+	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/dto" // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"    // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/pkg/validation"  // Adjust import path
 )
 
 // AuthHandler handles HTTP requests related to authentication.

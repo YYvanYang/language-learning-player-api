@@ -8,9 +8,9 @@ import (
 	"log/slog"
 	"time"
 
-	"your_project/internal/config" // Adjust import path (for presign expiry)
-	"your_project/internal/domain" // Adjust import path
-	"your_project/internal/port"   // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/internal/config" // Adjust import path (for presign expiry)
+	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
 )
 
 // AudioContentUseCase handles business logic related to audio tracks and collections.

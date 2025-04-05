@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"strings"
 
-	"your_project/internal/domain" // Adjust import path
-	"your_project/internal/port"   // Adjust import path (for SecurityHelper interface)
-	"your_project/pkg/httputil"    // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path (for SecurityHelper interface)
+	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"    // Adjust import path
 )
 
 const UserIDKey ContextKey = "userID" // Use the same type as RequestIDKey

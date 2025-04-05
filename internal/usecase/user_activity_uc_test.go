@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"your_project/internal/domain"
-	"your_project/internal/port"
-	"your_project/internal/port/mocks"
-	"your_project/internal/usecase"
+	"github.com/yvanyang/language-learning-player-backend/internal/domain"
+	"github.com/yvanyang/language-learning-player-backend/internal/port"
+	"github.com/yvanyang/language-learning-player-backend/internal/port/mocks"
+	"github.com/yvanyang/language-learning-player-backend/internal/usecase"
     "io" // For discarding logs
 	"log/slog"
 

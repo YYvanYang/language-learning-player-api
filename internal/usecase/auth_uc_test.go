@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"your_project/internal/config"
-	"your_project/internal/domain"
-	"your_project/internal/port/mocks" // Import the generated mocks
-	"your_project/internal/usecase"
+	"github.com/yvanyang/language-learning-player-backend/internal/config"
+	"github.com/yvanyang/language-learning-player-backend/internal/domain"
+	"github.com/yvanyang/language-learning-player-backend/internal/port/mocks" // Import the generated mocks
+	"github.com/yvanyang/language-learning-player-backend/internal/usecase"
 	"log/slog"
     "io" // For discarding logs
 

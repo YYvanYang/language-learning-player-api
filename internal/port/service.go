@@ -4,7 +4,7 @@ package port
 import (
 	"context"
 	"time"
-	"your_project/internal/domain" // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
 )
 
 // --- External Service Interfaces ---

@@ -5,7 +5,7 @@ import (
 	"testing"
     "log/slog"
     "io"
-	"your_project/pkg/security" // Adjust
+	"github.com/yvanyang/language-learning-player-backend/pkg/security" // Adjust
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

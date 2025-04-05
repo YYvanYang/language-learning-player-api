@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"your_project/internal/config" // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/internal/config" // Adjust import path
 )
 
 // NewPgxPool creates a new PostgreSQL connection pool.

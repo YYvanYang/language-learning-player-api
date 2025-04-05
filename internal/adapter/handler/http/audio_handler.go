@@ -8,11 +8,11 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"your_project/internal/domain" // Adjust import path
-	"your_project/internal/port"   // Adjust import path
-	"your_project/internal/adapter/handler/http/dto" // Adjust import path
-	"your_project/pkg/httputil"    // Adjust import path
-	"your_project/pkg/validation"  // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/dto" // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"    // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/pkg/validation"  // Adjust import path
 )
 
 // AudioHandler handles HTTP requests related to audio tracks and collections.

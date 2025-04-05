@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"golang.org/x/time/rate"
-	"your_project/pkg/httputil" // Adjust import path
-    "your_project/internal/domain" // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/pkg/httputil" // Adjust import path
+    "github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
 )
 
 // IPRateLimiter stores rate limiters for IP addresses.

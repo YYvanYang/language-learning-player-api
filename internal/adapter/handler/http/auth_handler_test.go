@@ -10,11 +10,11 @@ import (
 	"time"
 
 	chi "github.com/go-chi/chi/v5" // Need chi for routing context if using URL params
-	adapter "your_project/internal/adapter/handler/http" // Alias for handler package
-	"your_project/internal/adapter/handler/http/dto"
-	ucmocks "your_project/internal/usecase/mocks" // Mocks for usecase interfaces
-	"your_project/internal/domain"
-	"your_project/pkg/validation"
+	adapter "github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http" // Alias for handler package
+	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/dto"
+	ucmocks "github.com/yvanyang/language-learning-player-backend/internal/usecase/mocks" // Mocks for usecase interfaces
+	"github.com/yvanyang/language-learning-player-backend/internal/domain"
+	"github.com/yvanyang/language-learning-player-backend/pkg/validation"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"

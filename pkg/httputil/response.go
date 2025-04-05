@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"your_project/internal/domain" // Adjust import path
-	"your_project/internal/adapter/handler/http/middleware" // For Request ID
+	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware" // For Request ID
 )
 
 // ErrorResponseDTO defines the standard JSON error response body.

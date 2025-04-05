@@ -11,8 +11,8 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 
-	"your_project/internal/config" // Adjust import path
-	"your_project/internal/port"   // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/internal/config" // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
 )
 
 // MinioStorageService implements the port.FileStorageService interface using MinIO.

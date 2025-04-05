@@ -5,8 +5,8 @@ import (
 	"context"
 	"testing"
 
-	"your_project/internal/adapter/repository/postgres" // Import actual repo package
-	"your_project/internal/domain"
+	"github.com/yvanyang/language-learning-player-backend/internal/adapter/repository/postgres" // Import actual repo package
+	"github.com/yvanyang/language-learning-player-backend/internal/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

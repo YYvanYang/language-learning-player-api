@@ -3,7 +3,7 @@ package mocks
 
 import (
 	"context"
-	"your_project/internal/domain" // Adjust
+	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust
 	"github.com/stretchr/testify/mock"
 )
 
