@@ -24,10 +24,9 @@ import (
 	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware" // Adjust import path for our custom middleware
 	httpadapter "github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http" // Alias for http handler package
 	minioadapter "github.com/yvanyang/language-learning-player-backend/internal/adapter/service/minio" // Alias for minio adapter
-	// googleauthadapter "github.com/yvanyang/language-learning-player-backend/internal/adapter/service/google_auth" // New import
+	googleauthadapter "github.com/yvanyang/language-learning-player-backend/internal/adapter/service/google_auth" // Restored import
 	repo "github.com/yvanyang/language-learning-player-backend/internal/adapter/repository/postgres"
-	// service "github.com/yvanyang/language-learning-player-backend/internal/adapter/service" // Alias if needed for google/minio later
-	"github.com/yvanyang/language-learning-player-backend/internal/usecase"
+	uc "github.com/yvanyang/language-learning-player-backend/internal/usecase" // Alias usecase package if needed elsewhere
 	"github.com/yvanyang/language-learning-player-backend/pkg/logger"      // Adjust import path
 	"github.com/yvanyang/language-learning-player-backend/pkg/security"
 	"github.com/yvanyang/language-learning-player-backend/pkg/validation"
@@ -40,7 +39,6 @@ func main() {
 	defer stop()
 
 	// --- Configuration ---
-	// Load configuration from file (e.g., ./config.yaml) or environment variables
 	cfg, err := config.LoadConfig(".") // "." means look in the current directory
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading configuration: %v\n", err)
@@ -63,13 +61,12 @@ func main() {
 	}
 	defer dbPool.Close() // Ensure pool is closed on shutdown
 
-	
 	// Repositories
 	userRepo := repo.NewUserRepository(dbPool, appLogger)
-	trackRepo := repo.NewAudioTrackRepository(dbPool, appLogger) // New
-	collectionRepo := repo.NewAudioCollectionRepository(dbPool, appLogger) // New
-	progressRepo := repo.NewPlaybackProgressRepository(dbPool, appLogger) // New
-	bookmarkRepo := repo.NewBookmarkRepository(dbPool, appLogger)         // New
+	trackRepo := repo.NewAudioTrackRepository(dbPool, appLogger)
+	collectionRepo := repo.NewAudioCollectionRepository(dbPool, appLogger)
+	progressRepo := repo.NewPlaybackProgressRepository(dbPool, appLogger)
+	bookmarkRepo := repo.NewBookmarkRepository(dbPool, appLogger)
 
 	// Services / Helpers
 	secHelper, err := security.NewSecurity(cfg.JWT.SecretKey, appLogger)
@@ -77,32 +74,35 @@ func main() {
 		appLogger.Error("Failed to initialize security helper", "error", err)
 		os.Exit(1)
 	}
-	storageService, err := minioadapter.NewMinioStorageService(cfg.Minio, appLogger) // New
+	storageService, err := minioadapter.NewMinioStorageService(cfg.Minio, appLogger)
 	if err != nil {
 		appLogger.Error("Failed to initialize MinIO storage service", "error", err)
 		os.Exit(1)
 	}
-	// 将创建但未使用的googleAuthService注释掉，或者将其传递给authUseCase
-	// googleAuthService, err := googleauthadapter.NewGoogleAuthService(cfg.Google.ClientID, appLogger) // New
-	// if err != nil {
-	// 	appLogger.Error("Failed to initialize Google Auth service", "error", err)
-	// 	// Decide if this is fatal. If Google login is optional, maybe just log a warning?
-	// 	// If mandatory or a core feature, exit.
-	// 	os.Exit(1) // Assuming it's important
-	// }
+	// Restore Google Auth Service initialization
+	googleAuthService, err := googleauthadapter.NewGoogleAuthService(cfg.Google.ClientID, appLogger)
+	if err != nil {
+		appLogger.Error("Failed to initialize Google Auth service", "error", err)
+		// Decide if this is fatal. If Google login is optional, maybe just log a warning?
+		// If mandatory or a core feature, exit.
+		os.Exit(1) // Assuming it's important
+	}
 
 	// Validator
 	validator := validation.New()
 
 	// Use Cases
-	authUseCase := usecase.NewAuthUseCase(cfg.JWT, userRepo, secHelper, nil, appLogger) // Pass nil for extAuth for now
-	audioUseCase := usecase.NewAudioContentUseCase(cfg.Minio, trackRepo, collectionRepo, storageService, appLogger) // New
-	activityUseCase := usecase.NewUserActivityUseCase(progressRepo, bookmarkRepo, trackRepo, appLogger) // New
+	// Pass googleAuthService to AuthUseCase
+	authUseCase := uc.NewAuthUseCase(cfg.JWT, userRepo, secHelper, googleAuthService, appLogger)
+	audioUseCase := uc.NewAudioContentUseCase(cfg.Minio, trackRepo, collectionRepo, storageService, appLogger)
+	activityUseCase := uc.NewUserActivityUseCase(progressRepo, bookmarkRepo, trackRepo, appLogger)
+	uploadUseCase := uc.NewUploadUseCase(cfg.Minio, trackRepo, storageService, appLogger) // New
 
 	// HTTP Handlers
 	authHandler := httpadapter.NewAuthHandler(authUseCase, validator)
-	audioHandler := httpadapter.NewAudioHandler(audioUseCase, validator) // New
-	activityHandler := httpadapter.NewUserActivityHandler(activityUseCase, validator) // New
+	audioHandler := httpadapter.NewAudioHandler(audioUseCase, validator)
+	activityHandler := httpadapter.NewUserActivityHandler(activityUseCase, validator)
+	uploadHandler := httpadapter.NewUploadHandler(uploadUseCase, validator) // New
 
 	appLogger.Info("Dependencies initialized successfully")
 
@@ -118,13 +118,10 @@ func main() {
 	router.Use(chimiddleware.RealIP)               // Use X-Forwarded-For or X-Real-IP
 
 	// Rate Limiter (Example: 10 requests/sec, burst of 20 per IP)
-    ipLimiter := middleware.NewIPRateLimiter(rate.Limit(10), 20)
-    // Optional: Run cleanup in background (requires better cleanup logic in limiter)
-    // go ipLimiter.CleanUpOldLimiters(10*time.Minute, 1*time.Hour)
-    router.Use(middleware.RateLimit(ipLimiter)) // Add rate limiting middleware
+	ipLimiter := middleware.NewIPRateLimiter(rate.Limit(10), 20)
+	router.Use(middleware.RateLimit(ipLimiter)) // Add rate limiting middleware
 
 	router.Use(chimiddleware.StripSlashes)         // Remove trailing slashes
-	
 	router.Use(chimiddleware.Timeout(60 * time.Second)) // Example: 60s request timeout
 
 	// CORS Middleware Setup from Config
@@ -137,13 +134,10 @@ func main() {
 		MaxAge:           cfg.Cors.MaxAge,
 	}))
 
-	// TODO: Add Auth middleware (for protected routes) - Phase 3
-
 	// --- Routes ---
 	router.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusOK)
-		// TODO: Add DB ping check here for more comprehensive health check
 		fmt.Fprintln(w, "OK")
 	})
 
@@ -156,38 +150,37 @@ func main() {
 			r.Post("/auth/google/callback", authHandler.GoogleCallback)
 
 			// Public Audio Routes
-			r.Get("/audio/tracks", audioHandler.ListTracks)           // List public tracks
-			r.Get("/audio/tracks/{trackId}", audioHandler.GetTrackDetails) // Get details (auth check maybe inside usecase/handler for private)
-			// Maybe list public collections?
-			// r.Get("/audio/collections", audioHandler.ListPublicCollections)
+			r.Get("/audio/tracks", audioHandler.ListTracks)
+			r.Get("/audio/tracks/{trackId}", audioHandler.GetTrackDetails)
 		})
 
 		// Protected routes
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.Authenticator(secHelper))
 
-			// User Profile
-			r.Get("/users/me", func(w http.ResponseWriter, r *http.Request) { /* ... Placeholder ... */ })
-			// TODO: Add PUT /users/me
+			// User Profile (Placeholder)
+			r.Get("/users/me", func(w http.ResponseWriter, r *http.Request) { /* ... */ })
 
 			// Collections (Authenticated Actions)
 			r.Post("/audio/collections", audioHandler.CreateCollection)
-			r.Get("/audio/collections/{collectionId}", audioHandler.GetCollectionDetails) // Re-add here for authenticated access/ownership check
+			r.Get("/audio/collections/{collectionId}", audioHandler.GetCollectionDetails)
 			r.Put("/audio/collections/{collectionId}", audioHandler.UpdateCollectionMetadata)
 			r.Delete("/audio/collections/{collectionId}", audioHandler.DeleteCollection)
 			r.Put("/audio/collections/{collectionId}/tracks", audioHandler.UpdateCollectionTracks)
-			// TODO: Add DELETE /audio/collections/{collectionId}/tracks/{trackId} ? (or handle via UpdateCollectionTracks)
 
-			// User Activity Routes (New)
+			// User Activity Routes
 			r.Post("/users/me/progress", activityHandler.RecordProgress)
-			r.Get("/users/me/progress", activityHandler.ListProgress)       // Get list of all progress
-            r.Get("/users/me/progress/{trackId}", activityHandler.GetProgress) // Get progress for specific track
+			r.Get("/users/me/progress", activityHandler.ListProgress)
+			r.Get("/users/me/progress/{trackId}", activityHandler.GetProgress)
 
 			r.Post("/bookmarks", activityHandler.CreateBookmark)
-			r.Get("/bookmarks", activityHandler.ListBookmarks) // List bookmarks (can filter by trackId query param)
+			r.Get("/bookmarks", activityHandler.ListBookmarks)
 			r.Delete("/bookmarks/{bookmarkId}", activityHandler.DeleteBookmark)
 
-			// TODO: Maybe add protected routes for uploading tracks, managing own tracks?
+			// Upload Routes (New)
+			r.Post("/uploads/audio/request", uploadHandler.RequestUpload)
+			// Reuse POST /audio/tracks for completing the upload and creating the record
+			r.Post("/audio/tracks", uploadHandler.CompleteUploadAndCreateTrack)
 		})
 	})
 
@@ -210,7 +203,7 @@ func main() {
 	   http.Redirect(w, r, uiPath, http.StatusMovedPermanently)
 	})
 
-	router.Get("/swagger/*", httpSwagger.WrapHandler) // Use httpSwagger
+	router.Get("/swagger/*", httpSwagger.WrapHandler)
 
 	appLogger.Info("HTTP router setup complete")
 
@@ -229,7 +222,7 @@ func main() {
 		appLogger.Info("Starting server", "address", srv.Addr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			appLogger.Error("Server failed to start", "error", err)
-			os.Exit(1) // Use os.Exit here as logger might not be available in main goroutine anymore
+			os.Exit(1)
 		}
 	}()
 
@@ -237,22 +230,19 @@ func main() {
 	stop()
 	appLogger.Info("Shutting down server gracefully, press Ctrl+C again to force")
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second) // Increased timeout
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	// Close database pool
 	appLogger.Info("Closing database connection pool...")
-	dbPool.Close() // pgxpool Close doesn't take a context
+	dbPool.Close()
 	appLogger.Info("Database connection pool closed.")
-
-	// TODO: Add cleanup for MinIO client etc. when initialized
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		appLogger.Error("Server forced to shutdown", "error", err)
-		os.Exit(1)
+		// Consider os.Exit(1) here as well if shutdown fails critically
 	}
-
-	appLogger.Info("Server exiting")
+	appLogger.Info("Server shutdown complete.")
 }
 
 // Placeholder for API routes function (to be implemented later)

@@ -16,8 +16,8 @@ type FileStorageService interface {
 	GetPresignedGetURL(ctx context.Context, bucket, objectKey string, expiry time.Duration) (string, error)
 
 	// GetPresignedPutURL returns a temporary, signed URL for uploading/overwriting an object.
-	// Used for client-side uploads if implemented.
-	// GetPresignedPutURL(ctx context.Context, bucket, objectKey string, expiry time.Duration, metadata map[string]string) (string, error)
+	// The client MUST use the HTTP PUT method with this URL.
+	GetPresignedPutURL(ctx context.Context, bucket, objectKey string, expiry time.Duration) (string, error)
 
 	// DeleteObject removes an object from storage.
 	DeleteObject(ctx context.Context, bucket, objectKey string) error

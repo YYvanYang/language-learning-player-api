@@ -120,5 +120,44 @@ func (s *MinioStorageService) DeleteObject(ctx context.Context, bucket, objectKe
 }
 
 
+// GetPresignedPutURL generates a temporary URL for uploading an object.
+func (s *MinioStorageService) GetPresignedPutURL(ctx context.Context, bucket, objectKey string, expiry time.Duration /*, opts port.PutObjectOptions? */) (string, error) {
+    if bucket == "" {
+        bucket = s.defaultBucket
+    }
+    if expiry <= 0 {
+        expiry = s.defaultExpiry
+    }
+
+    // Removed unused putOpts variable
+    // putOpts := minio.PutObjectOptions{}
+    // if opts != nil && opts.ContentType != "" {
+    //     putOpts.ContentType = opts.ContentType
+    // }
+
+    // Note: PresignedPutObject might require url.Values for certain headers like content-type constraints
+    // Check minio-go SDK documentation for the exact way to enforce Content-Type if needed.
+    // Example (conceptual, check SDK):
+     policy := minio.NewPostPolicy()
+     policy.SetBucket(bucket)
+     policy.SetKey(objectKey)
+     policy.SetExpires(time.Now().UTC().Add(expiry))
+     // if opts != nil && opts.ContentType != "" {
+     //    policy.SetContentType(opts.ContentType)
+     // }
+     // presignedURL, err := s.client.PresignedPostPolicy(ctx, policy) // For POST uploads
+     // OR use PresignedPutObject directly, potentially setting headers via request parameters
+
+    // Simpler version using PresignedPutObject without strict header enforcement in signature itself:
+     presignedURL, err := s.client.PresignedPutObject(ctx, bucket, objectKey, expiry)
+    if err != nil {
+        s.logger.ErrorContext(ctx, "Failed to generate presigned PUT URL", "error", err, "bucket", bucket, "key", objectKey)
+        return "", fmt.Errorf("failed to get presigned PUT URL for %s/%s: %w", bucket, objectKey, err)
+    }
+
+    s.logger.DebugContext(ctx, "Generated presigned PUT URL", "bucket", bucket, "key", objectKey, "expiry", expiry)
+    return presignedURL.String(), nil
+}
+
 // Compile-time check to ensure MinioStorageService satisfies the port.FileStorageService interface
 var _ port.FileStorageService = (*MinioStorageService)(nil)
