@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"time"
 
 	// Use the official Google idtoken verifier
 	"google.golang.org/api/idtoken"

@@ -11,9 +11,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"   // Import
-	"github.com/jackc/pgx/v5/pgerrcode" // Import
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/lib/pq" // Using lib/pq for array handling with pgx (can be tricky otherwise)
+	"github.com/lib/pq" // Using lib/pq for array handling with pgx and error codes
 
 	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
 	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
@@ -61,7 +60,7 @@ func (r *AudioTrackRepository) Create(ctx context.Context, track *domain.AudioTr
 
 	if err != nil {
 		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+		if errors.As(err, &pgErr) && pgErr.Code == UniqueViolation {
 			// Assuming the constraint name follows the pattern <table_name>_<column_name>_key
 			if strings.Contains(pgErr.ConstraintName, "audio_tracks_minio_object_key_key") {
 				return fmt.Errorf("creating audio track: %w: object key '%s' already exists", domain.ErrConflict, track.MinioObjectKey)
@@ -70,7 +69,9 @@ func (r *AudioTrackRepository) Create(ctx context.Context, track *domain.AudioTr
 			return fmt.Errorf("creating audio track: %w: resource conflict on unique field", domain.ErrConflict)
 		}
 		// Handle FK violations if needed (e.g., uploader_id)
-		// if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.ForeignKeyViolation { ... }
+		if errors.As(err, &pgErr) && pgErr.Code == ForeignKeyViolation {
+			return fmt.Errorf("creating audio track: %w: referenced resource not found", domain.ErrInvalidArgument)
+		}
 
 		r.logger.ErrorContext(ctx, "Error creating audio track", "error", err, "trackID", track.ID)
 		return fmt.Errorf("creating audio track: %w", err)
@@ -304,7 +305,7 @@ func (r *AudioTrackRepository) Update(ctx context.Context, track *domain.AudioTr
 
 	if err != nil {
 		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+		if errors.As(err, &pgErr) && pgErr.Code == UniqueViolation {
 			if strings.Contains(pgErr.ConstraintName, "audio_tracks_minio_object_key_key") {
 				return fmt.Errorf("updating audio track: %w: object key '%s' already exists", domain.ErrConflict, track.MinioObjectKey)
 			}

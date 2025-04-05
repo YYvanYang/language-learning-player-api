@@ -2,7 +2,7 @@
 package security
 
 import (
-	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"

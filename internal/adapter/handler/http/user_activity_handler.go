@@ -3,38 +3,28 @@ package http
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/dto" // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware" // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"    // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/pkg/validation"  // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/internal/domain"
+	"github.com/yvanyang/language-learning-player-backend/internal/port"
+	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/dto"
+	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware"
+	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"
+	"github.com/yvanyang/language-learning-player-backend/pkg/validation"
 )
 
 // UserActivityHandler handles HTTP requests related to user progress and bookmarks.
 type UserActivityHandler struct {
-	activityUseCase UserActivityUseCase // Use interface defined below
+	activityUseCase port.UserActivityUseCase // 使用port包中定义的接口
 	validator       *validation.Validator
 }
 
-// UserActivityUseCase defines the methods expected from the use case layer.
-// Input Port for this handler.
-type UserActivityUseCase interface {
-	RecordPlaybackProgress(ctx context.Context, userID domain.UserID, trackID domain.TrackID, progress time.Duration) error
-	GetPlaybackProgress(ctx context.Context, userID domain.UserID, trackID domain.TrackID) (*domain.PlaybackProgress, error)
-    ListUserProgress(ctx context.Context, userID domain.UserID, page port.Page) ([]*domain.PlaybackProgress, int, error)
-	CreateBookmark(ctx context.Context, userID domain.UserID, trackID domain.TrackID, timestamp time.Duration, note string) (*domain.Bookmark, error)
-	ListBookmarks(ctx context.Context, userID domain.UserID, trackID *domain.TrackID, page port.Page) ([]*domain.Bookmark, int, error)
-	DeleteBookmark(ctx context.Context, userID domain.UserID, bookmarkID domain.BookmarkID) error
-}
-
 // NewUserActivityHandler creates a new UserActivityHandler.
-func NewUserActivityHandler(uc UserActivityUseCase, v *validation.Validator) *UserActivityHandler {
+func NewUserActivityHandler(uc port.UserActivityUseCase, v *validation.Validator) *UserActivityHandler {
 	return &UserActivityHandler{
 		activityUseCase: uc,
 		validator:       v,

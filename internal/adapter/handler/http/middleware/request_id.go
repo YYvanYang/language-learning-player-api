@@ -6,12 +6,8 @@ import (
 	"net/http"
 
 	"github.com/google/uuid" // Using google/uuid for request IDs
+	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"
 )
-
-// ContextKey is a custom type for context keys to avoid collisions.
-type ContextKey string
-
-const RequestIDKey ContextKey = "requestID"
 
 // RequestID is a middleware that injects a unique request ID into the context
 // and sets it in the response header.
@@ -27,7 +23,7 @@ func RequestID(next http.Handler) http.Handler {
 		w.Header().Set("X-Request-ID", reqID)
 
 		// Add ID to request context
-		ctx := context.WithValue(r.Context(), RequestIDKey, reqID)
+		ctx := context.WithValue(r.Context(), httputil.RequestIDKey, reqID)
 		r = r.WithContext(ctx)
 
 		next.ServeHTTP(w, r)
@@ -37,8 +33,5 @@ func RequestID(next http.Handler) http.Handler {
 // GetReqID retrieves the request ID from the context.
 // Returns an empty string if not found.
 func GetReqID(ctx context.Context) string {
-	if reqID, ok := ctx.Value(RequestIDKey).(string); ok {
-		return reqID
-	}
-	return ""
+	return httputil.GetReqID(ctx)
 }

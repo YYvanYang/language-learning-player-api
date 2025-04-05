@@ -3,34 +3,24 @@ package http
 
 import (
 	"encoding/json"
-	"errors"
+	"fmt"
 	"net/http"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path (for Usecase interface)
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/dto" // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"    // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/pkg/validation"  // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/internal/domain" 
+	"github.com/yvanyang/language-learning-player-backend/internal/port"   
+	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/dto" 
+	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"    
+	"github.com/yvanyang/language-learning-player-backend/pkg/validation"  
 )
 
 // AuthHandler handles HTTP requests related to authentication.
 type AuthHandler struct {
-	authUseCase port.AuthUseCase // Use interface defined in usecase layer (or define input port)
+	authUseCase port.AuthUseCase // Use interface defined in port package
 	validator   *validation.Validator
 }
 
-// Defines the methods expected from the AuthUseCase for this handler.
-// This is an INPUT PORT for the handler.
-// Could also be defined in internal/port if preferred.
-type AuthUseCase interface {
-	RegisterWithPassword(ctx context.Context, emailStr, password, name string) (*domain.User, string, error)
-	LoginWithPassword(ctx context.Context, emailStr, password string) (string, error)
-	AuthenticateWithGoogle(ctx context.Context, googleIdToken string) (authToken string, isNewUser bool, err error)
-}
-
-
 // NewAuthHandler creates a new AuthHandler.
-func NewAuthHandler(uc AuthUseCase, v *validation.Validator) *AuthHandler {
+func NewAuthHandler(uc port.AuthUseCase, v *validation.Validator) *AuthHandler {
 	return &AuthHandler{
 		authUseCase: uc,
 		validator:   v,

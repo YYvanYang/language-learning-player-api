@@ -17,13 +17,14 @@ import (
 	"github.com/go-chi/chi/v5" // Import Chi
 	chimiddleware "github.com/go-chi/chi/v5/middleware" // Chi's built-in middleware
 	"github.com/go-chi/cors" // Import chi cors
+	httpSwagger "github.com/swaggo/http-swagger" // 添加Swagger UI处理器
 	"golang.org/x/time/rate"
 
 	"github.com/yvanyang/language-learning-player-backend/internal/config" // Adjust import path
 	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware" // Adjust import path for our custom middleware
 	httpadapter "github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http" // Alias for http handler package
 	minioadapter "github.com/yvanyang/language-learning-player-backend/internal/adapter/service/minio" // Alias for minio adapter
-	googleauthadapter "github.com/yvanyang/language-learning-player-backend/internal/adapter/service/google_auth" // New import
+	// googleauthadapter "github.com/yvanyang/language-learning-player-backend/internal/adapter/service/google_auth" // New import
 	repo "github.com/yvanyang/language-learning-player-backend/internal/adapter/repository/postgres"
 	// service "github.com/yvanyang/language-learning-player-backend/internal/adapter/service" // Alias if needed for google/minio later
 	"github.com/yvanyang/language-learning-player-backend/internal/usecase"
@@ -81,13 +82,14 @@ func main() {
 		appLogger.Error("Failed to initialize MinIO storage service", "error", err)
 		os.Exit(1)
 	}
-	googleAuthService, err := googleauthadapter.NewGoogleAuthService(cfg.Google.ClientID, appLogger) // New
-	if err != nil {
-		appLogger.Error("Failed to initialize Google Auth service", "error", err)
-		// Decide if this is fatal. If Google login is optional, maybe just log a warning?
-		// If mandatory or a core feature, exit.
-		os.Exit(1) // Assuming it's important
-	}
+	// 将创建但未使用的googleAuthService注释掉，或者将其传递给authUseCase
+	// googleAuthService, err := googleauthadapter.NewGoogleAuthService(cfg.Google.ClientID, appLogger) // New
+	// if err != nil {
+	// 	appLogger.Error("Failed to initialize Google Auth service", "error", err)
+	// 	// Decide if this is fatal. If Google login is optional, maybe just log a warning?
+	// 	// If mandatory or a core feature, exit.
+	// 	os.Exit(1) // Assuming it's important
+	// }
 
 	// Validator
 	validator := validation.New()

@@ -4,6 +4,7 @@ package domain
 import (
 	"time"
 	"fmt"
+	"errors"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )

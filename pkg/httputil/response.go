@@ -2,13 +2,28 @@
 package httputil
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 
 	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware" // For Request ID
 )
+
+// ContextKey is a custom type for context keys to avoid collisions.
+type ContextKey string
+
+const RequestIDKey ContextKey = "requestID"
+
+// GetReqID retrieves the request ID from the context.
+// Returns an empty string if not found.
+func GetReqID(ctx context.Context) string {
+	if reqID, ok := ctx.Value(RequestIDKey).(string); ok {
+		return reqID
+	}
+	return ""
+}
 
 // ErrorResponseDTO defines the standard JSON error response body.
 type ErrorResponseDTO struct {
@@ -28,7 +43,7 @@ func RespondJSON(w http.ResponseWriter, r *http.Request, status int, payload int
 		if err != nil {
 			// Log error, but can't write header again
 			logger := slog.Default()
-			reqID := middleware.GetReqID(r.Context()) // Get request ID from context
+			reqID := GetReqID(r.Context()) // Get request ID from context
 			logger.ErrorContext(r.Context(), "Failed to encode JSON response", "error", err, "status", status, "request_id", reqID)
 			// Attempt to write a plain text error if JSON encoding fails *after* header was written
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -64,7 +79,7 @@ func MapDomainErrorToHTTP(err error) (status int, code string, message string) {
 func RespondError(w http.ResponseWriter, r *http.Request, err error) {
 	status, code, message := MapDomainErrorToHTTP(err)
 
-	reqID := middleware.GetReqID(r.Context()) // Get request ID from context
+	reqID := GetReqID(r.Context()) // Get request ID from context
 	logger := slog.Default()
 
 	// Log internal server errors with more detail

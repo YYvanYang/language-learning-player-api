@@ -3,46 +3,32 @@ package http
 
 import (
 	"encoding/json"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/dto" // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"    // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/pkg/validation"  // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/internal/domain"
+	"github.com/yvanyang/language-learning-player-backend/internal/port"
+	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/dto"
+	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"
+	"github.com/yvanyang/language-learning-player-backend/pkg/validation"
 )
 
 // AudioHandler handles HTTP requests related to audio tracks and collections.
 type AudioHandler struct {
-	audioUseCase AudioContentUseCase // Use interface defined below
+	audioUseCase port.AudioContentUseCase // 使用port包中定义的接口
 	validator    *validation.Validator
 }
 
-// AudioContentUseCase defines the methods expected from the use case layer.
-// Input Port for this handler.
-type AudioContentUseCase interface {
-	GetAudioTrackDetails(ctx context.Context, trackID domain.TrackID) (*domain.AudioTrack, string, error)
-	ListTracks(ctx context.Context, params port.ListTracksParams, page port.Page) ([]*domain.AudioTrack, int, error)
-	CreateCollection(ctx context.Context, title, description string, colType domain.CollectionType, initialTrackIDs []domain.TrackID) (*domain.AudioCollection, error)
-	GetCollectionDetails(ctx context.Context, collectionID domain.CollectionID) (*domain.AudioCollection, error)
-    GetCollectionTracks(ctx context.Context, collectionID domain.CollectionID) ([]*domain.AudioTrack, error) // New method needed
-	UpdateCollectionMetadata(ctx context.Context, collectionID domain.CollectionID, title, description string) error
-	UpdateCollectionTracks(ctx context.Context, collectionID domain.CollectionID, orderedTrackIDs []domain.TrackID) error
-	DeleteCollection(ctx context.Context, collectionID domain.CollectionID) error
-}
-
-
 // NewAudioHandler creates a new AudioHandler.
-func NewAudioHandler(uc AudioContentUseCase, v *validation.Validator) *AudioHandler {
+func NewAudioHandler(uc port.AudioContentUseCase, v *validation.Validator) *AudioHandler {
 	return &AudioHandler{
 		audioUseCase: uc,
 		validator:    v,
 	}
 }
-
 
 // --- Track Handlers ---
 

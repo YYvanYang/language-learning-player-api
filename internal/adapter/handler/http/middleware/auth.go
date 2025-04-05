@@ -3,6 +3,7 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -11,7 +12,7 @@ import (
 	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"    // Adjust import path
 )
 
-const UserIDKey ContextKey = "userID" // Use the same type as RequestIDKey
+const UserIDKey httputil.ContextKey = "userID" // Use httputil.ContextKey type
 
 // Authenticator creates a middleware that verifies the JWT token.
 func Authenticator(secHelper port.SecurityHelper) func(next http.Handler) http.Handler {

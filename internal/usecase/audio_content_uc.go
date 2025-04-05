@@ -11,6 +11,7 @@ import (
 	"github.com/yvanyang/language-learning-player-backend/internal/config" // Adjust import path (for presign expiry)
 	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
 	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware" // 添加middleware包
 )
 
 // AudioContentUseCase handles business logic related to audio tracks and collections.

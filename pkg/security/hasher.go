@@ -2,6 +2,7 @@
 package security
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 

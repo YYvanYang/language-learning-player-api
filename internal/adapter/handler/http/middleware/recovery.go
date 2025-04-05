@@ -2,9 +2,12 @@
 package middleware
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"runtime/debug"
+	
+	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"
 )
 
 // Recoverer is a middleware that recovers from panics, logs the panic,
@@ -23,9 +26,9 @@ func Recoverer(next http.Handler) http.Handler {
 					"stack", string(debug.Stack()),
 				)
 
-				// Respond with 500
-				// TODO: Use httputil.RespondError once available for consistent JSON error response
-				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				// Use httputil.RespondError for consistent JSON error response
+				err := errors.New("internal server error: recovered from panic")
+				httputil.RespondError(w, r, err)
 			}
 		}()
 

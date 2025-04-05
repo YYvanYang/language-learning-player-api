@@ -11,7 +11,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"   // Import pgconn for PgError
-	"github.com/jackc/pgx/v5/pgerrcode" // Import pgerrcode for error codes
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
@@ -53,7 +52,7 @@ func (r *UserRepository) Create(ctx context.Context, user *domain.User) error {
 	if err != nil {
 		var pgErr *pgconn.PgError
 		// Check if the error is a PostgreSQL error and specifically a unique_violation
-		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+		if errors.As(err, &pgErr) && pgErr.Code == UniqueViolation {
 			// Check which constraint was violated based on its name (defined in migration)
 			// Common constraint names are like <table_name>_<column_name>_key
 			if strings.Contains(pgErr.ConstraintName, "users_email_key") {
@@ -156,7 +155,7 @@ func (r *UserRepository) Update(ctx context.Context, user *domain.User) error {
 	if err != nil {
 		var pgErr *pgconn.PgError
 		// Check for unique constraint violation on update (e.g., changing email to an existing one)
-		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+		if errors.As(err, &pgErr) && pgErr.Code == UniqueViolation {
 			if strings.Contains(pgErr.ConstraintName, "users_email_key") {
 				return fmt.Errorf("updating user: %w: email already exists", domain.ErrConflict)
 			}

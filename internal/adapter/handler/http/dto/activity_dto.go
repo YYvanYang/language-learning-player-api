@@ -1,7 +1,11 @@
 // internal/adapter/handler/http/dto/activity_dto.go
 package dto
 
-import "time"
+import (
+	"time"
+	
+	"github.com/yvanyang/language-learning-player-backend/internal/domain"
+)
 
 // --- Request DTOs ---
 

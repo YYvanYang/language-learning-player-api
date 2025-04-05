@@ -10,7 +10,6 @@ import (
 
 	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
 	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware" // For getting user ID
 )
 
 // UserActivityUseCase handles business logic for user interactions like progress and bookmarks.

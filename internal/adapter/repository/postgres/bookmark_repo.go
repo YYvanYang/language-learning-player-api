@@ -180,7 +180,7 @@ func (r *BookmarkRepository) scanBookmark(ctx context.Context, row RowScanner) (
 		&b.ID,
 		&b.UserID,
 		&b.TrackID,
-		×tampSec, // Scan timestamp_seconds
+		&timestampSec, // Scan timestamp_seconds
 		&b.Note,
 		&b.CreatedAt,
 	)

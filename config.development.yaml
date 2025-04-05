@@ -1,0 +1,50 @@
+# config.development.yaml
+# 开发环境配置文件
+# 值可以通过环境变量覆盖（例如，SERVER_PORT=9000）。
+
+server:
+  port: "8080"
+  readTimeout: 5s
+  writeTimeout: 10s
+  idleTimeout: 120s
+
+database:
+  # 开发环境PostgreSQL连接字符串
+  # 请确保这个数据库服务器可以访问，或者设置环境变量DATABASE_DSN替代
+  dsn: "postgresql://postgres:postgres@localhost:5432/language_learner_db?sslmode=disable"
+  maxOpenConns: 25
+  maxIdleConns: 25
+  connMaxLifetime: 5m
+  connMaxIdleTime: 5m
+
+jwt:
+  # 开发环境JWT密钥 - 仅用于开发，生产环境请使用环境变量
+  secretKey: "development-jwt-secret-key-for-testing-purposes-only"
+  accessTokenExpiry: 1h
+  # refreshTokenExpiry: 720h # ~30 days
+
+minio:
+  # MinIO对象存储配置
+  endpoint: "localhost:9000"
+  accessKeyId: "minioadmin"
+  secretAccessKey: "minioadmin"
+  useSsl: false
+  bucketName: "language-audio"
+  presignExpiry: 1h
+
+google:
+  # 开发环境Google OAuth配置 - 仅用于开发
+  clientId: "development-google-client-id.apps.googleusercontent.com"
+  clientSecret: "DEVELOPMENT_GOOGLE_CLIENT_SECRET"
+
+log:
+  level: "debug" # 开发环境使用debug级别
+  json: false    # 开发环境使用易读的非JSON格式
+
+cors:
+  # 开发环境CORS配置，允许本地前端服务器
+  allowedOrigins: ["http://localhost:3000", "http://127.0.0.1:3000"]
+  allowedMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+  allowedHeaders: ["Accept", "Authorization", "Content-Type", "X-CSRF-Token"]
+  allowCredentials: true
+  maxAge: 300
