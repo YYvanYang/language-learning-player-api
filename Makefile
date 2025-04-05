@@ -191,7 +191,7 @@ migrate-force: tools check-db-url
 
 
 # --- Code Generation ---
-.PHONY: generate generate-sqlc generate-swag
+.PHONY: generate generate-sqlc generate-swag swagger
 
 # Target to run all generators
 generate: generate-sqlc generate-swag
@@ -209,6 +209,8 @@ generate-swag: tools
 	@$(SWAG) init -g $(SWAG_ENTRY_POINT) --output $(SWAG_OUTPUT_DIR)
 	@echo ">>> OpenAPI docs generated in $(SWAG_OUTPUT_DIR)."
 
+# Alias for generating OpenAPI docs
+swagger: generate-swag
 
 # --- Testing ---
 .PHONY: test test-unit test-integration test-cover

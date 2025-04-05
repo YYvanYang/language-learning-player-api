@@ -64,4 +64,26 @@ Viper 会自动将配置文件中的键名（例如 `server.port`）映射到环
 *   `LOG_LEVEL`: 日志级别 (例如 `debug`, `info`, `warn`, `error`)。
 *   `LOG_JSON`: 是否以 JSON 格式输出日志 (布尔值 `true` 或 `false`)。
 
-请参考 `config.example.yaml` 和 `internal/config/config.go` 中的 `setDefaultValues` 函数以获取完整的配置项列表及其默认值。 
+请参考 `config.example.yaml` 和 `internal/config/config.go` 中的 `setDefaultValues` 函数以获取完整的配置项列表及其默认值。
+
+## API 文档 (API Documentation)
+
+本项目的 API 使用 [OpenAPI Specification (OAS3)](https://swagger.io/specification/) 进行描述。
+
+### 访问文档
+
+当后端服务在本地运行时 (例如通过 `make run` 或 `make docker-run` 启动)，你可以通过浏览器访问以下地址来查看交互式的 Swagger UI 文档：
+
+[http://localhost:8080/swagger/index.html](http://localhost:8080/swagger/index.html)
+
+### 生成/更新文档
+
+项目使用 Go 代码中的注释和 [swaggo/swag](https://github.com/swaggo/swag) 工具来生成 OpenAPI 文档文件 (`docs/docs.go`, `docs/swagger.json`, `docs/swagger.yaml`)。
+
+如果你修改了 API Handler 中的注释，你需要重新生成文档文件。可以使用以下 Make 命令：
+
+```bash
+make swagger
+```
+
+**注意:** 建议在提交涉及 API 更改的代码前运行 `make swagger`，以确保文档与代码保持同步。 
