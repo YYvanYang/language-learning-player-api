@@ -10,8 +10,8 @@ server:
 
 database:
   # 开发环境PostgreSQL连接字符串
-  # 请确保这个数据库服务器可以访问，或者设置环境变量DATABASE_DSN替代
-  dsn: "postgresql://postgres:postgres@localhost:5432/language_learner_db?sslmode=disable"
+  # 使用与 Docker 容器匹配的凭据 (user/password)
+  dsn: "postgresql://user:password@localhost:5432/language_learner_db?sslmode=disable"
   maxOpenConns: 25
   maxIdleConns: 25
   connMaxLifetime: 5m

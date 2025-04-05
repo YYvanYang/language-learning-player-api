@@ -49,8 +49,12 @@ tools: install-migrate install-sqlc install-swag install-lint install-vulncheck
 install-migrate:
 	@if ! command -v migrate &> /dev/null; then \
 		echo ">>> Installing migrate CLI..."; \
-		go install github.com/golang-migrate/migrate/v4/cmd/migrate@latest; \
-		echo ">>> migrate installed."; \
+		if go install github.com/golang-migrate/migrate/v4/cmd/migrate@latest; then \
+			echo ">>> migrate installed successfully."; \
+		else \
+			echo ">>> ERROR: Failed to install migrate. Please check network connectivity and Go proxy settings."; \
+			exit 1; \
+		fi; \
 	else \
 		echo ">>> migrate is already installed."; \
 	fi
@@ -59,8 +63,12 @@ install-migrate:
 install-sqlc:
 	@if ! command -v sqlc &> /dev/null; then \
 		echo ">>> Installing sqlc CLI..."; \
-		go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest; \
-		echo ">>> sqlc installed."; \
+		if go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest; then \
+			echo ">>> sqlc installed successfully."; \
+		else \
+			echo ">>> ERROR: Failed to install sqlc. Please check network connectivity and Go proxy settings."; \
+			exit 1; \
+		fi; \
 	else \
 		echo ">>> sqlc is already installed."; \
 	fi
@@ -69,8 +77,12 @@ install-sqlc:
 install-swag:
 	@if ! command -v swag &> /dev/null; then \
 		echo ">>> Installing swag CLI..."; \
-		go install github.com/swaggo/swag/cmd/swag@latest; \
-		echo ">>> swag installed."; \
+		if go install github.com/swaggo/swag/cmd/swag@latest; then \
+			echo ">>> swag installed successfully."; \
+		else \
+			echo ">>> ERROR: Failed to install swag. Please check network connectivity and Go proxy settings."; \
+			exit 1; \
+		fi; \
 	else \
 		echo ">>> swag is already installed."; \
 	fi
@@ -79,8 +91,12 @@ install-swag:
 install-lint:
 	@if ! command -v golangci-lint &> /dev/null; then \
 		echo ">>> Installing golangci-lint..."; \
-		go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest; \
-		echo ">>> golangci-lint installed."; \
+		if go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest; then \
+			echo ">>> golangci-lint installed successfully."; \
+		else \
+			echo ">>> ERROR: Failed to install golangci-lint. Please check network connectivity and Go proxy settings."; \
+			exit 1; \
+		fi; \
 	else \
 		echo ">>> golangci-lint is already installed."; \
 	fi
@@ -89,8 +105,12 @@ install-lint:
 install-vulncheck:
 	@if ! command -v govulncheck &> /dev/null; then \
 		echo ">>> Installing govulncheck..."; \
-		go install golang.org/x/vuln/cmd/govulncheck@latest; \
-		echo ">>> govulncheck installed."; \
+		if go install golang.org/x/vuln/cmd/govulncheck@latest; then \
+			echo ">>> govulncheck installed successfully."; \
+		else \
+			echo ">>> ERROR: Failed to install govulncheck. Please check network connectivity and Go proxy settings."; \
+			exit 1; \
+		fi; \
 	else \
 		echo ">>> govulncheck is already installed."; \
 	fi
@@ -225,21 +245,15 @@ check-vuln: tools
 # Check if Docker is available
 check-docker:
 	@echo ">>> 检查Docker可用性..."
-	@if ! docker info &> /dev/null; then \
-		echo ">>> Docker服务不可用!"; \
+	@# Use 'docker version' as 'docker info' might require more permissions or fail in some envs
+	@if ! docker version &> /dev/null; then \
+		echo ">>> Docker 命令似乎不可用或无法执行!"; \
 		echo ">>> 如果您使用WSL 2，请按照以下步骤操作:"; \
 		echo ">>>   1. 确保Docker Desktop已运行"; \
 		echo ">>>   2. 确认已经在Docker Desktop设置中启用WSL 2集成"; \
-		echo ">>>   3. 在WSL 2中运行以下命令检查Docker安装:"; \
-		echo ">>>      which docker"; \
-		echo ">>>      docker --version"; \
-		echo ">>>   4. 如果Docker已安装但无法启动，尝试运行:"; \
-		echo ">>>      sudo service docker start"; \
-		echo ">>>   5. 查看Docker服务状态:"; \
-		echo ">>>      sudo service docker status"; \
-		echo ">>> 如果权限问题，请将用户添加到docker组:"; \
+		echo ">>>   3. 尝试直接运行 'docker ps' 确认Docker是否响应"; \
+		echo ">>> 如果权限问题，请将用户添加到docker组 (然后需要重新登录或使用 'newgrp docker'):"; \
 		echo ">>>   sudo usermod -aG docker $USER"; \
-		echo ">>>   重新登录或运行: newgrp docker"; \
 		echo ">>> 更多详情，请访问: https://docs.docker.com/go/wsl2/"; \
 		exit 1; \
 	fi

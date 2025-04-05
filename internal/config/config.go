@@ -47,11 +47,11 @@ type JWTConfig struct {
 
 // MinioConfig holds MinIO connection configuration.
 type MinioConfig struct {
-	Endpoint        string `mapstructure:"endpoint"`
-	AccessKeyID     string `mapstructure:"accessKeyId"`
-	SecretAccessKey string `mapstructure:"secretAccessKey"`
-	UseSSL          bool   `mapstructure:"useSsl"`
-	BucketName      string `mapstructure:"bucketName"`
+	Endpoint        string        `mapstructure:"endpoint"`
+	AccessKeyID     string        `mapstructure:"accessKeyId"`
+	SecretAccessKey string        `mapstructure:"secretAccessKey"`
+	UseSSL          bool          `mapstructure:"useSsl"`
+	BucketName      string        `mapstructure:"bucketName"`
 	PresignExpiry   time.Duration `mapstructure:"presignExpiry"` // Default expiry for presigned URLs
 }
 
@@ -79,84 +79,112 @@ type CorsConfig struct {
 
 
 // LoadConfig reads configuration from file or environment variables.
+// It looks for config files in the specified path (e.g., "." for current directory).
 func LoadConfig(path string) (config Config, err error) {
-	// Determine environment (e.g., from env var)
-    env := os.Getenv("APP_ENV")
-    if env == "" {
-        env = "development" // Default environment
-    }
+	v := viper.New()
 
-	viper.AddConfigPath(path)         // Path to look for the config file in
-	viper.SetConfigName("config." + env) // e.g., config.development, config.production
-	viper.SetConfigType("yaml")       // REQUIRED if the config file does not have the extension in the name
+	// Set default values first
+	setDefaultValues(v)
 
-	// Also try loading the base config file (config.yaml) for shared defaults
-    viper.SetConfigName("config")
-    if errReadBase := viper.MergeInConfig(); errReadBase != nil {
-        if _, ok := errReadBase.(viper.ConfigFileNotFoundError); !ok {
-            fmt.Fprintf(os.Stderr, "Warning: could not read base config file: %v\n", errReadBase)
-        }
-        // Base file not required, might not exist
-    }
+	// Configure Viper
+	v.AddConfigPath(path)         // Path to look for the config file in
+	v.SetConfigType("yaml")
+	v.AutomaticEnv()              // Read in environment variables that match
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_")) // Replace dots with underscores for env var names (e.g., server.port -> SERVER_PORT)
 
-    // Read environment-specific config, overriding base config
-    if errReadEnv := viper.MergeInConfig(); errReadEnv != nil {
-         if _, ok := errReadEnv.(viper.ConfigFileNotFoundError); ok {
-            // Env specific file not found, rely on base/env vars/defaults
-            fmt.Fprintf(os.Stderr, "Warning: environment config file 'config.%s.yaml' not found. Relying on base/defaults/env.\n", env)
-         } else {
-             // Other error reading env config file
-             return config, fmt.Errorf("error reading config file 'config.%s.yaml': %w", env, errReadEnv)
-         }
-    }
+	// 1. Load base configuration (config.yaml)
+	v.SetConfigName("config")
+	if errReadBase := v.ReadInConfig(); errReadBase != nil {
+		if _, ok := errReadBase.(viper.ConfigFileNotFoundError); !ok {
+			// Only return error if it's not a 'file not found' error for the base file
+			return config, fmt.Errorf("error reading base config file 'config.yaml': %w", errReadBase)
+		}
+		// Base file not found is okay, we can proceed without it.
+		fmt.Fprintln(os.Stderr, "Info: Base config file 'config.yaml' not found. Skipping.")
+	}
 
-	viper.AutomaticEnv()              // Read in environment variables that match
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_")) // Replace dots with underscores for env var names (e.g., server.port -> SERVER_PORT)
-
-	// Set default values (optional but recommended)
-	setDefaultValues()
+	// 2. Load and merge environment-specific configuration (e.g., config.development.yaml)
+	env := os.Getenv("APP_ENV")
+	if env == "" {
+		env = "development" // Default environment
+	}
+	v.SetConfigName(fmt.Sprintf("config.%s", env))
+	if errReadEnv := v.MergeInConfig(); errReadEnv != nil {
+		if _, ok := errReadEnv.(viper.ConfigFileNotFoundError); ok {
+			// Env specific file not found, rely on base/env vars/defaults
+			fmt.Fprintf(os.Stderr, "Info: Environment config file 'config.%s.yaml' not found. Relying on base/defaults/env.\n", env)
+		} else {
+			// Other error reading env config file
+			return config, fmt.Errorf("error merging config file 'config.%s.yaml': %w", env, errReadEnv)
+		}
+	}
 
 	// Unmarshal the final merged configuration
-    err = viper.Unmarshal(&config)
-    if err != nil {
-         return config, fmt.Errorf("failed to unmarshal configuration: %w", err)
+	err = v.Unmarshal(&config)
+	if err != nil {
+		 return config, fmt.Errorf("failed to unmarshal configuration: %w", err)
+	}
+
+	// Optional: Add validation logic here if needed
+    // For example, check if required fields like database DSN are set:
+    if config.Database.DSN == "" {
+        // Attempt to get from DATABASE_URL env var as a fallback
+        envDSN := os.Getenv("DATABASE_URL")
+        if envDSN != "" {
+            fmt.Fprintln(os.Stderr, "Info: Database DSN not found in config, using DATABASE_URL environment variable.")
+            config.Database.DSN = envDSN
+        } else {
+            // If still empty after checking env var, return error
+            return config, fmt.Errorf("database DSN is required but not found in config or DATABASE_URL environment variable")
+        }
     }
 
-    // Set log level based on environment if not explicitly set? (optional)
-    // if viper.GetString("log.level") == "" { ... }
-
-    return config, nil
+	return config, nil
 }
 
-func setDefaultValues() {
+// Use a dedicated viper instance for defaults to avoid conflicts
+func setDefaultValues(v *viper.Viper) {
     // Server Defaults
-    viper.SetDefault("server.port", "8080")
-    viper.SetDefault("server.readTimeout", "5s")
-    viper.SetDefault("server.writeTimeout", "10s")
-    viper.SetDefault("server.idleTimeout", "120s")
+    v.SetDefault("server.port", "8080")
+    v.SetDefault("server.readTimeout", "5s")
+    v.SetDefault("server.writeTimeout", "10s")
+    v.SetDefault("server.idleTimeout", "120s")
 
-    // Database Defaults
-    viper.SetDefault("database.maxOpenConns", 25)
-    viper.SetDefault("database.maxIdleConns", 25)
-    viper.SetDefault("database.connMaxLifetime", "5m")
-	viper.SetDefault("database.connMaxIdleTime", "5m") // Usually same as lifetime
+    // Database Defaults (Note: DSN has no sensible default)
+    v.SetDefault("database.maxOpenConns", 25)
+    v.SetDefault("database.maxIdleConns", 25)
+    v.SetDefault("database.connMaxLifetime", "5m")
+	v.SetDefault("database.connMaxIdleTime", "5m") // Usually same as lifetime
 
     // JWT Defaults
-    viper.SetDefault("jwt.accessTokenExpiry", "1h")
-    // viper.SetDefault("jwt.refreshTokenExpiry", "720h") // ~30 days
+	v.SetDefault("jwt.secretKey", "default-insecure-secret-key-please-override") // Provide a default but stress it's insecure
+    v.SetDefault("jwt.accessTokenExpiry", "1h")
 
     // MinIO Defaults
-    viper.SetDefault("minio.useSsl", false)
-    viper.SetDefault("minio.presignExpiry", "1h") // Default URL expiry
+	v.SetDefault("minio.endpoint", "localhost:9000")
+	v.SetDefault("minio.accessKeyId", "minioadmin")
+	v.SetDefault("minio.secretAccessKey", "minioadmin")
+    v.SetDefault("minio.useSsl", false)
+    v.SetDefault("minio.presignExpiry", "1h") // Default URL expiry
+
+	// Google Defaults
+	v.SetDefault("google.clientId", "")
+	v.SetDefault("google.clientSecret", "")
 
     // Log Defaults
-    viper.SetDefault("log.level", "info")
-    viper.SetDefault("log.json", true) // Prefer JSON logs for production
+    v.SetDefault("log.level", "info")
+    v.SetDefault("log.json", false) // Easier to read logs for dev default
 
-	// CORS Defaults (Example: Allow all for local dev, restrict in prod)
-	viper.SetDefault("cors.allowedOrigins", []string{"*"}) // Be careful with "*" in production!
-	viper.SetDefault("cors.allowedMethods", []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"})
-	viper.SetDefault("cors.allowedHeaders", []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"})
-	viper.SetDefault("cors.allowCredentials", true)
-	viper.SetDefault("cors.maxAge", 300) // 5 minutes
+	// CORS Defaults (Example: Allow local dev server)
+	v.SetDefault("cors.allowedOrigins", []string{"http://localhost:3000", "http://127.0.0.1:3000"})
+	v.SetDefault("cors.allowedMethods", []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"})
+	v.SetDefault("cors.allowedHeaders", []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"})
+	v.SetDefault("cors.allowCredentials", true)
+	v.SetDefault("cors.maxAge", 300) // 5 minutes
+}
+
+// GetConfig is a helper function to load config, often called from main.
+// Assumes config files are in the current working directory (".")
+func GetConfig() (Config, error) {
+    return LoadConfig(".")
 }
