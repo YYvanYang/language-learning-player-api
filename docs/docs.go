@@ -9,7 +9,16 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "contact": {},
+        "termsOfService": "http://swagger.io/terms/  // Optional: Add your terms of service URL here",
+        "contact": {
+            "name": "API Support Team",
+            "url": "http://www.example.com/support // Optional: URL for support",
+            "email": "support@example.com"
+        },
+        "license": {
+            "name": "Apache 2.0",
+            "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+        },
         "version": "{{.Version}}"
     },
     "host": "{{.Host}}",
@@ -353,12 +362,12 @@ const docTemplate = `{
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "",
-	Host:             "",
-	BasePath:         "",
-	Schemes:          []string{},
-	Title:            "",
-	Description:      "",
+	Version:          "1.0.0",
+	Host:             "localhost:8080                   // API host (usually without scheme)",
+	BasePath:         "/api/v1                      // Base path for all routes defined AFTER this block",
+	Schemes:          []string{"http", "https", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "//", "Supported", "schemes", "(optional,", "defaults", "may", "vary)"},
+	Title:            "Language Learning Audio Player API",
+	Description:      "API specification for the backend of the Language Learning Audio Player application. Provides endpoints for user authentication, audio content management, and user activity tracking.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

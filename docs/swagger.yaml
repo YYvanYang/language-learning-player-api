@@ -1,3 +1,5 @@
+basePath: /api/v1                      // Base path for all routes defined AFTER this
+  block
 definitions:
   dto.AudioTrackDetailsResponseDTO:
     properties:
@@ -86,8 +88,22 @@ definitions:
         description: Include request ID for tracing
         type: string
     type: object
+host: localhost:8080                   // API host (usually without scheme)
 info:
-  contact: {}
+  contact:
+    email: support@example.com
+    name: API Support Team
+    url: 'http://www.example.com/support // Optional: URL for support'
+  description: API specification for the backend of the Language Learning Audio Player
+    application. Provides endpoints for user authentication, audio content management,
+    and user activity tracking.
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: 'http://swagger.io/terms/  // Optional: Add your terms of service
+    URL here'
+  title: Language Learning Audio Player API
+  version: 1.0.0
 paths:
   /audio/tracks/{trackId}:
     get:
@@ -228,4 +244,33 @@ paths:
       summary: Delete a bookmark
       tags:
       - User Activity
+schemes:
+- http
+- https
+- ""
+- ""
+- ""
+- ""
+- ""
+- ""
+- ""
+- ""
+- ""
+- ""
+- ""
+- ""
+- ""
+- ""
+- ""
+- ""
+- ""
+- ""
+- ""
+- //
+- Supported
+- schemes
+- (optional,
+- defaults
+- may
+- vary)
 swagger: "2.0"

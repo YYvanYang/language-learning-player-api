@@ -31,6 +31,21 @@ import (
 	"github.com/yvanyang/language-learning-player-backend/pkg/validation"
 )
 
+// @title Language Learning Audio Player API
+// @version 1.0.0
+// @description API specification for the backend of the Language Learning Audio Player application. Provides endpoints for user authentication, audio content management, and user activity tracking.
+// @termsOfService http://swagger.io/terms/  // Optional: Add your terms of service URL here
+
+// @contact.name API Support Team
+// @contact.url http://www.example.com/support // Optional: URL for support
+// @contact.email support@example.com
+
+// @license.name Apache 2.0
+// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host localhost:8080                   // API host (usually without scheme)
+// @BasePath /api/v1                      // Base path for all routes defined AFTER this block
+// @schemes http https                    // Supported schemes (optional, defaults may vary)
 func main() {
 	// Create a context that listens for the interrupt signal from the OS.
 	// This is used for graceful shutdown.
@@ -183,8 +198,8 @@ func main() {
 		})
 	})
 
-	// Use httpSwagger wrapper for chi
-	router.Get("/swagger/*", httpSwagger.WrapHandler) // CHANGE BACK to this
+	// Use httpSwagger wrapper with custom UI config for title
+	router.Get("/swagger/*", httpSwagger.WrapHandler)
 
 	appLogger.Info("HTTP router setup complete")
 
