@@ -16,7 +16,7 @@ PG_USER ?= user
 PG_PASSWORD ?= password
 PG_DB ?= language_learner_db
 PG_PORT ?= 5432
-PG_VERSION ?= 15
+PG_VERSION ?= 16
 # Migrate CLI path relative to project root
 MIGRATIONS_PATH=migrations
 # Swag CLI variables (if using swaggo/swag)
@@ -224,17 +224,26 @@ check-vuln: tools
 
 # Check if Docker is available
 check-docker:
-	@if ! command -v docker &> /dev/null; then \
-		echo ">>> Docker 命令未找到!"; \
+	@echo ">>> 检查Docker可用性..."
+	@if ! docker info &> /dev/null; then \
+		echo ">>> Docker服务不可用!"; \
 		echo ">>> 如果您使用WSL 2，请按照以下步骤操作:"; \
-		echo ">>>   1. 确保已安装Docker Desktop"; \
-		echo ">>>   2. 在Docker Desktop设置中启用WSL 2集成"; \
-		echo ">>>   3. 打开Docker Desktop -> Settings -> Resources -> WSL Integration"; \
-		echo ">>>   4. 确保您当前使用的WSL发行版已启用"; \
-		echo ">>>   5. 重启Docker Desktop"; \
+		echo ">>>   1. 确保Docker Desktop已运行"; \
+		echo ">>>   2. 确认已经在Docker Desktop设置中启用WSL 2集成"; \
+		echo ">>>   3. 在WSL 2中运行以下命令检查Docker安装:"; \
+		echo ">>>      which docker"; \
+		echo ">>>      docker --version"; \
+		echo ">>>   4. 如果Docker已安装但无法启动，尝试运行:"; \
+		echo ">>>      sudo service docker start"; \
+		echo ">>>   5. 查看Docker服务状态:"; \
+		echo ">>>      sudo service docker status"; \
+		echo ">>> 如果权限问题，请将用户添加到docker组:"; \
+		echo ">>>   sudo usermod -aG docker $USER"; \
+		echo ">>>   重新登录或运行: newgrp docker"; \
 		echo ">>> 更多详情，请访问: https://docs.docker.com/go/wsl2/"; \
 		exit 1; \
 	fi
+	@echo ">>> Docker可用，继续执行..."
 
 # --- Docker ---
 .PHONY: docker-build docker-run docker-stop docker-push docker-postgres-run docker-postgres-stop
@@ -272,15 +281,37 @@ docker-push: check-docker
 # --- PostgreSQL Docker ---
 # Run PostgreSQL in Docker container
 docker-postgres-run: check-docker
-	@echo ">>> Running PostgreSQL in Docker container [$(PG_CONTAINER_NAME)]..."
-	@docker run --name $(PG_CONTAINER_NAME) \
+	@echo ">>> 正在启动PostgreSQL容器 [$(PG_CONTAINER_NAME)]..."
+	@echo ">>> 检查是否有同名容器..."
+	@if docker ps -a --format '{{.Names}}' | grep -q "^$(PG_CONTAINER_NAME)$$"; then \
+		echo ">>> 发现同名容器，尝试删除..."; \
+		docker stop $(PG_CONTAINER_NAME) || true; \
+		docker rm $(PG_CONTAINER_NAME) || true; \
+	fi
+	@echo ">>> 检查端口 $(PG_PORT) 是否已被占用..."
+	@if lsof -i:$(PG_PORT) > /dev/null 2>&1; then \
+		echo ">>> 警告：端口 $(PG_PORT) 已被占用，可能会导致启动失败"; \
+	fi
+	@echo ">>> 正在运行PostgreSQL容器..."
+	docker run --name $(PG_CONTAINER_NAME) \
 		-e POSTGRES_USER=$(PG_USER) \
 		-e POSTGRES_PASSWORD=$(PG_PASSWORD) \
 		-e POSTGRES_DB=$(PG_DB) \
 		-p $(PG_PORT):5432 \
 		-d postgres:$(PG_VERSION)-alpine
-	@echo ">>> PostgreSQL container started. Use 'make docker-postgres-stop' to stop."
-	@echo ">>> Connection string: $(DATABASE_URL)"
+	@echo ">>> 验证容器是否成功启动..."
+	@if docker ps | grep -q $(PG_CONTAINER_NAME); then \
+		echo ">>> PostgreSQL容器启动成功!"; \
+		echo ">>> 容器ID: $$(docker ps -q -f name=$(PG_CONTAINER_NAME))"; \
+		echo ">>> 连接字符串: $(DATABASE_URL)"; \
+	else \
+		echo ">>> 错误：PostgreSQL容器启动失败"; \
+		echo ">>> 查看最近的容器日志:"; \
+		docker logs $(PG_CONTAINER_NAME) 2>&1 || echo ">>> 无法获取容器日志"; \
+		echo ">>> 请检查Docker错误信息:"; \
+		docker ps -a | grep $(PG_CONTAINER_NAME) || echo ">>> 找不到容器"; \
+		exit 1; \
+	fi
 
 # Stop and remove PostgreSQL container
 docker-postgres-stop: check-docker
