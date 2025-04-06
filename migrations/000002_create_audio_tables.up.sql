@@ -7,7 +7,7 @@ CREATE TABLE audio_tracks (
     description TEXT,
     language_code VARCHAR(10) NOT NULL, -- e.g., 'en-US', 'zh-CN'
     level VARCHAR(50),                  -- e.g., 'A1', 'B2', 'NATIVE' (Matches domain.AudioLevel)
-    duration_ms INTEGER NOT NULL DEFAULT 0 CHECK (duration_ms >= 0), -- Store duration in milliseconds
+    duration_ms BIGINT NOT NULL DEFAULT 0 CHECK (duration_ms >= 0), -- Store duration in BIGINT MILLISECONDS
     minio_bucket VARCHAR(100) NOT NULL,
     minio_object_key VARCHAR(1024) NOT NULL UNIQUE, -- Object key should be unique within bucket
     cover_image_url VARCHAR(1024),
@@ -55,10 +55,11 @@ CREATE INDEX idx_collectiontracks_order ON collection_tracks(collection_id, posi
 
 
 -- Add triggers to automatically update updated_at timestamps for new tables
+-- Ensure the function update_updated_at_column exists from migration 000001
 CREATE TRIGGER update_audio_tracks_updated_at
 BEFORE UPDATE ON audio_tracks
 FOR EACH ROW
-EXECUTE FUNCTION update_updated_at_column(); -- Reuse function from previous migration
+EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_audio_collections_updated_at
 BEFORE UPDATE ON audio_collections

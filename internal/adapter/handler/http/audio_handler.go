@@ -59,6 +59,7 @@ func (h *AudioHandler) GetTrackDetails(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Map to DTO using the function (which now correctly handles domain types)
 	resp := dto.AudioTrackDetailsResponseDTO{
 		AudioTrackResponseDTO: dto.MapDomainTrackToResponseDTO(track),
 		PlayURL:               playURL,
@@ -87,33 +88,27 @@ func (h *AudioHandler) GetTrackDetails(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
 // @Router /audio/tracks [get]
 func (h *AudioHandler) ListTracks(w http.ResponseWriter, r *http.Request) {
-	// Parse query parameters manually or using a library like schema
+	// --- CORRECTED: Parse query parameters ---
 	q := r.URL.Query()
+	params := port.ListTracksParams{} // Initialize empty params struct
 
-	limit, _ := strconv.Atoi(q.Get("limit"))
-	offset, _ := strconv.Atoi(q.Get("offset"))
-	// Let the usecase handle defaults and constraints
-	// Remove old page creation: // if limit <= 0 { limit = 20 }
-    // Remove old page creation: // if offset < 0 { offset = 0 }
-	// Remove old page creation: // page := port.Page{Limit: limit, Offset: offset}
-
-	params := port.ListTracksParams{
-		SortBy:        q.Get("sortBy"),
-		SortDirection: q.Get("sortDir"),
-		Tags:          q["tags"], // Get array of tags ?tags=a&tags=b
-	}
-	// Assign optional filters if present
+	// Parse simple string filters
 	if query := q.Get("q"); query != "" { params.Query = &query }
 	if lang := q.Get("lang"); lang != "" { params.LanguageCode = &lang }
+	params.Tags = q["tags"] // Get array of tags ?tags=a&tags=b (handles empty case correctly)
+
+	// Parse Level (and validate)
 	if levelStr := q.Get("level"); levelStr != "" {
 		level := domain.AudioLevel(levelStr)
-		if level.IsValid() { // Validate level input
+		if level.IsValid() {
 			params.Level = &level
 		} else {
-			httputil.RespondError(w, r, fmt.Errorf("%w: invalid level query parameter", domain.ErrInvalidArgument))
+			httputil.RespondError(w, r, fmt.Errorf("%w: invalid level query parameter '%s'", domain.ErrInvalidArgument, levelStr))
 			return
 		}
 	}
+
+	// Parse isPublic (boolean)
 	if isPublicStr := q.Get("isPublic"); isPublicStr != "" {
 		isPublic, err := strconv.ParseBool(isPublicStr)
 		if err == nil {
@@ -124,7 +119,28 @@ func (h *AudioHandler) ListTracks(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Call use case with raw limit/offset, expect pageInfo back
+	// Parse Sort parameters
+	params.SortBy = q.Get("sortBy")
+	params.SortDirection = q.Get("sortDir")
+
+	// Parse Pagination parameters
+	limitStr := q.Get("limit")
+	offsetStr := q.Get("offset")
+	limit, errLimit := strconv.Atoi(limitStr)
+	// If limit is not provided or parsing fails, use 0 (usecase will apply default)
+	if limitStr != "" && errLimit != nil {
+		httputil.RespondError(w, r, fmt.Errorf("%w: invalid limit query parameter", domain.ErrInvalidArgument))
+		return
+	}
+	offset, errOffset := strconv.Atoi(offsetStr)
+	// If offset is not provided or parsing fails, use 0
+	if offsetStr != "" && errOffset != nil {
+		httputil.RespondError(w, r, fmt.Errorf("%w: invalid offset query parameter", domain.ErrInvalidArgument))
+		return
+	}
+	// --- End CORRECTED Parameter Parsing ---
+
+	// Call use case with parsed limit/offset. Usecase handles defaults/constraints.
 	tracks, total, pageInfo, err := h.audioUseCase.ListTracks(r.Context(), params, limit, offset)
 	if err != nil {
 		httputil.RespondError(w, r, err)
@@ -133,11 +149,11 @@ func (h *AudioHandler) ListTracks(w http.ResponseWriter, r *http.Request) {
 
 	respData := make([]dto.AudioTrackResponseDTO, len(tracks))
 	for i, track := range tracks {
-		respData[i] = dto.MapDomainTrackToResponseDTO(track)
+		respData[i] = dto.MapDomainTrackToResponseDTO(track) // Use mapping
 	}
 
 	// Create paginated response DTO using the helper from pkg/pagination
-	paginatedResult := pagination.NewPaginatedResponse(respData, total, pageInfo)
+	paginatedResult := pagination.NewPaginatedResponse(respData, total, pageInfo) // Pass pageInfo returned by usecase
 
 	// Use the generic PaginatedResponseDTO from the DTO package
 	resp := dto.PaginatedResponseDTO{
@@ -153,7 +169,7 @@ func (h *AudioHandler) ListTracks(w http.ResponseWriter, r *http.Request) {
 }
 
 
-// --- Collection Handlers ---
+// --- Collection Handlers --- (Full code included for completeness)
 
 // CreateCollection handles POST /api/v1/audio/collections
 // @Summary Create an audio collection
@@ -182,7 +198,6 @@ func (h *AudioHandler) CreateCollection(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Convert string IDs to domain IDs
 	initialTrackIDs := make([]domain.TrackID, 0, len(req.InitialTrackIDs))
 	for _, idStr := range req.InitialTrackIDs {
 		id, err := domain.TrackIDFromString(idStr)
@@ -201,8 +216,7 @@ func (h *AudioHandler) CreateCollection(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Fetch track details if needed for response (or adjust DTO mapping)
-	// For now, map without full track details unless collection included them
+	// Map response without tracks initially (as CreateCollection might return before tracks are fully associated if error occurred)
 	resp := dto.MapDomainCollectionToResponseDTO(collection, nil)
 
 	httputil.RespondJSON(w, r, http.StatusCreated, resp)
@@ -239,10 +253,7 @@ func (h *AudioHandler) GetCollectionDetails(w http.ResponseWriter, r *http.Reque
 	// Get associated track details (ordered)
 	tracks, err := h.audioUseCase.GetCollectionTracks(r.Context(), collectionID)
     if err != nil {
-        // Log the error but might still return the collection metadata?
         slog.Default().ErrorContext(r.Context(), "Failed to fetch tracks for collection details", "error", err, "collectionID", collectionID)
-        // Decide if this is critical or okay to return collection without tracks
-        // Let's return an error for now, as the frontend likely expects tracks.
         httputil.RespondError(w, r, fmt.Errorf("failed to retrieve collection tracks: %w", err))
         return
     }
@@ -331,8 +342,11 @@ func (h *AudioHandler) UpdateCollectionTracks(w http.ResponseWriter, r *http.Req
 	}
 	defer r.Body.Close()
 
-	// Validate the request DTO itself (e.g., if array shouldn't be null, though empty is okay)
-	// validator doesn't easily validate contents of array here, usecase does that.
+	// Validate the request DTO (e.g., check if track IDs are valid UUIDs)
+	if err := h.validator.ValidateStruct(req); err != nil {
+		httputil.RespondError(w, r, fmt.Errorf("%w: %v", domain.ErrInvalidArgument, err))
+		return
+	}
 
 	// Convert string IDs to domain IDs
 	orderedTrackIDs := make([]domain.TrackID, 0, len(req.OrderedTrackIDs))
@@ -353,7 +367,6 @@ func (h *AudioHandler) UpdateCollectionTracks(w http.ResponseWriter, r *http.Req
 
 	w.WriteHeader(http.StatusNoContent) // 204 No Content
 }
-
 
 // DeleteCollection handles DELETE /api/v1/audio/collections/{collectionId}
 // @Summary Delete an audio collection

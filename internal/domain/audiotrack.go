@@ -32,8 +32,8 @@ type AudioTrack struct {
 	ID              TrackID
 	Title           string
 	Description     string
-	Language        Language     // Value object
-	Level           AudioLevel   // Value object
+	Language        Language     // CORRECTED TYPE: Use Language value object
+	Level           AudioLevel   // CORRECTED TYPE: Use AudioLevel value object
 	Duration        time.Duration // Store as duration for easier use
 	MinioBucket     string
 	MinioObjectKey  string
@@ -49,7 +49,9 @@ type AudioTrack struct {
 // NewAudioTrack creates a new audio track instance.
 func NewAudioTrack(
 	title, description, bucket, objectKey string,
-	lang Language, level AudioLevel, duration time.Duration,
+	lang Language, // CORRECTED TYPE: Accept Language VO
+	level AudioLevel, // CORRECTED TYPE: Accept AudioLevel VO
+	duration time.Duration,
 	uploaderID *UserID, isPublic bool, tags []string, coverURL *string,
 ) (*AudioTrack, error) {
 	if title == "" {
@@ -61,15 +63,19 @@ func NewAudioTrack(
 	if duration < 0 {
 		return nil, fmt.Errorf("%w: duration cannot be negative", ErrInvalidArgument)
 	}
-	// Add more validations as needed (e.g., level validity)
+	// Allow LevelUnknown, but validate others
+	if level != LevelUnknown && !level.IsValid() {
+		return nil, fmt.Errorf("%w: invalid audio level '%s'", ErrInvalidArgument, level)
+	}
+	// Language VO creation handles its own validation if called externally before this
 
 	now := time.Now()
 	return &AudioTrack{
 		ID:             NewTrackID(),
 		Title:          title,
 		Description:    description,
-		Language:       lang,
-		Level:          level,
+		Language:       lang, // Assign VO directly
+		Level:          level, // Assign VO directly
 		Duration:       duration,
 		MinioBucket:    bucket,
 		MinioObjectKey: objectKey,

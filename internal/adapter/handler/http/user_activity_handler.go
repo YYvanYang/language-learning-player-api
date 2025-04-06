@@ -42,7 +42,7 @@ func NewUserActivityHandler(uc port.UserActivityUseCase, v *validation.Validator
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param progress body dto.RecordProgressRequestDTO true "Playback progress details"
+// @Param progress body dto.RecordProgressRequestDTO true "Playback progress details (progressMs in milliseconds)"
 // @Success 204 "Progress recorded successfully"
 // @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Input / Track ID Format"
 // @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
@@ -56,7 +56,7 @@ func (h *UserActivityHandler) RecordProgress(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var req dto.RecordProgressRequestDTO
+	var req dto.RecordProgressRequestDTO // DTO now uses ProgressMs
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.RespondError(w, r, fmt.Errorf("%w: invalid request body", domain.ErrInvalidArgument))
 		return
@@ -74,8 +74,8 @@ func (h *UserActivityHandler) RecordProgress(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Convert float seconds to duration
-	progressDuration := time.Duration(req.ProgressSeconds * float64(time.Second))
+	// CORRECTED: Convert milliseconds (int64) to duration
+	progressDuration := time.Duration(req.ProgressMs) * time.Millisecond
 
 	err = h.activityUseCase.RecordPlaybackProgress(r.Context(), userID, trackID, progressDuration)
 	if err != nil {
@@ -94,7 +94,7 @@ func (h *UserActivityHandler) RecordProgress(w http.ResponseWriter, r *http.Requ
 // @Produce json
 // @Security BearerAuth
 // @Param trackId path string true "Audio Track UUID" Format(uuid)
-// @Success 200 {object} dto.PlaybackProgressResponseDTO "Playback progress found"
+// @Success 200 {object} dto.PlaybackProgressResponseDTO "Playback progress found (progressMs in milliseconds)"
 // @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Track ID Format"
 // @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
 // @Failure 404 {object} httputil.ErrorResponseDTO "Progress Not Found (or Track Not Found)"
@@ -121,7 +121,7 @@ func (h *UserActivityHandler) GetProgress(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	resp := dto.MapDomainProgressToResponseDTO(progress)
+	resp := dto.MapDomainProgressToResponseDTO(progress) // DTO mapping updated for milliseconds
 	httputil.RespondJSON(w, r, http.StatusOK, resp)
 }
 
@@ -134,7 +134,7 @@ func (h *UserActivityHandler) GetProgress(w http.ResponseWriter, r *http.Request
 // @Security BearerAuth
 // @Param limit query int false "Pagination limit" default(50) minimum(1) maximum(100)
 // @Param offset query int false "Pagination offset" default(0) minimum(0)
-// @Success 200 {object} dto.PaginatedProgressResponseDTO "Paginated list of playback progress"
+// @Success 200 {object} dto.PaginatedProgressResponseDTO "Paginated list of playback progress (progressMs in milliseconds)"
 // @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
 // @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
 // @Router /users/me/progress [get]
@@ -146,8 +146,8 @@ func (h *UserActivityHandler) ListProgress(w http.ResponseWriter, r *http.Reques
 	}
 
 	q := r.URL.Query()
-	limit, _ := strconv.Atoi(q.Get("limit"))
-	offset, _ := strconv.Atoi(q.Get("offset"))
+	limit, _ := strconv.Atoi(q.Get("limit")) // Use 0 if parsing fails
+	offset, _ := strconv.Atoi(q.Get("offset")) // Use 0 if parsing fails
 
 	progressList, total, pageInfo, err := h.activityUseCase.ListUserProgress(r.Context(), userID, limit, offset)
 	if err != nil {
@@ -157,7 +157,7 @@ func (h *UserActivityHandler) ListProgress(w http.ResponseWriter, r *http.Reques
 
 	respData := make([]dto.PlaybackProgressResponseDTO, len(progressList))
 	for i, p := range progressList {
-		respData[i] = dto.MapDomainProgressToResponseDTO(p)
+		respData[i] = dto.MapDomainProgressToResponseDTO(p) // DTO mapping updated for milliseconds
 	}
 
 	// Create paginated response DTO using the helper from pkg/pagination
@@ -180,14 +180,14 @@ func (h *UserActivityHandler) ListProgress(w http.ResponseWriter, r *http.Reques
 
 // CreateBookmark handles POST /api/v1/bookmarks
 // @Summary Create a bookmark
-// @Description Creates a new bookmark at a specific timestamp within an audio track for the authenticated user.
+// @Description Creates a new bookmark at a specific timestamp (in milliseconds) in an audio track for the authenticated user.
 // @ID create-bookmark
 // @Tags User Activity
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param bookmark body dto.CreateBookmarkRequestDTO true "Bookmark details"
-// @Success 201 {object} dto.BookmarkResponseDTO "Bookmark created successfully"
+// @Param bookmark body dto.CreateBookmarkRequestDTO true "Bookmark details (timestampMs in milliseconds)"
+// @Success 201 {object} dto.BookmarkResponseDTO "Bookmark created successfully (timestampMs in milliseconds)"
 // @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Input / Track ID Format"
 // @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
 // @Failure 404 {object} httputil.ErrorResponseDTO "Track Not Found"
@@ -200,7 +200,7 @@ func (h *UserActivityHandler) CreateBookmark(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var req dto.CreateBookmarkRequestDTO
+	var req dto.CreateBookmarkRequestDTO // DTO now uses TimestampMs
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.RespondError(w, r, fmt.Errorf("%w: invalid request body", domain.ErrInvalidArgument))
 		return
@@ -218,7 +218,8 @@ func (h *UserActivityHandler) CreateBookmark(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	timestampDuration := time.Duration(req.TimestampSeconds * float64(time.Second))
+	// CORRECTED: Convert milliseconds (int64) to duration
+	timestampDuration := time.Duration(req.TimestampMs) * time.Millisecond
 
 	bookmark, err := h.activityUseCase.CreateBookmark(r.Context(), userID, trackID, timestampDuration, req.Note)
 	if err != nil {
@@ -226,7 +227,7 @@ func (h *UserActivityHandler) CreateBookmark(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	resp := dto.MapDomainBookmarkToResponseDTO(bookmark)
+	resp := dto.MapDomainBookmarkToResponseDTO(bookmark) // DTO mapping updated for milliseconds
 	httputil.RespondJSON(w, r, http.StatusCreated, resp) // 201 Created
 }
 
@@ -240,7 +241,7 @@ func (h *UserActivityHandler) CreateBookmark(w http.ResponseWriter, r *http.Requ
 // @Param trackId query string false "Filter by Audio Track UUID" Format(uuid)
 // @Param limit query int false "Pagination limit" default(50) minimum(1) maximum(100)
 // @Param offset query int false "Pagination offset" default(0) minimum(0)
-// @Success 200 {object} dto.PaginatedBookmarksResponseDTO "Paginated list of bookmarks"
+// @Success 200 {object} dto.PaginatedBookmarksResponseDTO "Paginated list of bookmarks (timestampMs in milliseconds)"
 // @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Track ID Format (if provided)"
 // @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
 // @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
@@ -275,7 +276,7 @@ func (h *UserActivityHandler) ListBookmarks(w http.ResponseWriter, r *http.Reque
 
 	respData := make([]dto.BookmarkResponseDTO, len(bookmarks))
 	for i, b := range bookmarks {
-		respData[i] = dto.MapDomainBookmarkToResponseDTO(b)
+		respData[i] = dto.MapDomainBookmarkToResponseDTO(b) // DTO mapping updated for milliseconds
 	}
 
 	// Create paginated response DTO using the helper from pkg/pagination

@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"   // Import
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lib/pq" // Using lib/pq for array handling with pgx and error codes
+	"github.com/google/uuid" // For uuid.NullUUID
 
 	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
 	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
@@ -22,18 +23,25 @@ import (
 type AudioTrackRepository struct {
 	db     *pgxpool.Pool
 	logger *slog.Logger
+	// Use Querier interface to work with both pool and transaction
+	getQuerier func(ctx context.Context) Querier
 }
 
 func NewAudioTrackRepository(db *pgxpool.Pool, logger *slog.Logger) *AudioTrackRepository {
-	return &AudioTrackRepository{
+	repo := &AudioTrackRepository{
 		db:     db,
 		logger: logger.With("repository", "AudioTrackRepository"),
 	}
+	repo.getQuerier = func(ctx context.Context) Querier {
+		return getQuerier(ctx, repo.db) // Use the helper defined in tx_manager.go or here
+	}
+	return repo
 }
 
 // --- Interface Implementation ---
 
 func (r *AudioTrackRepository) Create(ctx context.Context, track *domain.AudioTrack) error {
+	q := r.getQuerier(ctx)
 	query := `
 		INSERT INTO audio_tracks
 			(id, title, description, language_code, level, duration_ms,
@@ -42,13 +50,13 @@ func (r *AudioTrackRepository) Create(ctx context.Context, track *domain.AudioTr
 		VALUES
 			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 	`
-	_, err := r.db.Exec(ctx, query,
+	_, err := q.Exec(ctx, query,
 		track.ID,
 		track.Title,
 		track.Description,
-		track.Language.Code(), // Use code from Language VO
-		track.Level,           // Use AudioLevel directly (string)
-		track.Duration.Milliseconds(), // Store as milliseconds integer
+		track.Language.Code(),      // Use code from Language VO
+		track.Level,                // Use AudioLevel directly (string)
+		track.Duration.Milliseconds(), // CORRECTED: Store as milliseconds BIGINT
 		track.MinioBucket,
 		track.MinioObjectKey,
 		track.CoverImageURL,
@@ -62,18 +70,15 @@ func (r *AudioTrackRepository) Create(ctx context.Context, track *domain.AudioTr
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == UniqueViolation {
-			// Assuming the constraint name follows the pattern <table_name>_<column_name>_key
 			if strings.Contains(pgErr.ConstraintName, "audio_tracks_minio_object_key_key") {
 				return fmt.Errorf("creating audio track: %w: object key '%s' already exists", domain.ErrConflict, track.MinioObjectKey)
 			}
 			r.logger.WarnContext(ctx, "Unique constraint violation on audio track creation", "constraint", pgErr.ConstraintName, "trackID", track.ID)
 			return fmt.Errorf("creating audio track: %w: resource conflict on unique field", domain.ErrConflict)
 		}
-		// Handle FK violations if needed (e.g., uploader_id)
 		if errors.As(err, &pgErr) && pgErr.Code == ForeignKeyViolation {
 			return fmt.Errorf("creating audio track: %w: referenced resource not found", domain.ErrInvalidArgument)
 		}
-
 		r.logger.ErrorContext(ctx, "Error creating audio track", "error", err, "trackID", track.ID)
 		return fmt.Errorf("creating audio track: %w", err)
 	}
@@ -82,6 +87,7 @@ func (r *AudioTrackRepository) Create(ctx context.Context, track *domain.AudioTr
 }
 
 func (r *AudioTrackRepository) FindByID(ctx context.Context, id domain.TrackID) (*domain.AudioTrack, error) {
+	q := r.getQuerier(ctx)
 	query := `
         SELECT id, title, description, language_code, level, duration_ms,
                minio_bucket, minio_object_key, cover_image_url, uploader_id,
@@ -89,7 +95,7 @@ func (r *AudioTrackRepository) FindByID(ctx context.Context, id domain.TrackID) 
         FROM audio_tracks
         WHERE id = $1
     `
-	track, err := r.scanTrack(ctx, r.db.QueryRow(ctx, query, id))
+	track, err := r.scanTrack(ctx, q.QueryRow(ctx, query, id)) // Pass QueryRow directly
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrNotFound // Map to domain error
@@ -101,84 +107,72 @@ func (r *AudioTrackRepository) FindByID(ctx context.Context, id domain.TrackID) 
 }
 
 func (r *AudioTrackRepository) ListByIDs(ctx context.Context, ids []domain.TrackID) ([]*domain.AudioTrack, error) {
-    if len(ids) == 0 {
-        return []*domain.AudioTrack{}, nil
-    }
-
+	q := r.getQuerier(ctx)
+	if len(ids) == 0 {
+		return []*domain.AudioTrack{}, nil
+	}
 	// Convert domain.TrackID slice to primitive UUID slice for the query parameter
-    uuidStrs := make([]string, len(ids))
-    for i, id := range ids {
-        uuidStrs[i] = id.String()
-    }
-
-    query := `
+	uuidStrs := make([]string, len(ids))
+	for i, id := range ids {
+		uuidStrs[i] = id.String()
+	}
+	query := `
         SELECT id, title, description, language_code, level, duration_ms,
                minio_bucket, minio_object_key, cover_image_url, uploader_id,
                is_public, tags, created_at, updated_at
         FROM audio_tracks
         WHERE id = ANY($1) -- Use = ANY() for array matching
-		ORDER BY array_position($1, id::text) -- Attempt to preserve order (requires casting id to text)
+		ORDER BY array_position(text_to_uuid_array($1), id) -- Assuming a helper function or use Go sort
     `
-	// Note: array_position might not be the most performant way for large lists.
-	// An alternative is fetching all and re-ordering in Go code based on the input `ids`.
-
-	rows, err := r.db.Query(ctx, query, uuidStrs)
+	// NOTE: text_to_uuid_array is not a standard function, you might need to create it
+	// or sort in Go code after fetching. Let's assume Go sort for now.
+	querySimple := `
+        SELECT id, title, description, language_code, level, duration_ms,
+               minio_bucket, minio_object_key, cover_image_url, uploader_id,
+               is_public, tags, created_at, updated_at
+        FROM audio_tracks
+        WHERE id = ANY($1)
+    `
+	rows, err := q.Query(ctx, querySimple, uuidStrs) // Use simpler query
 	if err != nil {
 		r.logger.ErrorContext(ctx, "Error listing audio tracks by IDs", "error", err)
 		return nil, fmt.Errorf("listing audio tracks by IDs: %w", err)
 	}
 	defer rows.Close()
-
-	tracks := make([]*domain.AudioTrack, 0, len(ids))
+	trackMap := make(map[domain.TrackID]*domain.AudioTrack, len(ids))
 	for rows.Next() {
-		track, err := r.scanTrack(ctx, rows) // Use pgx.Rows which satisfies the RowScanner interface
+		track, err := r.scanTrack(ctx, rows)
 		if err != nil {
-			// Log error but continue processing other rows if possible
 			r.logger.ErrorContext(ctx, "Error scanning track in ListByIDs", "error", err)
-			continue // Or return error immediately depending on desired behavior
+			continue
 		}
-		tracks = append(tracks, track)
+		trackMap[track.ID] = track
 	}
-
 	if err = rows.Err(); err != nil {
 		r.logger.ErrorContext(ctx, "Error iterating track rows in ListByIDs", "error", err)
 		return nil, fmt.Errorf("iterating track rows: %w", err)
 	}
-
-	// Re-ordering in Go code (alternative to ORDER BY array_position)
-	// trackMap := make(map[domain.TrackID]*domain.AudioTrack, len(tracks))
-	// for _, t := range tracks {
-	// 	trackMap[t.ID] = t
-	// }
-	// orderedTracks := make([]*domain.AudioTrack, 0, len(ids))
-	// for _, id := range ids {
-	// 	if t, ok := trackMap[id]; ok {
-	// 		orderedTracks = append(orderedTracks, t)
-	// 	}
-	// }
-	// return orderedTracks, nil
-
-	return tracks, nil
+	// Re-order in Go code
+	orderedTracks := make([]*domain.AudioTrack, 0, len(ids))
+	for _, id := range ids {
+		if t, ok := trackMap[id]; ok {
+			orderedTracks = append(orderedTracks, t)
+		}
+	}
+	return orderedTracks, nil
 }
 
-
 func (r *AudioTrackRepository) List(ctx context.Context, params port.ListTracksParams, page pagination.Page) ([]*domain.AudioTrack, int, error) {
-    var args []interface{}
-    argID := 1
+	q := r.getQuerier(ctx)
+	var args []interface{}
+	argID := 1
+	baseQuery := ` FROM audio_tracks `
+	countQuery := `SELECT count(*) ` + baseQuery
+	selectQuery := `SELECT id, title, description, language_code, level, duration_ms, minio_bucket, minio_object_key, cover_image_url, uploader_id, is_public, tags, created_at, updated_at ` + baseQuery
+	whereClause := " WHERE 1=1"
 
-	// Base query
-	baseQuery := `
-        SELECT id, title, description, language_code, level, duration_ms,
-               minio_bucket, minio_object_key, cover_image_url, uploader_id,
-               is_public, tags, created_at, updated_at
-        FROM audio_tracks
-    `
-	countQuery := `SELECT count(*) FROM audio_tracks`
-	whereClause := " WHERE 1=1" // Start with true condition
-
-	// Build WHERE clause dynamically
 	if params.Query != nil && *params.Query != "" {
-		whereClause += fmt.Sprintf(" AND (title ILIKE $%d OR description ILIKE $%d)", argID, argID) // Case-insensitive search
+		whereClause += fmt.Sprintf(" AND (title ILIKE $%d OR description ILIKE $%d)", argID, argID)
 		args = append(args, "%"+*params.Query+"%")
 		argID++
 	}
@@ -208,78 +202,49 @@ func (r *AudioTrackRepository) List(ctx context.Context, params port.ListTracksP
 		argID++
 	}
 
-	// Get total count matching filters
 	var total int
-	countQuery += whereClause
-	err := r.db.QueryRow(ctx, countQuery, args...).Scan(&total)
+	err := q.QueryRow(ctx, countQuery+whereClause, args...).Scan(&total)
 	if err != nil {
 		r.logger.ErrorContext(ctx, "Error counting audio tracks", "error", err, "filters", params)
 		return nil, 0, fmt.Errorf("counting audio tracks: %w", err)
 	}
+	if total == 0 { return []*domain.AudioTrack{}, 0, nil }
 
-	if total == 0 {
-		return []*domain.AudioTrack{}, 0, nil
-	}
-
-
-	// Build final query with sorting and pagination
 	orderByClause := " ORDER BY created_at DESC" // Default sort
 	if params.SortBy != "" {
-		// Validate SortBy to prevent SQL injection
-		allowedSorts := map[string]string{
-			"createdAt": "created_at",
-			"title":     "title",
-			"duration":  "duration_ms",
-			"level":     "level", // Add more allowed fields
-		}
+		allowedSorts := map[string]string{"createdAt": "created_at", "title": "title", "duration": "duration_ms", "level": "level"}
 		dbColumn, ok := allowedSorts[params.SortBy]
 		if ok {
-			direction := " ASC"
-			if strings.ToLower(params.SortDirection) == "desc" {
-				direction = " DESC"
-			}
+			direction := " ASC"; if strings.ToLower(params.SortDirection) == "desc" { direction = " DESC" }
 			orderByClause = fmt.Sprintf(" ORDER BY %s%s", dbColumn, direction)
-		} else {
-			r.logger.WarnContext(ctx, "Invalid sort field requested", "sortBy", params.SortBy)
-			// Keep default sort
-		}
+		} else { r.logger.WarnContext(ctx, "Invalid sort field requested", "sortBy", params.SortBy) }
 	}
-
 	paginationClause := fmt.Sprintf(" LIMIT $%d OFFSET $%d", argID, argID+1)
 	args = append(args, page.Limit, page.Offset)
+	finalQuery := selectQuery + whereClause + orderByClause + paginationClause
 
-	finalQuery := baseQuery + whereClause + orderByClause + paginationClause
-
-	// Execute query
-	rows, err := r.db.Query(ctx, finalQuery, args...)
+	rows, err := q.Query(ctx, finalQuery, args...)
 	if err != nil {
 		r.logger.ErrorContext(ctx, "Error listing audio tracks", "error", err, "filters", params, "page", page)
 		return nil, 0, fmt.Errorf("listing audio tracks: %w", err)
 	}
 	defer rows.Close()
-
-	// Scan results
 	tracks := make([]*domain.AudioTrack, 0, page.Limit)
 	for rows.Next() {
 		track, err := r.scanTrack(ctx, rows)
-		if err != nil {
-			r.logger.ErrorContext(ctx, "Error scanning track in List", "error", err)
-			continue // Or return error
-		}
+		if err != nil { r.logger.ErrorContext(ctx, "Error scanning track in List", "error", err); continue }
 		tracks = append(tracks, track)
 	}
-
 	if err = rows.Err(); err != nil {
 		r.logger.ErrorContext(ctx, "Error iterating track rows in List", "error", err)
 		return nil, 0, fmt.Errorf("iterating track rows: %w", err)
 	}
-
-
 	return tracks, total, nil
 }
 
 
 func (r *AudioTrackRepository) Update(ctx context.Context, track *domain.AudioTrack) error {
+	q := r.getQuerier(ctx)
 	track.UpdatedAt = time.Now()
 	query := `
 		UPDATE audio_tracks SET
@@ -288,22 +253,14 @@ func (r *AudioTrackRepository) Update(ctx context.Context, track *domain.AudioTr
 			is_public = $11, tags = $12, updated_at = $13
 		WHERE id = $1
 	`
-	cmdTag, err := r.db.Exec(ctx, query,
-		track.ID,
-		track.Title,
-		track.Description,
-		track.Language.Code(),
-		track.Level,
-		track.Duration.Milliseconds(),
-		track.MinioBucket,
-		track.MinioObjectKey,
-		track.CoverImageURL,
-		track.UploaderID,
-		track.IsPublic,
-		pq.Array(track.Tags),
-		track.UpdatedAt,
+	cmdTag, err := q.Exec(ctx, query,
+		track.ID, track.Title, track.Description,
+		track.Language.Code(),      // CORRECTED: Use VO code
+		track.Level,                // CORRECTED: Use domain type directly
+		track.Duration.Milliseconds(), // CORRECTED: Save milliseconds
+		track.MinioBucket, track.MinioObjectKey, track.CoverImageURL, track.UploaderID,
+		track.IsPublic, pq.Array(track.Tags), track.UpdatedAt,
 	)
-
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == UniqueViolation {
@@ -313,93 +270,80 @@ func (r *AudioTrackRepository) Update(ctx context.Context, track *domain.AudioTr
 			r.logger.WarnContext(ctx, "Unique constraint violation on audio track update", "constraint", pgErr.ConstraintName, "trackID", track.ID)
 			return fmt.Errorf("updating audio track: %w: resource conflict on unique field", domain.ErrConflict)
 		}
-		// Handle FK violations if needed
 		r.logger.ErrorContext(ctx, "Error updating audio track", "error", err, "trackID", track.ID)
 		return fmt.Errorf("updating audio track: %w", err)
 	}
-
-	if cmdTag.RowsAffected() == 0 {
-		return domain.ErrNotFound
-	}
-
+	if cmdTag.RowsAffected() == 0 { return domain.ErrNotFound }
 	r.logger.InfoContext(ctx, "Audio track updated successfully", "trackID", track.ID)
 	return nil
 }
 
 func (r *AudioTrackRepository) Delete(ctx context.Context, id domain.TrackID) error {
+	q := r.getQuerier(ctx)
 	query := `DELETE FROM audio_tracks WHERE id = $1`
-	cmdTag, err := r.db.Exec(ctx, query, id)
+	cmdTag, err := q.Exec(ctx, query, id)
 	if err != nil {
 		r.logger.ErrorContext(ctx, "Error deleting audio track", "error", err, "trackID", id)
 		return fmt.Errorf("deleting audio track: %w", err)
 	}
-	if cmdTag.RowsAffected() == 0 {
-		return domain.ErrNotFound // Not found
-	}
+	if cmdTag.RowsAffected() == 0 { return domain.ErrNotFound }
 	r.logger.InfoContext(ctx, "Audio track deleted successfully", "trackID", id)
 	return nil
 }
 
 func (r *AudioTrackRepository) Exists(ctx context.Context, id domain.TrackID) (bool, error) {
-    var exists bool
-    query := `SELECT EXISTS(SELECT 1 FROM audio_tracks WHERE id = $1)`
-    err := r.db.QueryRow(ctx, query, id).Scan(&exists)
-    if err != nil {
-        r.logger.ErrorContext(ctx, "Error checking audio track existence", "error", err, "trackID", id)
-        return false, fmt.Errorf("checking track existence: %w", err)
-    }
-    return exists, nil
-}
-
-
-// --- Helper Methods ---
-
-// RowScanner defines an interface satisfied by both pgx.Row and pgx.Rows.
-type RowScanner interface {
-	Scan(dest ...any) error
+	q := r.getQuerier(ctx)
+	var exists bool
+	query := `SELECT EXISTS(SELECT 1 FROM audio_tracks WHERE id = $1)`
+	err := q.QueryRow(ctx, query, id).Scan(&exists)
+	if err != nil {
+		r.logger.ErrorContext(ctx, "Error checking audio track existence", "error", err, "trackID", id)
+		return false, fmt.Errorf("checking track existence: %w", err)
+	}
+	return exists, nil
 }
 
 // scanTrack scans a single row into a domain.AudioTrack.
 func (r *AudioTrackRepository) scanTrack(ctx context.Context, row RowScanner) (*domain.AudioTrack, error) {
 	var track domain.AudioTrack
 	var langCode string
-	var durationMs int64 // Scan into int64 first
-	var tags pq.StringArray // Scan TEXT[] into pq.StringArray
+	var levelStr string          // Scan level into string
+	var durationMs int64         // CORRECTED: Scan into int64 for milliseconds
+	var tags pq.StringArray      // Scan TEXT[] into pq.StringArray
+	var uploaderID uuid.NullUUID // Use uuid.NullUUID for nullable foreign key
 
 	err := row.Scan(
-		&track.ID,
-		&track.Title,
-		&track.Description,
-		&langCode, // Scan language code
-		&track.Level,
-		&durationMs, // Scan duration_ms
-		&track.MinioBucket,
-		&track.MinioObjectKey,
-		&track.CoverImageURL,
-		&track.UploaderID, // Scans correctly into *domain.UserID (*uuid.UUID)
-		&track.IsPublic,
-		&tags, // Scan into pq.StringArray
-		&track.CreatedAt,
-		&track.UpdatedAt,
+		&track.ID, &track.Title, &track.Description,
+		&langCode,       // Scan language code
+		&levelStr,       // Scan level string
+		&durationMs,     // CORRECTED: Scan duration_ms
+		&track.MinioBucket, &track.MinioObjectKey, &track.CoverImageURL,
+		&uploaderID,     // Scan into NullUUID
+		&track.IsPublic, &tags, &track.CreatedAt, &track.UpdatedAt,
 	)
-	if err != nil {
-		return nil, err // Let caller handle pgx.ErrNoRows or other DB errors
-	}
+	if err != nil { return nil, err }
 
 	// Convert scanned values to domain types
-	langVO, langErr := domain.NewLanguage(langCode, "") // Name is not stored, can be looked up later if needed
+	langVO, langErr := domain.NewLanguage(langCode, "") // Name is not stored
 	if langErr != nil {
-		r.logger.WarnContext(ctx, "Invalid language code found in database", "error", langErr, "langCode", langCode, "trackID", track.ID)
-		// Decide how to handle - return error or default language? Using default for now.
-		// langVO = domain.Language{} // Or a specific unknown language
+		r.logger.ErrorContext(ctx, "Invalid language code found in database", "error", langErr, "langCode", langCode, "trackID", track.ID)
 		return nil, fmt.Errorf("invalid language code %s in DB for track %s: %w", langCode, track.ID, langErr)
 	}
-	track.Language = langVO
-	track.Duration = time.Duration(durationMs) * time.Millisecond // Convert ms to time.Duration
+	track.Language = langVO // CORRECTED: Assign to Language field
+	track.Level = domain.AudioLevel(levelStr) // CORRECTED: Assign to Level field
+	if !track.Level.IsValid() { // Validate scanned level
+         r.logger.WarnContext(ctx, "Invalid audio level found in database", "level", levelStr, "trackID", track.ID)
+         track.Level = domain.LevelUnknown // Assign default if invalid?
+    }
+	track.Duration = time.Duration(durationMs) * time.Millisecond // CORRECTED: Convert ms to time.Duration
 	track.Tags = tags // Assign []string from pq.StringArray
+
+	if uploaderID.Valid {
+		uid := domain.UserID(uploaderID.UUID)
+		track.UploaderID = &uid
+	} else { track.UploaderID = nil }
 
 	return &track, nil
 }
 
-// Compile-time check
 var _ port.AudioTrackRepository = (*AudioTrackRepository)(nil)
