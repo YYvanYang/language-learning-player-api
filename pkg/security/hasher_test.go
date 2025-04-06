@@ -1,4 +1,8 @@
-// pkg/security/hasher_test.go
+// ============================================
+// FILE: pkg/security/hasher_test.go
+// ============================================
+// This file was already provided in all_code.md and looks correct.
+// No changes needed.
 package security_test
 
 import (
@@ -12,12 +16,12 @@ import (
 )
 
 // Helper to create a dummy logger
-func newTestLogger() *slog.Logger {
+func newTestLoggerForHasher() *slog.Logger {
      return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
 func TestBcryptHasher(t *testing.T) {
-	hasher := security.NewBcryptHasher(newTestLogger())
+	hasher := security.NewBcryptHasher(newTestLoggerForHasher())
 	password := "mysecretpassword"
 
 	hash, err := hasher.HashPassword(password)

@@ -1,4 +1,8 @@
-// internal/domain/value_objects_test.go
+// =============================================
+// FILE: internal/domain/value_objects_test.go
+// =============================================
+// This file was already provided in all_code.md and looks correct.
+// No changes needed.
 package domain_test // Use _test package to test only exported identifiers
 
 import (
@@ -92,4 +96,15 @@ func TestCollectionType_IsValid(t *testing.T) {
     assert.True(t, domain.TypeUnknown.IsValid())
     assert.False(t, domain.CollectionType("BOOK").IsValid())
     assert.False(t, domain.CollectionType("").IsValid())
+}
+
+func TestNewLanguage(t *testing.T) {
+    lang, err := domain.NewLanguage("en-US", "English (US)")
+    require.NoError(t, err)
+    assert.Equal(t, "EN-US", lang.Code()) // Should be uppercase
+    assert.Equal(t, "English (US)", lang.Name())
+
+    _, err = domain.NewLanguage("", "Spanish")
+    require.Error(t, err)
+    assert.ErrorIs(t, err, domain.ErrInvalidArgument)
 }
