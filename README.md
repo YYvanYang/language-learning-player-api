@@ -1,204 +1,270 @@
-# Language Learning Player Backend
+Okay, here is a comprehensive `README.md` file based on the provided codebase and our previous discussions on architecture and deployment.
 
-This is the backend API for the Language Learning Player application.
+```markdown
+# Language Learning Audio Player - Backend API
 
-## Development Setup (开发环境设置)
+[![Go Version](https://img.shields.io/badge/go-1.21+-blue.svg)](https://golang.org/dl/)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+<!-- Add more badges after setting up CI/CD -->
+<!-- [![Build Status](https://img.shields.io/github/actions/workflow/status/your-username/your-repo/.github/workflows/ci.yml?branch=main)](https://github.com/your-username/your-repo/actions) -->
+<!-- [![Coverage Status](https://coveralls.io/repos/github/your-username/your-repo/badge.svg?branch=main)](https://coveralls.io/github/your-username/your-repo?branch=main) -->
 
-### Go Proxy (可选)
+This repository contains the backend API service for the Language Learning Audio Player application. It provides functionalities for user authentication (including Google Sign-In), managing audio tracks and collections (playlists/courses), tracking user playback progress, and managing bookmarks.
 
-如果你在下载 Go 模块时遇到困难或速度缓慢（尤其是在中国大陆地区），建议设置 `GOPROXY` 环境变量来使用国内的代理。
+## Overview
 
-在你的终端或配置文件 (`.bashrc`, `.zshrc`, etc.) 中添加以下行：
+The backend is a monolithic Go application built following principles inspired by Clean Architecture / Hexagonal Architecture. It emphasizes separation of concerns, testability, and maintainability. Key features include:
 
-```bash
-export GOPROXY=https://goproxy.cn,direct
+*   **User Authentication:** Secure user registration (email/password), login, and Google OAuth 2.0 integration. Uses JWT for session management.
+*   **Audio Content Management:** API endpoints to list, search, and retrieve details of audio tracks and collections.
+*   **User Activity Tracking:** Recording user playback progress and managing bookmarks at specific timestamps.
+*   **Audio File Handling:** Uses object storage (MinIO / S3-compatible) for storing audio files. Provides secure, temporary access via **presigned URLs**.
+*   **API Documentation:** OpenAPI (Swagger) specification for clear API contracts.
+*   **Configuration Management:** Flexible configuration using YAML files and environment variables.
+*   **Database Migrations:** Managed database schema changes using `golang-migrate`.
+*   **Containerized:** Includes a `Dockerfile` for easy containerization and deployment.
+*   **Development Tooling:** `Makefile` provides convenient commands for building, testing, running dependencies, and more.
+
+## Architecture
+
+The application follows a layered architecture:
+
+*   **Domain:** Contains core business entities, value objects, and business rules. Pure Go, no external dependencies. (`internal/domain`)
+*   **Usecase:** Orchestrates application-specific business logic, coordinating domain objects and repository/service interactions. (`internal/usecase`)
+*   **Port:** Defines interfaces (contracts) between layers, especially between use cases and adapters. (`internal/port`)
+*   **Adapter:** Connects the application core to the outside world.
+    *   **Handlers:** Handle incoming requests (e.g., HTTP) and drive the use cases. (`internal/adapter/handler/http`)
+    *   **Repositories:** Implement data persistence logic for specific databases (e.g., PostgreSQL). (`internal/adapter/repository/postgres`)
+    *   **Services:** Implement interactions with external services (e.g., MinIO, Google Auth). (`internal/adapter/service/*`)
+*   **Pkg:** Shared, non-domain-specific utility code (logging, validation, security). (`pkg`)
+
+*(Refer to the architecture design document for a more detailed explanation).*
+
+## Directory Structure
+
+```
+.
+├── cmd/api/                # Application entry point (main.go)
+├── config/                 # Example configuration files
+├── docs/                   # Generated Swagger/OpenAPI documentation
+├── internal/               # Internal application code (private)
+│   ├── adapter/            # Adapters (handlers, repositories, services)
+│   ├── config/             # Configuration loading logic
+│   ├── domain/             # Core domain entities and logic
+│   ├── port/               # Interfaces (ports) defining layer boundaries
+│   └── usecase/            # Application business logic / use cases
+├── migrations/             # Database migration files (.sql)
+├── pkg/                    # Shared utility libraries (public)
+├── sqlc_queries/           # (If using sqlc) SQL queries for code generation
+├── test/                   # (Optional) End-to-end / cross-component tests
+├── .env.example            # Example environment variables
+├── .gitignore
+├── config.example.yaml     # Example base configuration
+├── config.development.yaml # Default development configuration
+├── Dockerfile              # Container build instructions
+├── go.mod                  # Go module dependencies
+├── go.sum
+└── Makefile                # Development task runner
 ```
 
-这会将 `goproxy.cn` 设置为首选代理，如果代理不可用，则回退到直接下载 (`direct`)。
+## Prerequisites
 
-## Configuration (配置)
+*   **Go:** Version 1.21 or later ([Installation Guide](https://golang.org/doc/install))
+*   **Docker:** For running dependencies locally and building the container ([Installation Guide](https://docs.docker.com/engine/install/))
+*   **Make:** For using the Makefile commands. Often pre-installed on Linux/macOS.
+*   **`migrate` CLI:** For database migrations ([Installation](https://github.com/golang-migrate/migrate/tree/master/cmd/migrate)). Can be installed via `make tools`.
+*   **(Optional) `swag` CLI:** For generating Swagger docs ([Installation](https://github.com/swaggo/swag#install)). Can be installed via `make tools`.
+*   **(Optional) `sqlc` CLI:** If using `sqlc` for database code generation ([Installation](https://docs.sqlc.dev/en/latest/overview/install.html)). Can be installed via `make tools`.
 
-本项目的配置管理采用了 [Viper](https://github.com/spf13/viper)，它支持从多种来源加载配置，并遵循以下优先级顺序（从高到低）：
+## Local Development Setup
 
-1.  **环境变量**: 优先级最高。任何设置的环境变量都会覆盖配置文件中的同名设置。
-2.  **环境特定配置文件**: 根据 `APP_ENV` 环境变量的值加载，例如 `config.development.yaml` 或 `config.production.yaml`。如果 `APP_ENV` 未设置，则默认为 `development`。
-3.  **基础配置文件**: `config.yaml` (如果存在)。
-4.  **代码中设置的默认值**: 在 `internal/config/config.go` 中定义，优先级最低。
-
-### 环境变量命名约定
-
-Viper 会自动将配置文件中的键名（例如 `server.port`）映射到环境变量名（例如 `SERVER_PORT`）。它会自动将 `.` 替换为 `_` 并转换为大写。
-
-### 本地开发配置
-
-对于本地开发，你有两种主要方式来设置配置（特别是敏感信息）：
-
-1.  **使用 `.env` 文件 (推荐)**:
-    *   复制项目根目录下的 `.env.example` 文件为 `.env`。
-    *   编辑 `.env` 文件，填入你的本地开发环境所需的值（例如数据库连接字符串、JWT 密钥等）。**切勿将 `.env` 文件提交到 Git 仓库！**
-    *   如果你使用 `make docker-run` 启动服务，Makefile 会自动加载 `.env` 文件中的变量。
-2.  **直接导出环境变量**:
-    *   在运行 `go run` 或 `make run` 的终端中直接导出环境变量。
-    *   示例：
-        ```bash
-        export JWT_SECRETKEY="your-local-dev-secret"
-        export DATABASE_URL="postgresql://user:password@localhost:5432/language_learner_db?sslmode=disable"
-        make run
-        ```
-
-### 关键环境变量
-
-以下是一些关键的环境变量，你很可能需要在 `.env` 文件或部署环境中进行设置：
-
-*   `APP_ENV`: 指定运行环境（例如 `development`, `production`, `staging`），用于加载对应的 `config.<env>.yaml` 文件。默认为 `development`。
-*   `SERVER_PORT`: API 服务器监听的端口 (默认: `8080`)。
-*   `DATABASE_DSN` 或 `DATABASE_URL`: PostgreSQL 数据库的连接字符串。代码会优先使用 `DATABASE_DSN`，如果未设置，则会尝试使用 `DATABASE_URL`。格式示例：`postgresql://user:password@host:port/dbname?sslmode=disable`。
-*   `JWT_SECRETKEY`: 用于签发和验证 JWT 的密钥。**必须设置为一个强随机字符串，并且在生产环境中保密！**
-*   `MINIO_ENDPOINT`: MinIO 服务的地址和端口 (例如 `localhost:9000` 或 `minio.example.com`)。
-*   `MINIO_ACCESSKEYID`: MinIO 的 Access Key ID。
-*   `MINIO_SECRETACCESSKEY`: MinIO 的 Secret Access Key。
-*   `MINIO_BUCKETNAME`: 用于存储音频文件的 MinIO 存储桶名称 (默认: `language-audio`)。
-*   `GOOGLE_CLIENTID`: Google OAuth 2.0 Client ID。
-*   `GOOGLE_CLIENTSECRET`: Google OAuth 2.0 Client Secret。
-*   `CORS_ALLOWEDORIGINS`: 允许访问 API 的前端源地址列表，以逗号分隔 (例如 `"http://localhost:3000,https://your-frontend.com"`)。
-*   `LOG_LEVEL`: 日志级别 (例如 `debug`, `info`, `warn`, `error`)。
-*   `LOG_JSON`: 是否以 JSON 格式输出日志 (布尔值 `true` 或 `false`)。
-
-请参考 `config.example.yaml` 和 `internal/config/config.go` 中的 `setDefaultValues` 函数以获取完整的配置项列表及其默认值。
-
-## API 文档 (API Documentation)
-
-本项目的 API 使用 [OpenAPI Specification (OAS3)](https://swagger.io/specification/) 进行描述。
-
-### 访问文档
-
-当后端服务在本地运行时 (例如通过 `make run` 或 `make docker-run` 启动)，你可以通过浏览器访问以下地址来查看交互式的 Swagger UI 文档：
-
-[http://localhost:8080/swagger/index.html](http://localhost:8080/swagger/index.html)
-
-### 生成/更新文档
-
-项目使用 Go 代码中的注释和 [swaggo/swag](https://github.com/swaggo/swag) 工具来生成 OpenAPI 文档文件 (`docs/docs.go`, `docs/swagger.json`, `docs/swagger.yaml`)。
-
-如果你修改了 API Handler 中的注释，你需要重新生成文档文件。可以使用以下 Make 命令：
-
-```bash
-make swagger
-```
-
-**注意:** 建议在提交涉及 API 更改的代码前运行 `make swagger`，以确保文档与代码保持同步。
-
-## Running the API Locally (本地运行 API)
-
-以下步骤将指导你在本地计算机上运行后端 API 服务。
-
-### 1. 先决条件 (Prerequisites)
-
-确保你的开发环境中已安装以下软件：
-
-*   **Go**: 建议使用最新稳定版本 (项目应能正常编译)。
-*   **Docker** 和 **Docker Compose**: 用于运行依赖服务 (PostgreSQL, MinIO)。
-*   **Make**: 用于执行 `Makefile` 中定义的命令。
-*   **Git**: 用于克隆代码仓库。
-
-### 2. 克隆代码仓库 (Clone Repository)
-
-```bash
-git clone <your-repository-url>
-cd language-learning-player-backend
-```
-
-### 3. 安装开发工具 (Install Tools)
-
-运行以下命令安装项目所需的 Go CLI 工具 (如 `migrate`, `swag` 等)：
-
-```bash
-make tools
-```
-
-### 4. 配置环境变量 (Configure Environment Variables)
-
-API 运行需要一些配置，特别是数据库连接信息和各种服务的密钥。
-
-*   **复制示例文件**:
+1.  **Clone the Repository:**
     ```bash
-    cp .env.example .env
+    git clone <repository-url>
+    cd language-learning-player-backend
     ```
-*   **编辑 `.env` 文件**: 打开 `.env` 文件，根据你的本地环境修改以下关键变量：
-    *   `DATABASE_URL`: 确保它指向你本地运行的 PostgreSQL 实例 (如果使用 `make deps-run` 启动，默认值通常可用)。格式：`postgresql://user:password@host:port/dbname?sslmode=disable`。
-    *   `JWT_SECRETKEY`: 设置一个 **强随机字符串** 作为 JWT 密钥。**不要使用默认值！**
-    *   `MINIO_ENDPOINT`: 确保它指向你本地运行的 MinIO 实例 (默认 `localhost:9000`)。
-    *   `MINIO_ACCESSKEYID`, `MINIO_SECRETACCESSKEY`: 确保与你本地 MinIO 设置匹配 (默认 `minioadmin`/`minioadmin`)。
-    *   `MINIO_BUCKETNAME`: MinIO 存储桶名称 (默认 `language-audio`)。
-    *   `GOOGLE_CLIENTID`, `GOOGLE_CLIENTSECRET`: 如果需要测试 Google 登录，请填入你的 Google Cloud OAuth 凭证。
-    *   `CORS_ALLOWEDORIGINS`: 添加你本地前端应用的访问地址 (例如 `http://localhost:3000`)。
-    *   其他变量按需修改。
 
-**重要提示:** `.env` 文件已被添加到 `.gitignore` 中，确保不会将你的本地敏感配置提交到 Git 仓库。
+2.  **Install Go Tools:**
+    ```bash
+    make tools
+    ```
+    This will install `migrate`, `swag` (if needed), `sqlc` (if needed), `golangci-lint`, etc. using `go install`. Ensure `$GOPATH/bin` or `$GOBIN` is in your system's `PATH`.
 
-### 5. 启动依赖服务 (Start Dependencies)
+3.  **Configuration:**
+    *   **Environment Variables:** Copy `.env.example` to `.env` and fill in any necessary secrets or overrides (like `DATABASE_URL`, `JWT_SECRETKEY`). **DO NOT commit the `.env` file.**
+      ```bash
+      cp .env.example .env
+      # Edit .env file
+      ```
+    *   **YAML Configuration:** The application loads `config.development.yaml` by default when `APP_ENV` is not set or set to `development`. You can modify this file or create `config.<your_env>.yaml` and set `APP_ENV`. Values in `.env` (if mapped correctly, e.g., `DATABASE_DSN`) or environment variables (e.g., `SERVER_PORT`) override YAML values.
 
-使用 Docker 启动 PostgreSQL 和 MinIO 服务：
+4.  **Start Dependencies (Database & MinIO):**
+    This command uses Docker to start PostgreSQL and MinIO containers.
+    ```bash
+    make deps-run
+    ```
+    *   PostgreSQL will be accessible at `localhost:5432` (or the port specified in `Makefile`) with credentials `user`/`password` and database `language_learner_db`.
+    *   MinIO API will be at `http://localhost:9000` and the console at `http://localhost:9001` (credentials: `minioadmin`/`minioadmin`). The required bucket (`language-audio`) will be created automatically.
 
-```bash
-make deps-run
-```
+5.  **Run Database Migrations:**
+    Ensure the `DATABASE_URL` environment variable is set correctly (either exported in your shell or defined in the `.env` file if your shell loads it).
+    ```bash
+    # Option 1: Export directly (replace with your actual DSN from step 4 if different)
+    export DATABASE_URL="postgresql://user:password@localhost:5432/language_learner_db?sslmode=disable"
 
-这个命令会：
-*   在后台启动名为 `language-learner-postgres` 的 PostgreSQL 容器 (端口 5432)。
-*   在后台启动名为 `language-learner-minio` 的 MinIO 容器 (API 端口 9000, Console 端口 9001)。
-*   等待服务可用。
-*   自动在 MinIO 中创建名为 `language-audio` (或你在 `.env` 中配置的名称) 的存储桶。
+    # Option 2: Rely on .env file if your environment/tool loads it automatically
 
-你可以使用 `docker ps` 查看容器状态，或使用 `docker logs <container_name>` 查看日志。
+    # Run migrations
+    make migrate-up
+    ```
 
-### 6. 运行数据库迁移 (Run Database Migrations)
+## Running the Application Locally
 
-在依赖服务（特别是 PostgreSQL）启动并运行后，应用数据库结构变更：
-
-```bash
-make migrate-up
-```
-
-这个命令会读取 `migrations/` 目录下的 SQL 文件，并将更改应用到 `.env` 文件中 `DATABASE_URL` 指定的数据库。
-
-### 7. 运行 API 服务 (Run the API Service)
-
-你有两种主要方式运行 API 服务：
-
-**方式 A: 直接运行 Go 代码 (推荐用于开发调试)**
+After completing the setup:
 
 ```bash
 make run
 ```
 
-*   此命令使用 `go run` 直接编译和运行 `cmd/api/main.go`。
-*   服务将在前台运行，日志会直接输出到终端。
-*   你可以使用 `Ctrl+C` 来停止服务。
-*   它会读取 `config.development.yaml` 和 `.env` 文件中的配置。
+This command uses `go run` to build and start the application. It will load `config.development.yaml` by default. The API server will typically be available at `http://localhost:8080` (or the port specified in the configuration).
 
-**方式 B: 在 Docker 容器中运行**
+## Running Tests
+
+*   **Run all tests (Unit + Integration):** Requires Docker for integration tests.
+    ```bash
+    make test
+    ```
+    This also generates a `coverage.out` file.
+
+*   **Run only unit tests (placeholder):**
+    ```bash
+    make test-unit
+    ```
+    *(Note: The effectiveness depends on how tests are organized/tagged).*
+
+*   **Run only integration tests:** Requires Docker.
+    ```bash
+    make test-integration
+    ```
+    *(Note: Runs tests specifically in the repository package or requires tests tagged with `integration`)*.
+
+*   **View Test Coverage:**
+    ```bash
+    make test-cover
+    ```
+    This will run all tests and open the HTML coverage report in your browser.
+
+*   **Run Linter:**
+    ```bash
+    make lint
+    ```
+
+*   **Check for Vulnerabilities:**
+    ```bash
+    make check-vuln
+    ```
+
+## Building the Application
+
+To create a production-ready binary (statically linked for Linux amd64 by default):
 
 ```bash
-make docker-run
+make build
 ```
 
-*   此命令首先会使用 `Dockerfile` 构建一个 Docker 镜像 (如果镜像不存在或代码有更新)。
-*   然后，它会在后台启动一个名为 `language-player-api` 的 Docker 容器来运行 API。
-*   容器会从 `.env` 文件加载环境变量进行配置。
-*   使用 `make docker-stop` 来停止并移除这个容器。
+The binary will be placed in the `./build/` directory.
 
-### 8. 验证服务是否运行 (Verify Service)
+## Configuration
 
-服务启动后，你可以通过以下方式验证：
+The application uses [Viper](https://github.com/spf13/viper) for configuration management.
 
-*   **健康检查**: 访问 `http://localhost:8080/healthz` (或你在配置中指定的端口)。如果看到 "OK"，表示服务基本运行正常。
-*   **API 文档**: 访问 `http://localhost:8080/`，它应该会自动重定向到 `http://localhost:8080/swagger/index.html`，显示 Swagger UI。
+*   **Files:** Looks for `config.yaml` (base) and `config.<APP_ENV>.yaml` (environment specific) in the current directory. Defaults to `config.development.yaml` if `APP_ENV` is not set.
+*   **Environment Variables:** Variables matching config keys (with `.` replaced by `_`, e.g., `SERVER_PORT`) override file values. Sensitive data (DB passwords, JWT secrets, API keys) **should** be configured via environment variables.
+*   **Defaults:** Default values are defined in `internal/config/config.go`.
 
-### 9. 停止服务 (Stopping the Service)
+Refer to `config.example.yaml` and `.env.example` for available configuration options.
 
-*   **如果使用 `make run`**: 在运行命令的终端按 `Ctrl+C`。
-*   **如果使用 `make docker-run`**: 运行 `make docker-stop`。
-*   **停止依赖服务 (PostgreSQL, MinIO)**: 运行 `make deps-stop`。
+## Database Migrations
 
-现在，你可以按照这些步骤在本地成功运行后端 API 了。 
+Database schema changes are managed using `golang-migrate/migrate`. Migration files (`.up.sql`, `.down.sql`) are located in the `/migrations` directory.
+
+*   **Requirements:** `migrate` CLI installed (`make tools`) and `DATABASE_URL` environment variable set.
+*   **Create a new migration:**
+    ```bash
+    make migrate-create name=describe_your_change
+    ```
+*   **Apply migrations:**
+    ```bash
+    make migrate-up
+    ```
+*   **Rollback the last migration:**
+    ```bash
+    make migrate-down
+    ```
+*   **Force migration version (use with caution):**
+    ```bash
+    make migrate-force version=<version_number>
+    ```
+
+## API Documentation (Swagger)
+
+This project uses `swaggo/swag` to generate OpenAPI (Swagger) documentation from code annotations.
+
+*   **Generate/Update Docs:**
+    ```bash
+    make swagger
+    ```
+    This updates the files in the `/docs` directory. Commit these generated files.
+*   **Access Docs:** When the application is running locally, access the Swagger UI at:
+    [http://localhost:8080/swagger/index.html](http://localhost:8080/swagger/index.html) (Adjust port if necessary).
+
+## Docker Usage
+
+*   **Build the Docker Image:**
+    ```bash
+    # Customize DOCKER_IMAGE_NAME in Makefile or pass it as an argument
+    make docker-build DOCKER_IMAGE_NAME=your-repo/language-player-api DOCKER_IMAGE_TAG=latest
+    ```
+*   **Run the Docker Container:** Uses the `.env` file for configuration by default.
+    ```bash
+    make docker-run
+    ```
+    The container will run in the background, exposing port 8080.
+*   **Stop the Docker Container:**
+    ```bash
+    make docker-stop
+    ```
+*   **Push the Image (Requires Login):**
+    ```bash
+    # Ensure DOCKER_IMAGE_NAME is set correctly
+    make docker-push
+    ```
+
+## Deployment (Recommended Low-Cost Strategy)
+
+For personal projects or cost-sensitive deployments, the following strategy is recommended:
+
+1.  **Compute:** Deploy the container image to a **Serverless Container Platform** like **Google Cloud Run**. This provides scale-to-zero capability (no cost when idle) and pay-per-use pricing.
+2.  **Database:** Use a **Managed PostgreSQL Service** like **Google Cloud SQL** or **AWS RDS**. Start with the smallest available instance size covered by the free tier. Ensure the database is in the *same region* as your compute service.
+3.  **Object Storage:** Use **Cloudflare R2**. Its **free egress** is a major cost saver for audio streaming. It's S3-compatible. Alternatively, use AWS S3 or GCS but heavily rely on a CDN.
+4.  **CDN:** Use **Cloudflare (Free Plan)** in front of your object storage (R2/S3/GCS). This caches audio files globally, improves user experience, and drastically reduces egress costs from your origin storage.
+5.  **Configuration:** Inject secrets (DB password, JWT key, Google credentials) via environment variables provided by the cloud platform (e.g., Cloud Run secret management).
+6.  **Deployment:** Build the Docker image in a CI/CD pipeline (e.g., GitHub Actions) and deploy directly to Cloud Run using `gcloud` CLI commands.
+
+*(This is a high-level overview. Refer to the specific cloud provider documentation for detailed setup instructions.)*
+
+## Contributing
+
+Contributions are welcome! Please follow standard Go practices, ensure tests pass (`make test`), code is linted (`make lint`), and documentation is updated if necessary. Open an issue to discuss significant changes before submitting a pull request.
+
+## License
+
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details (You need to add a LICENSE file).
+```
+
+**Next Steps:**
+
+1.  **Add a `LICENSE` file:** Choose a license (like Apache 2.0 mentioned) and add the corresponding license text to a file named `LICENSE` in the root directory.
+2.  **Update Placeholders:** Replace placeholders like `your-username/your-repo`, `your-dockerhub-username`, `<repository-url>`, and example email/URLs with your actual project details.
+3.  **Set up CI/CD:** Once you have CI/CD (e.g., GitHub Actions), update the badge URLs for Build Status and Coverage.
+4.  **Review and Refine:** Read through the generated README in the context of your project and refine any sections that need clarification or more specific details.
