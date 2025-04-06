@@ -86,4 +86,119 @@ Viper 会自动将配置文件中的键名（例如 `server.port`）映射到环
 make swagger
 ```
 
-**注意:** 建议在提交涉及 API 更改的代码前运行 `make swagger`，以确保文档与代码保持同步。 
+**注意:** 建议在提交涉及 API 更改的代码前运行 `make swagger`，以确保文档与代码保持同步。
+
+## Running the API Locally (本地运行 API)
+
+以下步骤将指导你在本地计算机上运行后端 API 服务。
+
+### 1. 先决条件 (Prerequisites)
+
+确保你的开发环境中已安装以下软件：
+
+*   **Go**: 建议使用最新稳定版本 (项目应能正常编译)。
+*   **Docker** 和 **Docker Compose**: 用于运行依赖服务 (PostgreSQL, MinIO)。
+*   **Make**: 用于执行 `Makefile` 中定义的命令。
+*   **Git**: 用于克隆代码仓库。
+
+### 2. 克隆代码仓库 (Clone Repository)
+
+```bash
+git clone <your-repository-url>
+cd language-learning-player-backend
+```
+
+### 3. 安装开发工具 (Install Tools)
+
+运行以下命令安装项目所需的 Go CLI 工具 (如 `migrate`, `swag` 等)：
+
+```bash
+make tools
+```
+
+### 4. 配置环境变量 (Configure Environment Variables)
+
+API 运行需要一些配置，特别是数据库连接信息和各种服务的密钥。
+
+*   **复制示例文件**:
+    ```bash
+    cp .env.example .env
+    ```
+*   **编辑 `.env` 文件**: 打开 `.env` 文件，根据你的本地环境修改以下关键变量：
+    *   `DATABASE_URL`: 确保它指向你本地运行的 PostgreSQL 实例 (如果使用 `make deps-run` 启动，默认值通常可用)。格式：`postgresql://user:password@host:port/dbname?sslmode=disable`。
+    *   `JWT_SECRETKEY`: 设置一个 **强随机字符串** 作为 JWT 密钥。**不要使用默认值！**
+    *   `MINIO_ENDPOINT`: 确保它指向你本地运行的 MinIO 实例 (默认 `localhost:9000`)。
+    *   `MINIO_ACCESSKEYID`, `MINIO_SECRETACCESSKEY`: 确保与你本地 MinIO 设置匹配 (默认 `minioadmin`/`minioadmin`)。
+    *   `MINIO_BUCKETNAME`: MinIO 存储桶名称 (默认 `language-audio`)。
+    *   `GOOGLE_CLIENTID`, `GOOGLE_CLIENTSECRET`: 如果需要测试 Google 登录，请填入你的 Google Cloud OAuth 凭证。
+    *   `CORS_ALLOWEDORIGINS`: 添加你本地前端应用的访问地址 (例如 `http://localhost:3000`)。
+    *   其他变量按需修改。
+
+**重要提示:** `.env` 文件已被添加到 `.gitignore` 中，确保不会将你的本地敏感配置提交到 Git 仓库。
+
+### 5. 启动依赖服务 (Start Dependencies)
+
+使用 Docker 启动 PostgreSQL 和 MinIO 服务：
+
+```bash
+make deps-run
+```
+
+这个命令会：
+*   在后台启动名为 `language-learner-postgres` 的 PostgreSQL 容器 (端口 5432)。
+*   在后台启动名为 `language-learner-minio` 的 MinIO 容器 (API 端口 9000, Console 端口 9001)。
+*   等待服务可用。
+*   自动在 MinIO 中创建名为 `language-audio` (或你在 `.env` 中配置的名称) 的存储桶。
+
+你可以使用 `docker ps` 查看容器状态，或使用 `docker logs <container_name>` 查看日志。
+
+### 6. 运行数据库迁移 (Run Database Migrations)
+
+在依赖服务（特别是 PostgreSQL）启动并运行后，应用数据库结构变更：
+
+```bash
+make migrate-up
+```
+
+这个命令会读取 `migrations/` 目录下的 SQL 文件，并将更改应用到 `.env` 文件中 `DATABASE_URL` 指定的数据库。
+
+### 7. 运行 API 服务 (Run the API Service)
+
+你有两种主要方式运行 API 服务：
+
+**方式 A: 直接运行 Go 代码 (推荐用于开发调试)**
+
+```bash
+make run
+```
+
+*   此命令使用 `go run` 直接编译和运行 `cmd/api/main.go`。
+*   服务将在前台运行，日志会直接输出到终端。
+*   你可以使用 `Ctrl+C` 来停止服务。
+*   它会读取 `config.development.yaml` 和 `.env` 文件中的配置。
+
+**方式 B: 在 Docker 容器中运行**
+
+```bash
+make docker-run
+```
+
+*   此命令首先会使用 `Dockerfile` 构建一个 Docker 镜像 (如果镜像不存在或代码有更新)。
+*   然后，它会在后台启动一个名为 `language-player-api` 的 Docker 容器来运行 API。
+*   容器会从 `.env` 文件加载环境变量进行配置。
+*   使用 `make docker-stop` 来停止并移除这个容器。
+
+### 8. 验证服务是否运行 (Verify Service)
+
+服务启动后，你可以通过以下方式验证：
+
+*   **健康检查**: 访问 `http://localhost:8080/healthz` (或你在配置中指定的端口)。如果看到 "OK"，表示服务基本运行正常。
+*   **API 文档**: 访问 `http://localhost:8080/`，它应该会自动重定向到 `http://localhost:8080/swagger/index.html`，显示 Swagger UI。
+
+### 9. 停止服务 (Stopping the Service)
+
+*   **如果使用 `make run`**: 在运行命令的终端按 `Ctrl+C`。
+*   **如果使用 `make docker-run`**: 运行 `make docker-stop`。
+*   **停止依赖服务 (PostgreSQL, MinIO)**: 运行 `make deps-stop`。
+
+现在，你可以按照这些步骤在本地成功运行后端 API 了。 
