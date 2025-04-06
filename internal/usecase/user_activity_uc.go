@@ -10,6 +10,7 @@ import (
 
 	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
 	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"                      // Import pagination
 )
 
 // UserActivityUseCase handles business logic for user interactions like progress and bookmarks.
@@ -84,17 +85,16 @@ func (uc *UserActivityUseCase) GetPlaybackProgress(ctx context.Context, userID d
 
 
 // ListUserProgress retrieves a paginated list of all progress records for a user.
-func (uc *UserActivityUseCase) ListUserProgress(ctx context.Context, userID domain.UserID, page port.Page) ([]*domain.PlaybackProgress, int, error) {
-    // Apply defaults/constraints
-	if page.Limit <= 0 || page.Limit > 100 { page.Limit = 50 }
-	if page.Offset < 0 { page.Offset = 0 }
+func (uc *UserActivityUseCase) ListUserProgress(ctx context.Context, userID domain.UserID, limit, offset int) ([]*domain.PlaybackProgress, int, pagination.Page, error) {
+    // Create Page object, applying defaults and constraints
+	pageParams := pagination.NewPageFromOffset(limit, offset)
 
-	progressList, total, err := uc.progressRepo.ListByUser(ctx, userID, page)
+	progressList, total, err := uc.progressRepo.ListByUser(ctx, userID, pageParams)
 	if err != nil {
-		uc.logger.ErrorContext(ctx, "Failed to list user progress", "error", err, "userID", userID, "page", page)
-		return nil, 0, fmt.Errorf("failed to retrieve progress list: %w", err)
+		uc.logger.ErrorContext(ctx, "Failed to list user progress", "error", err, "userID", userID, "page", pageParams)
+		return nil, 0, pageParams, fmt.Errorf("failed to retrieve progress list: %w", err)
 	}
-	return progressList, total, nil
+	return progressList, total, pageParams, nil
 }
 
 
@@ -132,34 +132,45 @@ func (uc *UserActivityUseCase) CreateBookmark(ctx context.Context, userID domain
 }
 
 // ListBookmarks retrieves bookmarks for a user, optionally filtered by track.
-func (uc *UserActivityUseCase) ListBookmarks(ctx context.Context, userID domain.UserID, trackID *domain.TrackID, page port.Page) ([]*domain.Bookmark, int, error) {
-	// Apply defaults/constraints
-	if page.Limit <= 0 || page.Limit > 100 { page.Limit = 50 }
-	if page.Offset < 0 { page.Offset = 0 }
-
+func (uc *UserActivityUseCase) ListBookmarks(ctx context.Context, userID domain.UserID, trackID *domain.TrackID, limit, offset int) ([]*domain.Bookmark, int, pagination.Page, error) {
 	var bookmarks []*domain.Bookmark
 	var total int
 	var err error
+	var pageParams pagination.Page
 
 	if trackID != nil {
-		// Listing for a specific track (no pagination needed as per repo interface?)
-		// Let's assume ListByUserAndTrack returns all bookmarks for that track.
+		// Listing for a specific track (repo method doesn't support pagination, returns all)
 		bookmarks, err = uc.bookmarkRepo.ListByUserAndTrack(ctx, userID, *trackID)
-		total = len(bookmarks) // Total is just the count returned
-		// Reset pagination as we fetched all
-		page.Limit = total
-		page.Offset = 0
+		if err != nil {
+			uc.logger.ErrorContext(ctx, "Failed to list bookmarks by user and track", "error", err, "userID", userID, "trackID", *trackID)
+			// Still return a default Page struct on error?
+			// Let's return a Page reflecting the requested (but failed) fetch - could be misleading.
+			// Returning a zero Page might be better.
+			pageParams = pagination.NewPageFromOffset(0, 0) // Or just pagination.Page{}
+			return nil, 0, pageParams, fmt.Errorf("failed to retrieve bookmarks for track: %w", err)
+		}
+		total = len(bookmarks)
+		// Create Page reflecting the *actual* result (all bookmarks for the track)
+		// NewPageFromOffset applies limits, which is not correct here.
+		pageParams = pagination.Page{Limit: total, Offset: 0}
+		// Ensure limit does not exceed MaxLimit if that's a strict requirement downstream,
+		// although NewPaginatedResponse will handle this again.
+		if pageParams.Limit > pagination.MaxLimit {
+			pageParams.Limit = pagination.MaxLimit // Optional: Apply constraint here too?
+		}
+
 	} else {
 		// Listing all bookmarks for the user (paginated)
-		bookmarks, total, err = uc.bookmarkRepo.ListByUser(ctx, userID, page)
+		pageParams = pagination.NewPageFromOffset(limit, offset)
+		bookmarks, total, err = uc.bookmarkRepo.ListByUser(ctx, userID, pageParams)
+		if err != nil {
+			uc.logger.ErrorContext(ctx, "Failed to list bookmarks by user", "error", err, "userID", userID, "page", pageParams)
+			return nil, 0, pageParams, fmt.Errorf("failed to retrieve bookmarks: %w", err)
+		}
 	}
 
-	if err != nil {
-		uc.logger.ErrorContext(ctx, "Failed to list bookmarks", "error", err, "userID", userID, "trackID", trackID, "page", page)
-		return nil, 0, fmt.Errorf("failed to retrieve bookmarks: %w", err)
-	}
-
-	return bookmarks, total, nil
+	// Success case for both scenarios (trackID nil or not nil)
+	return bookmarks, total, pageParams, nil
 }
 
 // DeleteBookmark deletes a bookmark owned by the user.

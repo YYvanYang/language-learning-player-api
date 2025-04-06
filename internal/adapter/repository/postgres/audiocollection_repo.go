@@ -13,6 +13,7 @@ import (
 
 	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
 	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"                       // Import pagination
 )
 
 type AudioCollectionRepository struct {
@@ -114,7 +115,7 @@ func (r *AudioCollectionRepository) FindWithTracks(ctx context.Context, id domai
 }
 
 
-func (r *AudioCollectionRepository) ListByOwner(ctx context.Context, ownerID domain.UserID, page port.Page) ([]*domain.AudioCollection, int, error) {
+func (r *AudioCollectionRepository) ListByOwner(ctx context.Context, ownerID domain.UserID, page pagination.Page) ([]*domain.AudioCollection, int, error) {
     var args []interface{}
 	argID := 1
 

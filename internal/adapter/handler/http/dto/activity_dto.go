@@ -67,20 +67,3 @@ func MapDomainBookmarkToResponseDTO(b *domain.Bookmark) BookmarkResponseDTO {
 		CreatedAt:        b.CreatedAt,
 	}
 }
-
-
-// PaginatedProgressResponseDTO defines the structure for paginated progress lists.
-type PaginatedProgressResponseDTO struct {
-	Data  []PlaybackProgressResponseDTO `json:"data"`
-	Total int                           `json:"total"`
-	Limit int                           `json:"limit"`
-	Offset int                          `json:"offset"`
-}
-
-// PaginatedBookmarksResponseDTO defines the structure for paginated bookmark lists.
-type PaginatedBookmarksResponseDTO struct {
-	Data  []BookmarkResponseDTO `json:"data"`
-	Total int                   `json:"total"`
-	Limit int                   `json:"limit"`
-	Offset int                  `json:"offset"`
-}

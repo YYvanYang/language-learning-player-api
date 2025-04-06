@@ -12,6 +12,7 @@ import (
 	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
 	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
 	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware" // 添加middleware包
+	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"                      // Import pagination
 )
 
 // AudioContentUseCase handles business logic related to audio tracks and collections.
@@ -115,14 +116,10 @@ func (uc *AudioContentUseCase) GetAudioTrackDetails(ctx context.Context, trackID
 
 
 // ListTracks retrieves a paginated list of tracks based on filtering and sorting criteria.
-func (uc *AudioContentUseCase) ListTracks(ctx context.Context, params port.ListTracksParams, page port.Page) ([]*domain.AudioTrack, int, error) {
-	// Apply defaults or constraints for pagination
-	if page.Limit <= 0 || page.Limit > 100 { // Max limit example
-		page.Limit = 20 // Default limit
-	}
-	if page.Offset < 0 {
-		page.Offset = 0
-	}
+// It receives raw limit/offset from the handler, creates a pagination.Page object, and returns it along with results.
+func (uc *AudioContentUseCase) ListTracks(ctx context.Context, params port.ListTracksParams, limit, offset int) ([]*domain.AudioTrack, int, pagination.Page, error) {
+	// Create Page object, applying defaults and constraints
+	pageParams := pagination.NewPageFromOffset(limit, offset)
 
 	// Ensure only public tracks are listed if no specific filter is set and user context doesn't grant special access
 	// This logic might be better placed in the handler or middleware depending on complexity.
@@ -135,14 +132,16 @@ func (uc *AudioContentUseCase) ListTracks(ctx context.Context, params port.ListT
 	}
 
 
-	tracks, total, err := uc.trackRepo.List(ctx, params, page)
+	tracks, total, err := uc.trackRepo.List(ctx, params, pageParams) // Pass validated Page object
 	if err != nil {
-		uc.logger.ErrorContext(ctx, "Failed to list audio tracks from repository", "error", err, "params", params, "page", page)
-		return nil, 0, fmt.Errorf("failed to retrieve track list: %w", err) // Internal error
+		uc.logger.ErrorContext(ctx, "Failed to list audio tracks from repository", "error", err, "params", params, "page", pageParams)
+		// Return the validated pageParams even on error
+		return nil, 0, pageParams, fmt.Errorf("failed to retrieve track list: %w", err)
 	}
 
-	uc.logger.InfoContext(ctx, "Successfully listed audio tracks", "count", len(tracks), "total", total, "params", params, "page", page)
-	return tracks, total, nil
+	uc.logger.InfoContext(ctx, "Successfully listed audio tracks", "count", len(tracks), "total", total, "params", params, "page", pageParams)
+	// Return tracks, total, and the validated pageParams used for the query
+	return tracks, total, pageParams, nil
 }
 
 

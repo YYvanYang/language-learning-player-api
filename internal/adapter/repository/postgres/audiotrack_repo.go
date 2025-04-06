@@ -16,6 +16,7 @@ import (
 
 	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
 	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"                       // Import pagination
 )
 
 type AudioTrackRepository struct {
@@ -161,7 +162,7 @@ func (r *AudioTrackRepository) ListByIDs(ctx context.Context, ids []domain.Track
 }
 
 
-func (r *AudioTrackRepository) List(ctx context.Context, params port.ListTracksParams, page port.Page) ([]*domain.AudioTrack, int, error) {
+func (r *AudioTrackRepository) List(ctx context.Context, params port.ListTracksParams, page pagination.Page) ([]*domain.AudioTrack, int, error) {
     var args []interface{}
     argID := 1
 

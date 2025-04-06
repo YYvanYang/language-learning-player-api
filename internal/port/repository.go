@@ -5,15 +5,17 @@ import (
 	"context"
 	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
 	// Assuming a common pagination package exists or will be created in pkg/pagination
-	// "github.com/yvanyang/language-learning-player-backend/pkg/pagination"
+	"github.com/yvanyang/language-learning-player-backend/pkg/pagination" // Import the new package
 )
 
-// --- Pagination Placeholder ---
+// --- Remove Pagination Placeholder ---
+/* Remove this section
 // Replace with actual implementation in pkg/pagination later
 type Page struct {
 	Limit  int
 	Offset int
 }
+*/
 // --- End Pagination Placeholder ---
 
 
@@ -48,7 +50,7 @@ type AudioTrackRepository interface {
 	ListByIDs(ctx context.Context, ids []domain.TrackID) ([]*domain.AudioTrack, error)
 	// List retrieves a paginated list of tracks based on filter and sort parameters.
 	// Returns the list of tracks for the current page and the total count matching the filters.
-	List(ctx context.Context, params ListTracksParams, page Page) (tracks []*domain.AudioTrack, total int, err error)
+	List(ctx context.Context, params ListTracksParams, page pagination.Page) (tracks []*domain.AudioTrack, total int, err error)
 	Create(ctx context.Context, track *domain.AudioTrack) error
 	Update(ctx context.Context, track *domain.AudioTrack) error
 	Delete(ctx context.Context, id domain.TrackID) error
@@ -61,7 +63,7 @@ type AudioCollectionRepository interface {
 	// FindWithTracks retrieves collection metadata and its ordered track list.
 	// This might require a JOIN or separate queries in implementation.
 	FindWithTracks(ctx context.Context, id domain.CollectionID) (*domain.AudioCollection, error)
-	ListByOwner(ctx context.Context, ownerID domain.UserID, page Page) (collections []*domain.AudioCollection, total int, err error)
+	ListByOwner(ctx context.Context, ownerID domain.UserID, page pagination.Page) (collections []*domain.AudioCollection, total int, err error)
 	Create(ctx context.Context, collection *domain.AudioCollection) error // Creates collection metadata only
 	UpdateMetadata(ctx context.Context, collection *domain.AudioCollection) error // Updates title, description
 	// ManageTracks persists the full ordered list of track IDs for a collection.
@@ -77,7 +79,7 @@ type PlaybackProgressRepository interface {
 	// Upsert creates or updates the progress record.
 	Upsert(ctx context.Context, progress *domain.PlaybackProgress) error
 	// ListByUser retrieves all progress records for a user, paginated, ordered by LastListenedAt descending.
-	ListByUser(ctx context.Context, userID domain.UserID, page Page) (progressList []*domain.PlaybackProgress, total int, err error)
+	ListByUser(ctx context.Context, userID domain.UserID, page pagination.Page) (progressList []*domain.PlaybackProgress, total int, err error)
 }
 
 // BookmarkRepository defines the persistence operations for Bookmark entities.
@@ -86,7 +88,7 @@ type BookmarkRepository interface {
 	// ListByUserAndTrack retrieves all bookmarks for a specific user on a specific track, ordered by timestamp.
 	ListByUserAndTrack(ctx context.Context, userID domain.UserID, trackID domain.TrackID) ([]*domain.Bookmark, error)
 	// ListByUser retrieves all bookmarks for a user, paginated, ordered by CreatedAt descending.
-	ListByUser(ctx context.Context, userID domain.UserID, page Page) (bookmarks []*domain.Bookmark, total int, err error)
+	ListByUser(ctx context.Context, userID domain.UserID, page pagination.Page) (bookmarks []*domain.Bookmark, total int, err error)
 	Create(ctx context.Context, bookmark *domain.Bookmark) error
 	Delete(ctx context.Context, id domain.BookmarkID) error // Assumes ownership check happens in Usecase
 }

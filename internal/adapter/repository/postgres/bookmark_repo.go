@@ -13,6 +13,7 @@ import (
 
 	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
 	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"                       // Import pagination
 )
 
 type BookmarkRepository struct {
@@ -101,7 +102,7 @@ func (r *BookmarkRepository) ListByUserAndTrack(ctx context.Context, userID doma
 	return bookmarks, nil
 }
 
-func (r *BookmarkRepository) ListByUser(ctx context.Context, userID domain.UserID, page port.Page) ([]*domain.Bookmark, int, error) {
+func (r *BookmarkRepository) ListByUser(ctx context.Context, userID domain.UserID, page pagination.Page) ([]*domain.Bookmark, int, error) {
     baseQuery := `FROM bookmarks WHERE user_id = $1`
 	countQuery := `SELECT count(*) ` + baseQuery
 	selectQuery := `SELECT id, user_id, track_id, timestamp_seconds, note, created_at ` + baseQuery

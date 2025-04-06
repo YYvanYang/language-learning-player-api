@@ -138,20 +138,3 @@ func MapDomainCollectionToResponseDTO(collection *domain.AudioCollection, tracks
 
 	return dto
 }
-
-
-// PaginatedTracksResponseDTO defines the structure for paginated track lists.
-type PaginatedTracksResponseDTO struct {
-	Data  []AudioTrackResponseDTO `json:"data"`
-	Total int                     `json:"total"`
-	Limit int                     `json:"limit"`
-	Offset int                    `json:"offset"`
-}
-
-// PaginatedCollectionsResponseDTO defines the structure for paginated collection lists.
-type PaginatedCollectionsResponseDTO struct {
-	Data  []AudioCollectionResponseDTO `json:"data"`
-	Total int                          `json:"total"`
-	Limit int                          `json:"limit"`
-	Offset int                         `json:"offset"`
-}

@@ -13,6 +13,7 @@ import (
 	"github.com/yvanyang/language-learning-player-backend/internal/port"
 	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/dto"
 	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"
+	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"
 	"github.com/yvanyang/language-learning-player-backend/pkg/validation"
 )
 
@@ -91,10 +92,10 @@ func (h *AudioHandler) ListTracks(w http.ResponseWriter, r *http.Request) {
 
 	limit, _ := strconv.Atoi(q.Get("limit"))
 	offset, _ := strconv.Atoi(q.Get("offset"))
-	if limit <= 0 { limit = 20 }
-    if offset < 0 { offset = 0 }
-
-	page := port.Page{Limit: limit, Offset: offset}
+	// Let the usecase handle defaults and constraints
+	// Remove old page creation: // if limit <= 0 { limit = 20 }
+    // Remove old page creation: // if offset < 0 { offset = 0 }
+	// Remove old page creation: // page := port.Page{Limit: limit, Offset: offset}
 
 	params := port.ListTracksParams{
 		SortBy:        q.Get("sortBy"),
@@ -123,7 +124,8 @@ func (h *AudioHandler) ListTracks(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tracks, total, err := h.audioUseCase.ListTracks(r.Context(), params, page)
+	// Call use case with raw limit/offset, expect pageInfo back
+	tracks, total, pageInfo, err := h.audioUseCase.ListTracks(r.Context(), params, limit, offset)
 	if err != nil {
 		httputil.RespondError(w, r, err)
 		return
@@ -134,11 +136,17 @@ func (h *AudioHandler) ListTracks(w http.ResponseWriter, r *http.Request) {
 		respData[i] = dto.MapDomainTrackToResponseDTO(track)
 	}
 
-	resp := dto.PaginatedTracksResponseDTO{
-		Data:   respData,
-		Total:  total,
-		Limit:  page.Limit,
-		Offset: page.Offset,
+	// Create paginated response DTO using the helper from pkg/pagination
+	paginatedResult := pagination.NewPaginatedResponse(respData, total, pageInfo)
+
+	// Use the generic PaginatedResponseDTO from the DTO package
+	resp := dto.PaginatedResponseDTO{
+		Data:       paginatedResult.Data,
+		Total:      paginatedResult.Total,
+		Limit:      paginatedResult.Limit,
+		Offset:     paginatedResult.Offset,
+		Page:       paginatedResult.Page,
+		TotalPages: paginatedResult.TotalPages,
 	}
 
 	httputil.RespondJSON(w, r, http.StatusOK, resp)

@@ -13,6 +13,7 @@ import (
 
 	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
 	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"                       // Import pagination
 )
 
 type PlaybackProgressRepository struct {
@@ -77,7 +78,7 @@ func (r *PlaybackProgressRepository) Find(ctx context.Context, userID domain.Use
 	return progress, nil
 }
 
-func (r *PlaybackProgressRepository) ListByUser(ctx context.Context, userID domain.UserID, page port.Page) ([]*domain.PlaybackProgress, int, error) {
+func (r *PlaybackProgressRepository) ListByUser(ctx context.Context, userID domain.UserID, page pagination.Page) ([]*domain.PlaybackProgress, int, error) {
     baseQuery := `FROM playback_progress WHERE user_id = $1`
 	countQuery := `SELECT count(*) ` + baseQuery
 	selectQuery := `SELECT user_id, track_id, progress_seconds, last_listened_at ` + baseQuery

@@ -14,6 +14,7 @@ import (
 	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/dto"
 	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware"
 	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"
+	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"
 	"github.com/yvanyang/language-learning-player-backend/pkg/validation"
 )
 
@@ -147,11 +148,8 @@ func (h *UserActivityHandler) ListProgress(w http.ResponseWriter, r *http.Reques
 	q := r.URL.Query()
 	limit, _ := strconv.Atoi(q.Get("limit"))
 	offset, _ := strconv.Atoi(q.Get("offset"))
-	if limit <= 0 { limit = 50 }
-	if offset < 0 { offset = 0 }
-	page := port.Page{Limit: limit, Offset: offset}
 
-	progressList, total, err := h.activityUseCase.ListUserProgress(r.Context(), userID, page)
+	progressList, total, pageInfo, err := h.activityUseCase.ListUserProgress(r.Context(), userID, limit, offset)
 	if err != nil {
 		httputil.RespondError(w, r, err)
 		return
@@ -162,11 +160,17 @@ func (h *UserActivityHandler) ListProgress(w http.ResponseWriter, r *http.Reques
 		respData[i] = dto.MapDomainProgressToResponseDTO(p)
 	}
 
-	resp := dto.PaginatedProgressResponseDTO{
-		Data:   respData,
-		Total:  total,
-		Limit:  page.Limit,
-		Offset: page.Offset,
+	// Create paginated response DTO using the helper from pkg/pagination
+	paginatedResult := pagination.NewPaginatedResponse(respData, total, pageInfo)
+
+	// Use the generic PaginatedResponseDTO from the DTO package
+	resp := dto.PaginatedResponseDTO{
+		Data:       paginatedResult.Data,
+		Total:      paginatedResult.Total,
+		Limit:      paginatedResult.Limit,
+		Offset:     paginatedResult.Offset,
+		Page:       paginatedResult.Page,
+		TotalPages: paginatedResult.TotalPages,
 	}
 
 	httputil.RespondJSON(w, r, http.StatusOK, resp)
@@ -251,9 +255,6 @@ func (h *UserActivityHandler) ListBookmarks(w http.ResponseWriter, r *http.Reque
 	q := r.URL.Query()
 	limit, _ := strconv.Atoi(q.Get("limit"))
 	offset, _ := strconv.Atoi(q.Get("offset"))
-	if limit <= 0 { limit = 50 }
-	if offset < 0 { offset = 0 }
-	page := port.Page{Limit: limit, Offset: offset}
 
 	// Check for optional trackId filter
 	var trackIDFilter *domain.TrackID
@@ -266,7 +267,7 @@ func (h *UserActivityHandler) ListBookmarks(w http.ResponseWriter, r *http.Reque
 		trackIDFilter = &tid
 	}
 
-	bookmarks, total, err := h.activityUseCase.ListBookmarks(r.Context(), userID, trackIDFilter, page)
+	bookmarks, total, pageInfo, err := h.activityUseCase.ListBookmarks(r.Context(), userID, trackIDFilter, limit, offset)
 	if err != nil {
 		httputil.RespondError(w, r, err)
 		return
@@ -277,11 +278,17 @@ func (h *UserActivityHandler) ListBookmarks(w http.ResponseWriter, r *http.Reque
 		respData[i] = dto.MapDomainBookmarkToResponseDTO(b)
 	}
 
-	resp := dto.PaginatedBookmarksResponseDTO{
-		Data:   respData,
-		Total:  total,
-		Limit:  page.Limit, // Use the potentially adjusted limit from usecase
-		Offset: page.Offset,
+	// Create paginated response DTO using the helper from pkg/pagination
+	paginatedResult := pagination.NewPaginatedResponse(respData, total, pageInfo)
+
+	// Use the generic PaginatedResponseDTO from the DTO package
+	resp := dto.PaginatedResponseDTO{
+		Data:       paginatedResult.Data,
+		Total:      paginatedResult.Total,
+		Limit:      paginatedResult.Limit,
+		Offset:     paginatedResult.Offset,
+		Page:       paginatedResult.Page,
+		TotalPages: paginatedResult.TotalPages,
 	}
 
 	httputil.RespondJSON(w, r, http.StatusOK, resp)

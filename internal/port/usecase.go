@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/yvanyang/language-learning-player-backend/internal/domain"
+	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"
 )
 
 // AuthUseCase defines the methods for the Auth use case layer.
@@ -18,7 +19,7 @@ type AuthUseCase interface {
 // AudioContentUseCase defines the methods for the Audio Content use case layer.
 type AudioContentUseCase interface {
 	GetAudioTrackDetails(ctx context.Context, trackID domain.TrackID) (*domain.AudioTrack, string, error)
-	ListTracks(ctx context.Context, params ListTracksParams, page Page) ([]*domain.AudioTrack, int, error)
+	ListTracks(ctx context.Context, params ListTracksParams, limit, offset int) ([]*domain.AudioTrack, int, pagination.Page, error)
 	CreateCollection(ctx context.Context, title, description string, colType domain.CollectionType, initialTrackIDs []domain.TrackID) (*domain.AudioCollection, error)
 	GetCollectionDetails(ctx context.Context, collectionID domain.CollectionID) (*domain.AudioCollection, error)
 	GetCollectionTracks(ctx context.Context, collectionID domain.CollectionID) ([]*domain.AudioTrack, error)
@@ -31,8 +32,8 @@ type AudioContentUseCase interface {
 type UserActivityUseCase interface {
 	RecordPlaybackProgress(ctx context.Context, userID domain.UserID, trackID domain.TrackID, progress time.Duration) error
 	GetPlaybackProgress(ctx context.Context, userID domain.UserID, trackID domain.TrackID) (*domain.PlaybackProgress, error)
-	ListUserProgress(ctx context.Context, userID domain.UserID, page Page) ([]*domain.PlaybackProgress, int, error)
+	ListUserProgress(ctx context.Context, userID domain.UserID, limit, offset int) ([]*domain.PlaybackProgress, int, pagination.Page, error)
 	CreateBookmark(ctx context.Context, userID domain.UserID, trackID domain.TrackID, timestamp time.Duration, note string) (*domain.Bookmark, error)
-	ListBookmarks(ctx context.Context, userID domain.UserID, trackID *domain.TrackID, page Page) ([]*domain.Bookmark, int, error)
+	ListBookmarks(ctx context.Context, userID domain.UserID, trackID *domain.TrackID, limit, offset int) ([]*domain.Bookmark, int, pagination.Page, error)
 	DeleteBookmark(ctx context.Context, userID domain.UserID, bookmarkID domain.BookmarkID) error
 } 
