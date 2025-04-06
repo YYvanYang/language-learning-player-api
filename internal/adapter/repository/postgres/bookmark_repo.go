@@ -93,7 +93,7 @@ func (r *BookmarkRepository) ListByUserAndTrack(ctx context.Context, userID doma
 	defer rows.Close()
 	bookmarks := make([]*domain.Bookmark, 0)
 	for rows.Next() {
-		bookmark, err := r.scanBookmark(ctx, rows)
+		bookmark, err := r.scanBookmark(ctx, rows) // Use RowScanner compatible scan
 		if err != nil { r.logger.ErrorContext(ctx, "Error scanning bookmark in ListByUserAndTrack", "error", err); continue }
 		bookmarks = append(bookmarks, bookmark)
 	}
@@ -131,7 +131,7 @@ func (r *BookmarkRepository) ListByUser(ctx context.Context, userID domain.UserI
 	defer rows.Close()
 	bookmarks := make([]*domain.Bookmark, 0, page.Limit)
 	for rows.Next() {
-		bookmark, err := r.scanBookmark(ctx, rows)
+		bookmark, err := r.scanBookmark(ctx, rows) // Use RowScanner compatible scan
 		if err != nil { r.logger.ErrorContext(ctx, "Error scanning bookmark in ListByUser", "error", err); continue }
 		bookmarks = append(bookmarks, bookmark)
 	}
@@ -159,6 +159,7 @@ func (r *BookmarkRepository) Delete(ctx context.Context, id domain.BookmarkID) e
 }
 
 // scanBookmark scans a single row into a domain.Bookmark.
+// Accepts RowScanner interface
 func (r *BookmarkRepository) scanBookmark(ctx context.Context, row RowScanner) (*domain.Bookmark, error) {
 	var b domain.Bookmark
 	var timestampMs int64 // CORRECTED: Scan milliseconds into int64
@@ -167,7 +168,7 @@ func (r *BookmarkRepository) scanBookmark(ctx context.Context, row RowScanner) (
 		&b.ID,
 		&b.UserID,
 		&b.TrackID,
-		&timestampMs, // Scan timestamp_ms
+		&timestampMs, // **FIXED:** Scan timestamp_ms (Changed '×' to 't')
 		&b.Note,
 		&b.CreatedAt,
 	)

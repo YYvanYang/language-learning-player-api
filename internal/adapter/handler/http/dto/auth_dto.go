@@ -30,13 +30,4 @@ type AuthResponseDTO struct {
 	IsNewUser *bool  `json:"isNewUser,omitempty"` // Pointer, only included for Google callback if user is new
 }
 
-// UserResponseDTO defines the JSON representation of a user profile (example).
-type UserResponseDTO struct {
-	ID              string  `json:"id"`
-	Email           string  `json:"email"`
-	Name            string  `json:"name"`
-	AuthProvider    string  `json:"authProvider"`
-	ProfileImageURL *string `json:"profileImageUrl,omitempty"`
-	CreatedAt       string  `json:"createdAt"` // Use string format like RFC3339
-	UpdatedAt       string  `json:"updatedAt"`
-}
+// REMOVED UserResponseDTO from here. It now resides in user_dto.go

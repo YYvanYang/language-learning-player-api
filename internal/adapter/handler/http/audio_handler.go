@@ -7,11 +7,12 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
-
+	// REMOVED: "time" - No longer needed directly in this file after changes
 	"github.com/go-chi/chi/v5"
 	"github.com/yvanyang/language-learning-player-backend/internal/domain"
 	"github.com/yvanyang/language-learning-player-backend/internal/port"
 	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/dto"
+	// REMOVED: "github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware" - Not used directly
 	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"
 	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"
 	"github.com/yvanyang/language-learning-player-backend/pkg/validation"
@@ -88,20 +89,19 @@ func (h *AudioHandler) GetTrackDetails(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
 // @Router /audio/tracks [get]
 func (h *AudioHandler) ListTracks(w http.ResponseWriter, r *http.Request) {
-	// --- CORRECTED: Parse query parameters ---
 	q := r.URL.Query()
-	params := port.ListTracksParams{} // Initialize empty params struct
+	ucParams := port.UseCaseListTracksParams{} // Use UseCaseListTracksParams
 
 	// Parse simple string filters
-	if query := q.Get("q"); query != "" { params.Query = &query }
-	if lang := q.Get("lang"); lang != "" { params.LanguageCode = &lang }
-	params.Tags = q["tags"] // Get array of tags ?tags=a&tags=b (handles empty case correctly)
+	if query := q.Get("q"); query != "" { ucParams.Query = &query }
+	if lang := q.Get("lang"); lang != "" { ucParams.LanguageCode = &lang }
+	ucParams.Tags = q["tags"] // Get array of tags
 
 	// Parse Level (and validate)
 	if levelStr := q.Get("level"); levelStr != "" {
 		level := domain.AudioLevel(levelStr)
 		if level.IsValid() {
-			params.Level = &level
+			ucParams.Level = &level
 		} else {
 			httputil.RespondError(w, r, fmt.Errorf("%w: invalid level query parameter '%s'", domain.ErrInvalidArgument, levelStr))
 			return
@@ -112,7 +112,7 @@ func (h *AudioHandler) ListTracks(w http.ResponseWriter, r *http.Request) {
 	if isPublicStr := q.Get("isPublic"); isPublicStr != "" {
 		isPublic, err := strconv.ParseBool(isPublicStr)
 		if err == nil {
-			params.IsPublic = &isPublic
+			ucParams.IsPublic = &isPublic
 		} else {
 			httputil.RespondError(w, r, fmt.Errorf("%w: invalid isPublic query parameter (must be true or false)", domain.ErrInvalidArgument))
 			return
@@ -120,28 +120,23 @@ func (h *AudioHandler) ListTracks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse Sort parameters
-	params.SortBy = q.Get("sortBy")
-	params.SortDirection = q.Get("sortDir")
+	ucParams.SortBy = q.Get("sortBy")
+	ucParams.SortDirection = q.Get("sortDir")
 
 	// Parse Pagination parameters
 	limitStr := q.Get("limit")
 	offsetStr := q.Get("offset")
 	limit, errLimit := strconv.Atoi(limitStr)
-	// If limit is not provided or parsing fails, use 0 (usecase will apply default)
-	if limitStr != "" && errLimit != nil {
-		httputil.RespondError(w, r, fmt.Errorf("%w: invalid limit query parameter", domain.ErrInvalidArgument))
-		return
-	}
 	offset, errOffset := strconv.Atoi(offsetStr)
-	// If offset is not provided or parsing fails, use 0
-	if offsetStr != "" && errOffset != nil {
-		httputil.RespondError(w, r, fmt.Errorf("%w: invalid offset query parameter", domain.ErrInvalidArgument))
+	if (limitStr != "" && errLimit != nil) || (offsetStr != "" && errOffset != nil) {
+		httputil.RespondError(w, r, fmt.Errorf("%w: invalid limit or offset query parameter", domain.ErrInvalidArgument))
 		return
 	}
-	// --- End CORRECTED Parameter Parsing ---
+	ucParams.Page = pagination.NewPageFromOffset(limit, offset)
 
-	// Call use case with parsed limit/offset. Usecase handles defaults/constraints.
-	tracks, total, pageInfo, err := h.audioUseCase.ListTracks(r.Context(), params, limit, offset)
+
+	// Call use case with the single params struct
+	tracks, total, actualPageInfo, err := h.audioUseCase.ListTracks(r.Context(), ucParams)
 	if err != nil {
 		httputil.RespondError(w, r, err)
 		return
@@ -149,13 +144,10 @@ func (h *AudioHandler) ListTracks(w http.ResponseWriter, r *http.Request) {
 
 	respData := make([]dto.AudioTrackResponseDTO, len(tracks))
 	for i, track := range tracks {
-		respData[i] = dto.MapDomainTrackToResponseDTO(track) // Use mapping
+		respData[i] = dto.MapDomainTrackToResponseDTO(track)
 	}
 
-	// Create paginated response DTO using the helper from pkg/pagination
-	paginatedResult := pagination.NewPaginatedResponse(respData, total, pageInfo) // Pass pageInfo returned by usecase
-
-	// Use the generic PaginatedResponseDTO from the DTO package
+	paginatedResult := pagination.NewPaginatedResponse(respData, total, actualPageInfo)
 	resp := dto.PaginatedResponseDTO{
 		Data:       paginatedResult.Data,
 		Total:      paginatedResult.Total,
@@ -168,8 +160,7 @@ func (h *AudioHandler) ListTracks(w http.ResponseWriter, r *http.Request) {
 	httputil.RespondJSON(w, r, http.StatusOK, resp)
 }
 
-
-// --- Collection Handlers --- (Full code included for completeness)
+// --- Collection Handlers --- (Rest of the file remains the same)
 
 // CreateCollection handles POST /api/v1/audio/collections
 // @Summary Create an audio collection
@@ -252,11 +243,11 @@ func (h *AudioHandler) GetCollectionDetails(w http.ResponseWriter, r *http.Reque
 
 	// Get associated track details (ordered)
 	tracks, err := h.audioUseCase.GetCollectionTracks(r.Context(), collectionID)
-    if err != nil {
-        slog.Default().ErrorContext(r.Context(), "Failed to fetch tracks for collection details", "error", err, "collectionID", collectionID)
-        httputil.RespondError(w, r, fmt.Errorf("failed to retrieve collection tracks: %w", err))
-        return
-    }
+	if err != nil {
+		slog.Default().ErrorContext(r.Context(), "Failed to fetch tracks for collection details", "error", err, "collectionID", collectionID)
+		httputil.RespondError(w, r, fmt.Errorf("failed to retrieve collection tracks: %w", err))
+		return
+	}
 
 	// Map domain object and tracks to response DTO
 	resp := dto.MapDomainCollectionToResponseDTO(collection, tracks)

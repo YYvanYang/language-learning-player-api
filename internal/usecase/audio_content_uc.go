@@ -20,7 +20,7 @@ type AudioContentUseCase struct {
 	trackRepo      port.AudioTrackRepository
 	collectionRepo port.AudioCollectionRepository
 	storageService port.FileStorageService
-	txManager      port.TransactionManager // ADDED: Transaction Manager
+	txManager      port.TransactionManager
 	presignExpiry  time.Duration
 	logger         *slog.Logger
 }
@@ -31,7 +31,7 @@ func NewAudioContentUseCase(
 	tr port.AudioTrackRepository,
 	cr port.AudioCollectionRepository,
 	ss port.FileStorageService,
-	tm port.TransactionManager, // ADDED: Transaction Manager dependency
+	tm port.TransactionManager,
 	log *slog.Logger,
 ) *AudioContentUseCase {
 	if tm == nil {
@@ -41,7 +41,7 @@ func NewAudioContentUseCase(
 		trackRepo:      tr,
 		collectionRepo: cr,
 		storageService: ss,
-		txManager:      tm, // Store it
+		txManager:      tm,
 		presignExpiry:  minioCfg.PresignExpiry,
 		logger:         log.With("usecase", "AudioContentUseCase"),
 	}
@@ -61,17 +61,6 @@ func (uc *AudioContentUseCase) GetAudioTrackDetails(ctx context.Context, trackID
 		return nil, "", err
 	}
 
-	// Optional: Authorization Check (Example)
-	/*
-	if !track.IsPublic {
-		userID, ok := middleware.GetUserIDFromContext(ctx)
-		if !ok { return nil, "", domain.ErrUnauthenticated }
-		if track.UploaderID == nil || *track.UploaderID != userID {
-			return nil, "", domain.ErrPermissionDenied
-		}
-	}
-	*/
-
 	playURL, err := uc.storageService.GetPresignedGetURL(ctx, track.MinioBucket, track.MinioObjectKey, uc.presignExpiry)
 	if err != nil {
 		uc.logger.ErrorContext(ctx, "Failed to generate presigned URL for track", "error", err, "trackID", trackID)
@@ -83,18 +72,41 @@ func (uc *AudioContentUseCase) GetAudioTrackDetails(ctx context.Context, trackID
 }
 
 // ListTracks retrieves a paginated list of tracks based on filtering and sorting criteria.
-func (uc *AudioContentUseCase) ListTracks(ctx context.Context, params port.ListTracksParams, limit, offset int) ([]*domain.AudioTrack, int, pagination.Page, error) {
-	pageParams := pagination.NewPageFromOffset(limit, offset)
-	tracks, total, err := uc.trackRepo.List(ctx, params, pageParams)
+// CHANGED: Signature now accepts params port.UseCaseListTracksParams
+func (uc *AudioContentUseCase) ListTracks(ctx context.Context, params port.UseCaseListTracksParams) ([]*domain.AudioTrack, int, pagination.Page, error) {
+	// Apply defaults/constraints to pagination within the params struct
+	pageParams := pagination.NewPageFromOffset(params.Page.Limit, params.Page.Offset)
+	// Update the params struct with the constrained page info, so repo gets the correct values
+	params.Page = pageParams
+
+	// Convert UseCaseListTracksParams to the format expected by the repository List method
+	// (This assumes the repository's ListTracksParams is the same or a subset)
+	// If repository needs different params, perform mapping here.
+	// For now, assume they are compatible enough (or repo uses the same struct name).
+	repoParams := port.ListTracksParams{ // This refers to the repo's ListTracksParams struct in port/repository.go
+		Query:         params.Query,
+		LanguageCode:  params.LanguageCode,
+		Level:         params.Level,
+		IsPublic:      params.IsPublic,
+		UploaderID:    params.UploaderID,
+		Tags:          params.Tags,
+		SortBy:        params.SortBy,
+		SortDirection: params.SortDirection,
+	}
+
+
+	tracks, total, err := uc.trackRepo.List(ctx, repoParams, pageParams) // Pass repoParams and pageParams
 	if err != nil {
 		uc.logger.ErrorContext(ctx, "Failed to list audio tracks from repository", "error", err, "params", params, "page", pageParams)
 		return nil, 0, pageParams, fmt.Errorf("failed to retrieve track list: %w", err)
 	}
 	uc.logger.InfoContext(ctx, "Successfully listed audio tracks", "count", len(tracks), "total", total, "params", params, "page", pageParams)
+	// Return the actual page params used (after applying defaults/constraints)
 	return tracks, total, pageParams, nil
 }
 
-// --- Collection Use Cases ---
+
+// --- Collection Use Cases --- (Rest of the file remains the same)
 
 // CreateCollection creates a new audio collection, potentially adding initial tracks atomically.
 func (uc *AudioContentUseCase) CreateCollection(ctx context.Context, title, description string, colType domain.CollectionType, initialTrackIDs []domain.TrackID) (*domain.AudioCollection, error) {
@@ -135,6 +147,7 @@ func (uc *AudioContentUseCase) CreateCollection(ctx context.Context, title, desc
 			}
 
 			// Call ManageTracks repo method within the transaction context
+			// Note: The repo method might implicitly use txCtx via getQuerier
 			if err := uc.collectionRepo.ManageTracks(txCtx, collection.ID, initialTrackIDs); err != nil {
 				return fmt.Errorf("adding initial tracks: %w", err)
 			}

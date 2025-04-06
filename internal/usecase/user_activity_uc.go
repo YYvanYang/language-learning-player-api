@@ -73,13 +73,17 @@ func (uc *UserActivityUseCase) GetPlaybackProgress(ctx context.Context, userID d
 }
 
 // ListUserProgress retrieves a paginated list of all progress records for a user.
-func (uc *UserActivityUseCase) ListUserProgress(ctx context.Context, userID domain.UserID, limit, offset int) ([]*domain.PlaybackProgress, int, pagination.Page, error) {
-	pageParams := pagination.NewPageFromOffset(limit, offset)
-	progressList, total, err := uc.progressRepo.ListByUser(ctx, userID, pageParams)
+// CHANGED: Signature now accepts params port.ListProgressParams
+func (uc *UserActivityUseCase) ListUserProgress(ctx context.Context, params port.ListProgressParams) ([]*domain.PlaybackProgress, int, pagination.Page, error) {
+	// Apply defaults/constraints to pagination within the params struct
+	pageParams := pagination.NewPageFromOffset(params.Page.Limit, params.Page.Offset)
+
+	progressList, total, err := uc.progressRepo.ListByUser(ctx, params.UserID, pageParams)
 	if err != nil {
-		uc.logger.ErrorContext(ctx, "Failed to list user progress", "error", err, "userID", userID, "page", pageParams)
+		uc.logger.ErrorContext(ctx, "Failed to list user progress", "error", err, "userID", params.UserID, "page", pageParams)
 		return nil, 0, pageParams, fmt.Errorf("failed to retrieve progress list: %w", err)
 	}
+	// Return the actual page params used (after applying defaults/constraints)
 	return progressList, total, pageParams, nil
 }
 
@@ -110,41 +114,38 @@ func (uc *UserActivityUseCase) CreateBookmark(ctx context.Context, userID domain
 }
 
 // ListBookmarks retrieves bookmarks for a user, optionally filtered by track.
-// CORRECTED: Pagination is only applied when listing *all* bookmarks for a user.
-// When filtering by trackId, *all* bookmarks for that track are returned.
-func (uc *UserActivityUseCase) ListBookmarks(ctx context.Context, userID domain.UserID, trackIDFilter *domain.TrackID, limit, offset int) ([]*domain.Bookmark, int, pagination.Page, error) {
+// CHANGED: Signature now accepts params port.ListBookmarksParams
+func (uc *UserActivityUseCase) ListBookmarks(ctx context.Context, params port.ListBookmarksParams) ([]*domain.Bookmark, int, pagination.Page, error) {
 	var bookmarks []*domain.Bookmark
 	var total int
 	var err error
-	var pageParams pagination.Page // Will hold the *actual* pagination info used/returned
+	// Apply defaults/constraints to pagination within the params struct
+	pageParams := pagination.NewPageFromOffset(params.Page.Limit, params.Page.Offset)
 
-	if trackIDFilter != nil {
-		// --- Listing for a specific track: Fetch ALL, NO standard pagination applied ---
-		bookmarks, err = uc.bookmarkRepo.ListByUserAndTrack(ctx, userID, *trackIDFilter)
+
+	if params.TrackIDFilter != nil {
+		// Listing for a specific track: Fetch ALL, NO standard pagination applied here
+		// The repo method ListByUserAndTrack fetches all for that track.
+		bookmarks, err = uc.bookmarkRepo.ListByUserAndTrack(ctx, params.UserID, *params.TrackIDFilter)
 		if err != nil {
-			uc.logger.ErrorContext(ctx, "Failed to list bookmarks by user and track", "error", err, "userID", userID, "trackID", *trackIDFilter)
-			pageParams = pagination.NewPageFromOffset(0, 0) // Return zero page on error
+			uc.logger.ErrorContext(ctx, "Failed to list bookmarks by user and track", "error", err, "userID", params.UserID, "trackID", *params.TrackIDFilter)
 			return nil, 0, pageParams, fmt.Errorf("failed to retrieve bookmarks for track: %w", err)
 		}
 		total = len(bookmarks)
-		// Return pagination info reflecting that all results were returned (limit=total, offset=0)
-		// This informs the client that no further pages exist for this specific filter.
+		// Adjust pageParams to reflect all results were returned for this filter
 		pageParams = pagination.Page{Limit: total, Offset: 0}
-		// Use DefaultLimit if total is 0 to avoid limit 0 in response
 		if total == 0 { pageParams.Limit = pagination.DefaultLimit }
 
 	} else {
-		// --- Listing all bookmarks for the user (PAGINATED) ---
-		pageParams = pagination.NewPageFromOffset(limit, offset) // Apply defaults/constraints
-		bookmarks, total, err = uc.bookmarkRepo.ListByUser(ctx, userID, pageParams)
+		// Listing all bookmarks for the user (PAGINATED)
+		bookmarks, total, err = uc.bookmarkRepo.ListByUser(ctx, params.UserID, pageParams)
 		if err != nil {
-			uc.logger.ErrorContext(ctx, "Failed to list bookmarks by user", "error", err, "userID", userID, "page", pageParams)
+			uc.logger.ErrorContext(ctx, "Failed to list bookmarks by user", "error", err, "userID", params.UserID, "page", pageParams)
 			return nil, 0, pageParams, fmt.Errorf("failed to retrieve bookmarks: %w", err)
 		}
-		// pageParams is already the constrained, correct page info used for the query
+		// pageParams already holds the constrained page info used for the query
 	}
 
-	// Success case for both scenarios
 	return bookmarks, total, pageParams, nil
 }
 

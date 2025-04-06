@@ -19,7 +19,8 @@ type AuthUseCase interface {
 // AudioContentUseCase defines the methods for the Audio Content use case layer.
 type AudioContentUseCase interface {
 	GetAudioTrackDetails(ctx context.Context, trackID domain.TrackID) (*domain.AudioTrack, string, error)
-	ListTracks(ctx context.Context, params ListTracksParams, limit, offset int) ([]*domain.AudioTrack, int, pagination.Page, error)
+	// CHANGED: ListTracks now takes UseCaseListTracksParams
+	ListTracks(ctx context.Context, params UseCaseListTracksParams) ([]*domain.AudioTrack, int, pagination.Page, error)
 	CreateCollection(ctx context.Context, title, description string, colType domain.CollectionType, initialTrackIDs []domain.TrackID) (*domain.AudioCollection, error)
 	GetCollectionDetails(ctx context.Context, collectionID domain.CollectionID) (*domain.AudioCollection, error)
 	GetCollectionTracks(ctx context.Context, collectionID domain.CollectionID) ([]*domain.AudioTrack, error)
@@ -32,8 +33,16 @@ type AudioContentUseCase interface {
 type UserActivityUseCase interface {
 	RecordPlaybackProgress(ctx context.Context, userID domain.UserID, trackID domain.TrackID, progress time.Duration) error
 	GetPlaybackProgress(ctx context.Context, userID domain.UserID, trackID domain.TrackID) (*domain.PlaybackProgress, error)
-	ListUserProgress(ctx context.Context, userID domain.UserID, limit, offset int) ([]*domain.PlaybackProgress, int, pagination.Page, error)
+	// CHANGED: ListUserProgress now takes ListProgressParams
+	ListUserProgress(ctx context.Context, params ListProgressParams) ([]*domain.PlaybackProgress, int, pagination.Page, error)
 	CreateBookmark(ctx context.Context, userID domain.UserID, trackID domain.TrackID, timestamp time.Duration, note string) (*domain.Bookmark, error)
-	ListBookmarks(ctx context.Context, userID domain.UserID, trackID *domain.TrackID, limit, offset int) ([]*domain.Bookmark, int, pagination.Page, error)
+	// CHANGED: ListBookmarks now takes ListBookmarksParams
+	ListBookmarks(ctx context.Context, params ListBookmarksParams) ([]*domain.Bookmark, int, pagination.Page, error)
 	DeleteBookmark(ctx context.Context, userID domain.UserID, bookmarkID domain.BookmarkID) error
-} 
+}
+
+// UserUseCase defines the interface for user-related operations (e.g., profile)
+type UserUseCase interface {
+	GetUserProfile(ctx context.Context, userID domain.UserID) (*domain.User, error)
+	// Add UpdateUserProfile, etc. here later
+}

@@ -1,42 +1,16 @@
 {
     "schemes": [
         "http",
-        "https",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "//",
-        "Supported",
-        "schemes",
-        "(optional,",
-        "defaults",
-        "may",
-        "vary)"
+        "https"
     ],
     "swagger": "2.0",
     "info": {
         "description": "API specification for the backend of the Language Learning Audio Player application. Provides endpoints for user authentication, audio content management, and user activity tracking.",
         "title": "Language Learning Audio Player API",
-        "termsOfService": "http://swagger.io/terms/  // Optional: Add your terms of service URL here",
+        "termsOfService": "http://swagger.io/terms/",
         "contact": {
             "name": "API Support Team",
-            "url": "http://www.example.com/support // Optional: URL for support",
+            "url": "http://www.example.com/support",
             "email": "support@example.com"
         },
         "license": {
@@ -45,8 +19,8 @@
         },
         "version": "1.0.0"
     },
-    "host": "localhost:8080                   // API host (usually without scheme)",
-    "basePath": "/api/v1                      // Base path for all routes defined AFTER this block",
+    "host": "localhost:8080",
+    "basePath": "/api/v1",
     "paths": {
         "/audio/collections": {
             "post": {
@@ -791,7 +765,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Paginated list of bookmarks",
+                        "description": "Paginated list of bookmarks (timestampMs in milliseconds)",
                         "schema": {
                             "$ref": "#/definitions/dto.PaginatedBookmarksResponseDTO"
                         }
@@ -822,7 +796,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Creates a new bookmark at a specific timestamp within an audio track for the authenticated user.",
+                "description": "Creates a new bookmark at a specific timestamp (in milliseconds) in an audio track for the authenticated user.",
                 "consumes": [
                     "application/json"
                 ],
@@ -836,7 +810,7 @@
                 "operationId": "create-bookmark",
                 "parameters": [
                     {
-                        "description": "Bookmark details",
+                        "description": "Bookmark details (timestampMs in milliseconds)",
                         "name": "bookmark",
                         "in": "body",
                         "required": true,
@@ -847,7 +821,7 @@
                 ],
                 "responses": {
                     "201": {
-                        "description": "Bookmark created successfully",
+                        "description": "Bookmark created successfully (timestampMs in milliseconds)",
                         "schema": {
                             "$ref": "#/definitions/dto.BookmarkResponseDTO"
                         }
@@ -1075,7 +1049,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Paginated list of playback progress",
+                        "description": "Paginated list of playback progress (progressMs in milliseconds)",
                         "schema": {
                             "$ref": "#/definitions/dto.PaginatedProgressResponseDTO"
                         }
@@ -1114,7 +1088,7 @@
                 "operationId": "record-playback-progress",
                 "parameters": [
                     {
-                        "description": "Playback progress details",
+                        "description": "Playback progress details (progressMs in milliseconds)",
                         "name": "progress",
                         "in": "body",
                         "required": true,
@@ -1182,7 +1156,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Playback progress found",
+                        "description": "Playback progress found (progressMs in milliseconds)",
                         "schema": {
                             "$ref": "#/definitions/dto.PlaybackProgressResponseDTO"
                         }
@@ -1235,7 +1209,7 @@
                     "type": "string"
                 },
                 "tracks": {
-                    "description": "Optionally include track details or just IDs:\nTrackIDs []string `json:\"trackIds\"` // Just the ordered IDs",
+                    "description": "Include full track details if needed by frontend",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/dto.AudioTrackResponseDTO"
@@ -1263,7 +1237,7 @@
                     "type": "string"
                 },
                 "durationMs": {
-                    "description": "Use int64 for milliseconds",
+                    "description": "CORRECTED: Use milliseconds",
                     "type": "integer"
                 },
                 "id": {
@@ -1276,6 +1250,7 @@
                     "type": "string"
                 },
                 "level": {
+                    "description": "Domain type maps to string here",
                     "type": "string"
                 },
                 "playUrl": {
@@ -1314,7 +1289,7 @@
                     "type": "string"
                 },
                 "durationMs": {
-                    "description": "Use int64 for milliseconds",
+                    "description": "CORRECTED: Use milliseconds",
                     "type": "integer"
                 },
                 "id": {
@@ -1327,6 +1302,7 @@
                     "type": "string"
                 },
                 "level": {
+                    "description": "Domain type maps to string here",
                     "type": "string"
                 },
                 "tags": {
@@ -1372,8 +1348,9 @@
                 "note": {
                     "type": "string"
                 },
-                "timestampSeconds": {
-                    "type": "number"
+                "timestampMs": {
+                    "description": "CORRECTED: Use milliseconds",
+                    "type": "integer"
                 },
                 "trackId": {
                     "type": "string"
@@ -1440,7 +1417,7 @@
         "dto.CreateBookmarkRequestDTO": {
             "type": "object",
             "required": [
-                "timestampSeconds",
+                "timestampMs",
                 "trackId"
             ],
             "properties": {
@@ -1448,9 +1425,9 @@
                     "description": "Optional note",
                     "type": "string"
                 },
-                "timestampSeconds": {
-                    "description": "Use float64 for seconds from JSON",
-                    "type": "number",
+                "timestampMs": {
+                    "description": "CORRECTED: Use milliseconds (int64)",
+                    "type": "integer",
                     "minimum": 0
                 },
                 "trackId": {
@@ -1469,7 +1446,7 @@
                     "type": "string"
                 },
                 "initialTrackIds": {
-                    "description": "Optional list of track UUIDs",
+                    "description": "Add validation for slice elements",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -1530,7 +1507,13 @@
                 "offset": {
                     "type": "integer"
                 },
+                "page": {
+                    "type": "integer"
+                },
                 "total": {
+                    "type": "integer"
+                },
+                "totalPages": {
                     "type": "integer"
                 }
             }
@@ -1550,7 +1533,13 @@
                 "offset": {
                     "type": "integer"
                 },
+                "page": {
+                    "type": "integer"
+                },
                 "total": {
+                    "type": "integer"
+                },
+                "totalPages": {
                     "type": "integer"
                 }
             }
@@ -1570,7 +1559,13 @@
                 "offset": {
                     "type": "integer"
                 },
+                "page": {
+                    "type": "integer"
+                },
                 "total": {
+                    "type": "integer"
+                },
+                "totalPages": {
                     "type": "integer"
                 }
             }
@@ -1581,8 +1576,9 @@
                 "lastListenedAt": {
                     "type": "string"
                 },
-                "progressSeconds": {
-                    "type": "number"
+                "progressMs": {
+                    "description": "CORRECTED: Use milliseconds",
+                    "type": "integer"
                 },
                 "trackId": {
                     "type": "string"
@@ -1595,13 +1591,13 @@
         "dto.RecordProgressRequestDTO": {
             "type": "object",
             "required": [
-                "progressSeconds",
+                "progressMs",
                 "trackId"
             ],
             "properties": {
-                "progressSeconds": {
-                    "description": "Use float64 for seconds from JSON",
-                    "type": "number",
+                "progressMs": {
+                    "description": "CORRECTED: Use milliseconds (int64)",
+                    "type": "integer",
                     "minimum": 0
                 },
                 "trackId": {
@@ -1684,7 +1680,7 @@
             "type": "object",
             "properties": {
                 "orderedTrackIds": {
-                    "description": "Full ordered list of track UUIDs",
+                    "description": "Add validation",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -1769,6 +1765,10 @@
         {
             "description": "Operations related to requesting upload URLs and finalizing uploads.",
             "name": "Uploads"
+        },
+        {
+            "description": "API health checks.",
+            "name": "Health"
         }
     ]
 }

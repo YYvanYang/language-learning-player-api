@@ -2,29 +2,24 @@
 package http
 
 import (
-	"context"
+	// REMOVED: "context" - Not needed directly here
 	"net/http"
-	"time"
 
 	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/dto"
+	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/dto" // Import dto package
 	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware"
 	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"
+	"github.com/yvanyang/language-learning-player-backend/internal/port" // Import port package for UserUseCase interface
 )
-
-// UserUseCase defines the interface for user-related operations needed by the handler.
-type UserUseCase interface {
-	GetUserProfile(ctx context.Context, userID domain.UserID) (*domain.User, error)
-}
 
 // UserHandler handles HTTP requests related to user profiles.
 type UserHandler struct {
-	userUseCase UserUseCase
+	userUseCase port.UserUseCase // Use interface from port package
 	// validator *validation.Validator // Add validator if needed for PUT/PATCH later
 }
 
 // NewUserHandler creates a new UserHandler.
-func NewUserHandler(uc UserUseCase) *UserHandler {
+func NewUserHandler(uc port.UserUseCase) *UserHandler {
 	return &UserHandler{
 		userUseCase: uc,
 	}
@@ -56,20 +51,6 @@ func (h *UserHandler) GetMyProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := MapDomainUserToResponseDTO(user) // Use mapping function
+	resp := dto.MapDomainUserToResponseDTO(user) // Use mapping function from DTO package
 	httputil.RespondJSON(w, r, http.StatusOK, resp)
 }
-
-// MapDomainUserToResponseDTO converts a domain user to its DTO representation.
-// Consider moving this to the dto package or keeping it here if only used by this handler.
-func MapDomainUserToResponseDTO(user *domain.User) dto.UserResponseDTO {
-	return dto.UserResponseDTO{
-		ID:              user.ID.String(),
-		Email:           user.Email.String(),
-		Name:            user.Name,
-		AuthProvider:    string(user.AuthProvider),
-		ProfileImageURL: user.ProfileImageURL,
-		CreatedAt:       user.CreatedAt.Format(time.RFC3339), // Format time
-		UpdatedAt:       user.UpdatedAt.Format(time.RFC3339),
-	}
-} 

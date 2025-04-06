@@ -8,6 +8,7 @@ import (
 	"log/slog"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn" // ADDED: Import pgconn
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/yvanyang/language-learning-player-backend/internal/port" // Adjust import path
@@ -21,8 +22,14 @@ type Querier interface {
 	Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error)
 	Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
 	QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
-	SendBatch(ctx context.Context, b *pgx.Batch) pgx.BatchResults // Add SendBatch
+	SendBatch(ctx context.Context, b *pgx.Batch) pgx.BatchResults
 	// Add CopyFrom if needed
+}
+
+// RowScanner defines an interface for scanning database rows, compatible with pgx.Row and pgx.Rows.
+// ADDED: Interface definition
+type RowScanner interface {
+	Scan(dest ...interface{}) error
 }
 
 // getQuerier attempts to retrieve a pgx.Tx from the context.

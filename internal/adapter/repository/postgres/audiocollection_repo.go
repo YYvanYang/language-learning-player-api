@@ -145,7 +145,7 @@ func (r *AudioCollectionRepository) ListByOwner(ctx context.Context, ownerID dom
 	defer rows.Close()
 	collections := make([]*domain.AudioCollection, 0, page.Limit)
 	for rows.Next() {
-		collection, err := r.scanCollection(ctx, rows)
+		collection, err := r.scanCollection(ctx, rows) // Use RowScanner compatible scan
 		if err != nil { r.logger.ErrorContext(ctx, "Error scanning collection in ListByOwner", "error", err); continue }
 		collection.TrackIDs = make([]domain.TrackID, 0)
 		collections = append(collections, collection)
@@ -265,6 +265,7 @@ func (r *AudioCollectionRepository) exists(ctx context.Context, id domain.Collec
 
 
 // scanCollection scans a single row into a domain.AudioCollection.
+// CHANGED: Accepts RowScanner interface
 func (r *AudioCollectionRepository) scanCollection(ctx context.Context, row RowScanner) (*domain.AudioCollection, error) {
 	var collection domain.AudioCollection
 	err := row.Scan(

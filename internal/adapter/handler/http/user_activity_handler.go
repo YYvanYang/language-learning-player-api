@@ -74,7 +74,7 @@ func (h *UserActivityHandler) RecordProgress(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// CORRECTED: Convert milliseconds (int64) to duration
+	// Convert milliseconds (int64) to duration
 	progressDuration := time.Duration(req.ProgressMs) * time.Millisecond
 
 	err = h.activityUseCase.RecordPlaybackProgress(r.Context(), userID, trackID, progressDuration)
@@ -149,7 +149,17 @@ func (h *UserActivityHandler) ListProgress(w http.ResponseWriter, r *http.Reques
 	limit, _ := strconv.Atoi(q.Get("limit")) // Use 0 if parsing fails
 	offset, _ := strconv.Atoi(q.Get("offset")) // Use 0 if parsing fails
 
-	progressList, total, pageInfo, err := h.activityUseCase.ListUserProgress(r.Context(), userID, limit, offset)
+	// Create pagination parameters and apply defaults/constraints
+	pageParams := pagination.NewPageFromOffset(limit, offset)
+
+	// Create use case parameters struct
+	ucParams := port.ListProgressParams{
+		UserID: userID,
+		Page:   pageParams,
+	}
+
+	// Call use case with the params struct
+	progressList, total, actualPageInfo, err := h.activityUseCase.ListUserProgress(r.Context(), ucParams)
 	if err != nil {
 		httputil.RespondError(w, r, err)
 		return
@@ -160,8 +170,8 @@ func (h *UserActivityHandler) ListProgress(w http.ResponseWriter, r *http.Reques
 		respData[i] = dto.MapDomainProgressToResponseDTO(p) // DTO mapping updated for milliseconds
 	}
 
-	// Create paginated response DTO using the helper from pkg/pagination
-	paginatedResult := pagination.NewPaginatedResponse(respData, total, pageInfo)
+	// Use the returned actualPageInfo for the response
+	paginatedResult := pagination.NewPaginatedResponse(respData, total, actualPageInfo)
 
 	// Use the generic PaginatedResponseDTO from the DTO package
 	resp := dto.PaginatedResponseDTO{
@@ -218,7 +228,7 @@ func (h *UserActivityHandler) CreateBookmark(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// CORRECTED: Convert milliseconds (int64) to duration
+	// Convert milliseconds (int64) to duration
 	timestampDuration := time.Duration(req.TimestampMs) * time.Millisecond
 
 	bookmark, err := h.activityUseCase.CreateBookmark(r.Context(), userID, trackID, timestampDuration, req.Note)
@@ -257,6 +267,9 @@ func (h *UserActivityHandler) ListBookmarks(w http.ResponseWriter, r *http.Reque
 	limit, _ := strconv.Atoi(q.Get("limit"))
 	offset, _ := strconv.Atoi(q.Get("offset"))
 
+	// Create pagination parameters
+	pageParams := pagination.NewPageFromOffset(limit, offset)
+
 	// Check for optional trackId filter
 	var trackIDFilter *domain.TrackID
 	if trackIDStr := q.Get("trackId"); trackIDStr != "" {
@@ -268,7 +281,15 @@ func (h *UserActivityHandler) ListBookmarks(w http.ResponseWriter, r *http.Reque
 		trackIDFilter = &tid
 	}
 
-	bookmarks, total, pageInfo, err := h.activityUseCase.ListBookmarks(r.Context(), userID, trackIDFilter, limit, offset)
+	// Create use case parameters struct
+	ucParams := port.ListBookmarksParams{
+		UserID:        userID,
+		TrackIDFilter: trackIDFilter,
+		Page:          pageParams,
+	}
+
+	// Call use case with the params struct
+	bookmarks, total, actualPageInfo, err := h.activityUseCase.ListBookmarks(r.Context(), ucParams)
 	if err != nil {
 		httputil.RespondError(w, r, err)
 		return
@@ -279,8 +300,8 @@ func (h *UserActivityHandler) ListBookmarks(w http.ResponseWriter, r *http.Reque
 		respData[i] = dto.MapDomainBookmarkToResponseDTO(b) // DTO mapping updated for milliseconds
 	}
 
-	// Create paginated response DTO using the helper from pkg/pagination
-	paginatedResult := pagination.NewPaginatedResponse(respData, total, pageInfo)
+	// Use the returned actualPageInfo for the response
+	paginatedResult := pagination.NewPaginatedResponse(respData, total, actualPageInfo)
 
 	// Use the generic PaginatedResponseDTO from the DTO package
 	resp := dto.PaginatedResponseDTO{

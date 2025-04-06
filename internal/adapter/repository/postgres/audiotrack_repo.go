@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"   // Import
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lib/pq" // Using lib/pq for array handling with pgx and error codes
 	"github.com/google/uuid" // For uuid.NullUUID
@@ -116,16 +116,7 @@ func (r *AudioTrackRepository) ListByIDs(ctx context.Context, ids []domain.Track
 	for i, id := range ids {
 		uuidStrs[i] = id.String()
 	}
-	query := `
-        SELECT id, title, description, language_code, level, duration_ms,
-               minio_bucket, minio_object_key, cover_image_url, uploader_id,
-               is_public, tags, created_at, updated_at
-        FROM audio_tracks
-        WHERE id = ANY($1) -- Use = ANY() for array matching
-		ORDER BY array_position(text_to_uuid_array($1), id) -- Assuming a helper function or use Go sort
-    `
-	// NOTE: text_to_uuid_array is not a standard function, you might need to create it
-	// or sort in Go code after fetching. Let's assume Go sort for now.
+	// REMOVED unused 'query' variable
 	querySimple := `
         SELECT id, title, description, language_code, level, duration_ms,
                minio_bucket, minio_object_key, cover_image_url, uploader_id,
@@ -242,7 +233,6 @@ func (r *AudioTrackRepository) List(ctx context.Context, params port.ListTracksP
 	return tracks, total, nil
 }
 
-
 func (r *AudioTrackRepository) Update(ctx context.Context, track *domain.AudioTrack) error {
 	q := r.getQuerier(ctx)
 	track.UpdatedAt = time.Now()
@@ -304,39 +294,39 @@ func (r *AudioTrackRepository) Exists(ctx context.Context, id domain.TrackID) (b
 }
 
 // scanTrack scans a single row into a domain.AudioTrack.
+// CHANGED: Accepts RowScanner interface
 func (r *AudioTrackRepository) scanTrack(ctx context.Context, row RowScanner) (*domain.AudioTrack, error) {
 	var track domain.AudioTrack
 	var langCode string
-	var levelStr string          // Scan level into string
-	var durationMs int64         // CORRECTED: Scan into int64 for milliseconds
-	var tags pq.StringArray      // Scan TEXT[] into pq.StringArray
-	var uploaderID uuid.NullUUID // Use uuid.NullUUID for nullable foreign key
+	var levelStr string
+	var durationMs int64
+	var tags pq.StringArray
+	var uploaderID uuid.NullUUID
 
 	err := row.Scan(
 		&track.ID, &track.Title, &track.Description,
-		&langCode,       // Scan language code
-		&levelStr,       // Scan level string
-		&durationMs,     // CORRECTED: Scan duration_ms
+		&langCode,
+		&levelStr,
+		&durationMs,
 		&track.MinioBucket, &track.MinioObjectKey, &track.CoverImageURL,
-		&uploaderID,     // Scan into NullUUID
+		&uploaderID,
 		&track.IsPublic, &tags, &track.CreatedAt, &track.UpdatedAt,
 	)
 	if err != nil { return nil, err }
 
-	// Convert scanned values to domain types
-	langVO, langErr := domain.NewLanguage(langCode, "") // Name is not stored
+	langVO, langErr := domain.NewLanguage(langCode, "")
 	if langErr != nil {
 		r.logger.ErrorContext(ctx, "Invalid language code found in database", "error", langErr, "langCode", langCode, "trackID", track.ID)
 		return nil, fmt.Errorf("invalid language code %s in DB for track %s: %w", langCode, track.ID, langErr)
 	}
-	track.Language = langVO // CORRECTED: Assign to Language field
-	track.Level = domain.AudioLevel(levelStr) // CORRECTED: Assign to Level field
-	if !track.Level.IsValid() { // Validate scanned level
+	track.Language = langVO
+	track.Level = domain.AudioLevel(levelStr)
+	if !track.Level.IsValid() {
          r.logger.WarnContext(ctx, "Invalid audio level found in database", "level", levelStr, "trackID", track.ID)
-         track.Level = domain.LevelUnknown // Assign default if invalid?
+         track.Level = domain.LevelUnknown
     }
-	track.Duration = time.Duration(durationMs) * time.Millisecond // CORRECTED: Convert ms to time.Duration
-	track.Tags = tags // Assign []string from pq.StringArray
+	track.Duration = time.Duration(durationMs) * time.Millisecond
+	track.Tags = tags
 
 	if uploaderID.Valid {
 		uid := domain.UserID(uploaderID.UUID)

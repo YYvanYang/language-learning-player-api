@@ -9,10 +9,10 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "termsOfService": "http://swagger.io/terms/  // Optional: Add your terms of service URL here",
+        "termsOfService": "http://swagger.io/terms/",
         "contact": {
             "name": "API Support Team",
-            "url": "http://www.example.com/support // Optional: URL for support",
+            "url": "http://www.example.com/support",
             "email": "support@example.com"
         },
         "license": {
@@ -767,7 +767,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Paginated list of bookmarks",
+                        "description": "Paginated list of bookmarks (timestampMs in milliseconds)",
                         "schema": {
                             "$ref": "#/definitions/dto.PaginatedBookmarksResponseDTO"
                         }
@@ -798,7 +798,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Creates a new bookmark at a specific timestamp within an audio track for the authenticated user.",
+                "description": "Creates a new bookmark at a specific timestamp (in milliseconds) in an audio track for the authenticated user.",
                 "consumes": [
                     "application/json"
                 ],
@@ -812,7 +812,7 @@ const docTemplate = `{
                 "operationId": "create-bookmark",
                 "parameters": [
                     {
-                        "description": "Bookmark details",
+                        "description": "Bookmark details (timestampMs in milliseconds)",
                         "name": "bookmark",
                         "in": "body",
                         "required": true,
@@ -823,7 +823,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "201": {
-                        "description": "Bookmark created successfully",
+                        "description": "Bookmark created successfully (timestampMs in milliseconds)",
                         "schema": {
                             "$ref": "#/definitions/dto.BookmarkResponseDTO"
                         }
@@ -1051,7 +1051,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Paginated list of playback progress",
+                        "description": "Paginated list of playback progress (progressMs in milliseconds)",
                         "schema": {
                             "$ref": "#/definitions/dto.PaginatedProgressResponseDTO"
                         }
@@ -1090,7 +1090,7 @@ const docTemplate = `{
                 "operationId": "record-playback-progress",
                 "parameters": [
                     {
-                        "description": "Playback progress details",
+                        "description": "Playback progress details (progressMs in milliseconds)",
                         "name": "progress",
                         "in": "body",
                         "required": true,
@@ -1158,7 +1158,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Playback progress found",
+                        "description": "Playback progress found (progressMs in milliseconds)",
                         "schema": {
                             "$ref": "#/definitions/dto.PlaybackProgressResponseDTO"
                         }
@@ -1211,7 +1211,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "tracks": {
-                    "description": "Optionally include track details or just IDs:\nTrackIDs []string ` + "`" + `json:\"trackIds\"` + "`" + ` // Just the ordered IDs",
+                    "description": "Include full track details if needed by frontend",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/dto.AudioTrackResponseDTO"
@@ -1239,7 +1239,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "durationMs": {
-                    "description": "Use int64 for milliseconds",
+                    "description": "CORRECTED: Use milliseconds",
                     "type": "integer"
                 },
                 "id": {
@@ -1252,6 +1252,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "level": {
+                    "description": "Domain type maps to string here",
                     "type": "string"
                 },
                 "playUrl": {
@@ -1290,7 +1291,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "durationMs": {
-                    "description": "Use int64 for milliseconds",
+                    "description": "CORRECTED: Use milliseconds",
                     "type": "integer"
                 },
                 "id": {
@@ -1303,6 +1304,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "level": {
+                    "description": "Domain type maps to string here",
                     "type": "string"
                 },
                 "tags": {
@@ -1348,8 +1350,9 @@ const docTemplate = `{
                 "note": {
                     "type": "string"
                 },
-                "timestampSeconds": {
-                    "type": "number"
+                "timestampMs": {
+                    "description": "CORRECTED: Use milliseconds",
+                    "type": "integer"
                 },
                 "trackId": {
                     "type": "string"
@@ -1416,7 +1419,7 @@ const docTemplate = `{
         "dto.CreateBookmarkRequestDTO": {
             "type": "object",
             "required": [
-                "timestampSeconds",
+                "timestampMs",
                 "trackId"
             ],
             "properties": {
@@ -1424,9 +1427,9 @@ const docTemplate = `{
                     "description": "Optional note",
                     "type": "string"
                 },
-                "timestampSeconds": {
-                    "description": "Use float64 for seconds from JSON",
-                    "type": "number",
+                "timestampMs": {
+                    "description": "CORRECTED: Use milliseconds (int64)",
+                    "type": "integer",
                     "minimum": 0
                 },
                 "trackId": {
@@ -1445,7 +1448,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "initialTrackIds": {
-                    "description": "Optional list of track UUIDs",
+                    "description": "Add validation for slice elements",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -1506,7 +1509,13 @@ const docTemplate = `{
                 "offset": {
                     "type": "integer"
                 },
+                "page": {
+                    "type": "integer"
+                },
                 "total": {
+                    "type": "integer"
+                },
+                "totalPages": {
                     "type": "integer"
                 }
             }
@@ -1526,7 +1535,13 @@ const docTemplate = `{
                 "offset": {
                     "type": "integer"
                 },
+                "page": {
+                    "type": "integer"
+                },
                 "total": {
+                    "type": "integer"
+                },
+                "totalPages": {
                     "type": "integer"
                 }
             }
@@ -1546,7 +1561,13 @@ const docTemplate = `{
                 "offset": {
                     "type": "integer"
                 },
+                "page": {
+                    "type": "integer"
+                },
                 "total": {
+                    "type": "integer"
+                },
+                "totalPages": {
                     "type": "integer"
                 }
             }
@@ -1557,8 +1578,9 @@ const docTemplate = `{
                 "lastListenedAt": {
                     "type": "string"
                 },
-                "progressSeconds": {
-                    "type": "number"
+                "progressMs": {
+                    "description": "CORRECTED: Use milliseconds",
+                    "type": "integer"
                 },
                 "trackId": {
                     "type": "string"
@@ -1571,13 +1593,13 @@ const docTemplate = `{
         "dto.RecordProgressRequestDTO": {
             "type": "object",
             "required": [
-                "progressSeconds",
+                "progressMs",
                 "trackId"
             ],
             "properties": {
-                "progressSeconds": {
-                    "description": "Use float64 for seconds from JSON",
-                    "type": "number",
+                "progressMs": {
+                    "description": "CORRECTED: Use milliseconds (int64)",
+                    "type": "integer",
                     "minimum": 0
                 },
                 "trackId": {
@@ -1660,7 +1682,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "orderedTrackIds": {
-                    "description": "Full ordered list of track UUIDs",
+                    "description": "Add validation",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -1745,6 +1767,10 @@ const docTemplate = `{
         {
             "description": "Operations related to requesting upload URLs and finalizing uploads.",
             "name": "Uploads"
+        },
+        {
+            "description": "API health checks.",
+            "name": "Health"
         }
     ]
 }`
@@ -1752,9 +1778,9 @@ const docTemplate = `{
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
 	Version:          "1.0.0",
-	Host:             "localhost:8080                   // API host (usually without scheme)",
-	BasePath:         "/api/v1                      // Base path for all routes defined AFTER this block",
-	Schemes:          []string{"http", "https", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "//", "Supported", "schemes", "(optional,", "defaults", "may", "vary)"},
+	Host:             "localhost:8080",
+	BasePath:         "/api/v1",
+	Schemes:          []string{"http", "https"},
 	Title:            "Language Learning Audio Player API",
 	Description:      "API specification for the backend of the Language Learning Audio Player application. Provides endpoints for user authentication, audio content management, and user activity tracking.",
 	InfoInstanceName: "swagger",
