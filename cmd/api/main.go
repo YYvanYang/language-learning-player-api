@@ -265,15 +265,3 @@ func main() {
 	}
 	appLogger.Info("Server shutdown complete.")
 }
-
-// Placeholder for API routes function (to be implemented later)
-// func apiV1Routes() http.Handler {
-// 	r := chi.NewRouter()
-//  // TODO: Add middleware specific to v1 (e.g., Auth)
-//	// r.Use(middleware.Authenticator)
-//
-//  // TODO: Mount resource-specific routers (auth, audio, user, etc.)
-// 	// r.Mount("/auth", authRoutes())
-// 	// r.Mount("/audio", audioRoutes())
-// 	return r
-// }
