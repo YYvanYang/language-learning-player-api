@@ -60,7 +60,7 @@ tools: install-migrate install-sqlc install-swag install-lint install-vulncheck
 install-migrate:
 	@if ! command -v migrate &> /dev/null; then \
 		echo ">>> Installing migrate CLI..."; \
-		if go install github.com/golang-migrate/migrate/v4/cmd/migrate@latest; then \
+		if go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest; then \
 			echo ">>> migrate installed successfully."; \
 		else \
 			echo ">>> ERROR: Failed to install migrate. Please check network connectivity and Go proxy settings."; \
