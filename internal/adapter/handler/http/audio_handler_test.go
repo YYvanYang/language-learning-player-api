@@ -15,8 +15,8 @@ import (
 	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/dto"
 	"github.com/yvanyang/language-learning-player-backend/internal/domain"
 	"github.com/yvanyang/language-learning-player-backend/internal/port" // Import port for interfaces
-	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"
 	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"
+	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"
 	"github.com/yvanyang/language-learning-player-backend/pkg/validation"
 )
 
@@ -28,7 +28,7 @@ type MockAudioContentUseCase struct {
 }
 
 // Implement only the methods needed for the test, forwarding calls to the mock object
-func (m *MockAudioContentUseCase) ListTracks(ctx context.Context, params port.ListTracksParams, page port.Page) ([]*domain.AudioTrack, int, error) {
+func (m *MockAudioContentUseCase) ListTracks(ctx context.Context, params port.ListTracksParams, page pagination.Page) ([]*domain.AudioTrack, int, error) {
 	args := m.Called(ctx, params, page)
 	// Handle nil return for the slice pointer correctly
 	if args.Get(0) == nil {
@@ -93,10 +93,11 @@ func TestListTracks(t *testing.T) {
 
 	// Define a sample domain object for use case response
 	trackID, _ := domain.TrackIDFromString("uuid-track-1") // Use TrackIDFromString, ignore error for test setup
+	langVO, _ := domain.NewLanguage("en-US", "")           // Ignore name for test setup simplicity
 	sampleTrackDomain := &domain.AudioTrack{
 		ID:            trackID,
 		Title:         "Sample Track",
-		Language:      "en-US",        // CHANGE: Correct field name
+		Language:      langVO, // CHANGE: Correct field name
 		Level:         "B1",
 		Duration:      120 * time.Second, // CHANGE: Correct field name and type
 		CoverImageURL: nil,
@@ -109,7 +110,7 @@ func TestListTracks(t *testing.T) {
 		Title:         "Sample Track",
 		LanguageCode:  "en-US", // DTO field might still be LanguageCode
 		Level:         "B1",
-		DurationMs:    120000,  // DTO field might still be DurationMs
+		DurationMs:    120000, // DTO field might still be DurationMs
 		CoverImageURL: nil,
 		IsPublic:      true,
 	}
@@ -120,7 +121,6 @@ func TestListTracks(t *testing.T) {
 		var useCaseInterface port.AudioContentUseCase = mockUseCase
 		handler := httpadapter.NewAudioHandler(useCaseInterface, validator)
 
-
 		// Prepare expected response from use case (domain objects and total count)
 		expectedTracks := []*domain.AudioTrack{sampleTrackDomain}
 		expectedTotal := 1
@@ -128,14 +128,14 @@ func TestListTracks(t *testing.T) {
 		// Set expectations on the mock
 		isPublicValue := true
 		// Ensure pointers match the types in port.ListTracksParams
-		langParam := string(sampleTrackDomain.Language) // Convert if necessary
+		langParam := sampleTrackDomain.Language.Code() // Convert if necessary
 		levelParam := domain.AudioLevel(sampleTrackDomain.Level)
 		expectedParams := port.ListTracksParams{
 			LanguageCode: &langParam, // CHANGE: Use pointer to string or correct type
 			Level:        &levelParam,
 			IsPublic:     &isPublicValue,
 		}
-		expectedPage := port.Page{Limit: 10, Offset: 0} // CHANGE: Use port.Page
+		expectedPage := pagination.Page{Limit: 10, Offset: 0}
 		// Use mock.Anything for context, specific types for others
 		mockUseCase.On("ListTracks", mock.Anything, expectedParams, expectedPage).Return(expectedTracks, expectedTotal, nil).Once()
 
@@ -162,19 +162,18 @@ func TestListTracks(t *testing.T) {
 
 		// Optional: Deeper check of the actual data requires unmarshalling the interface{} slice items
 		if len(actualResponse.Data) > 0 {
-				// Need to handle the case where data is map[string]interface{} after json.Unmarshal
-				var firstItemMap map[string]interface{}
-				firstItemBytes, _ := json.Marshal(actualResponse.Data[0])
-				err = json.Unmarshal(firstItemBytes, &firstItemMap)
-				assert.NoError(t, err)
+			// Need to handle the case where data is map[string]interface{} after json.Unmarshal
+			var firstItemMap map[string]interface{}
+			firstItemBytes, _ := json.Marshal(actualResponse.Data[0])
+			err = json.Unmarshal(firstItemBytes, &firstItemMap)
+			assert.NoError(t, err)
 
-				// Compare map fields or remarshal to the expected DTO type
-				var actualTrackDTO dto.AudioTrackResponseDTO
-				err = json.Unmarshal(firstItemBytes, &actualTrackDTO)
-				assert.NoError(t, err)
-				assert.Equal(t, sampleTrackDTO, actualTrackDTO)
+			// Compare map fields or remarshal to the expected DTO type
+			var actualTrackDTO dto.AudioTrackResponseDTO
+			err = json.Unmarshal(firstItemBytes, &actualTrackDTO)
+			assert.NoError(t, err)
+			assert.Equal(t, sampleTrackDTO, actualTrackDTO)
 		}
-
 
 		mockUseCase.AssertExpectations(t)
 	})
@@ -187,7 +186,7 @@ func TestListTracks(t *testing.T) {
 
 		expectedError := errors.New("internal database error")
 		// Use mock.AnythingOfType for struct parameters if precise matching is difficult or not needed
-		mockUseCase.On("ListTracks", mock.Anything, mock.AnythingOfType("port.ListTracksParams"), mock.AnythingOfType("port.Page")).Return(nil, 0, expectedError).Once() // CHANGE: Use port.Page
+		mockUseCase.On("ListTracks", mock.Anything, mock.AnythingOfType("port.ListTracksParams"), mock.AnythingOfType("pagination.Page")).Return(nil, 0, expectedError).Once()
 
 		// Prepare HTTP request
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/audio/tracks", nil)
@@ -251,7 +250,7 @@ func TestListTracks(t *testing.T) {
 			IsPublic: nil, // Assuming nil means no filter by default
 		}
 		// Assuming default limit=20, offset=0 based on handler code
-		expectedPage := port.Page{Limit: 20, Offset: 0} // CHANGE: Use port.Page
+		expectedPage := pagination.Page{Limit: 20, Offset: 0}
 		mockUseCase.On("ListTracks", mock.Anything, expectedParams, expectedPage).Return(expectedTracks, expectedTotal, nil).Once()
 
 		// Prepare HTTP request with no query params

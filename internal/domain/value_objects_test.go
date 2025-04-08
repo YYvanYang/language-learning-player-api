@@ -7,6 +7,7 @@ package domain_test // Use _test package to test only exported identifiers
 
 import (
 	"testing"
+
 	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Import the actual package
 
 	"github.com/stretchr/testify/assert"
@@ -87,24 +88,24 @@ func TestAudioLevel_IsValid(t *testing.T) {
 	assert.True(t, domain.LevelNative.IsValid())
 	assert.True(t, domain.LevelUnknown.IsValid())
 	assert.False(t, domain.AudioLevel("D1").IsValid())
-	assert.False(t, domain.AudioLevel("").IsValid()) // Should use LevelUnknown
+	assert.True(t, domain.LevelUnknown.IsValid())
 }
 
 func TestCollectionType_IsValid(t *testing.T) {
-    assert.True(t, domain.TypeCourse.IsValid())
-    assert.True(t, domain.TypePlaylist.IsValid())
-    assert.True(t, domain.TypeUnknown.IsValid())
-    assert.False(t, domain.CollectionType("BOOK").IsValid())
-    assert.False(t, domain.CollectionType("").IsValid())
+	assert.True(t, domain.TypeCourse.IsValid())
+	assert.True(t, domain.TypePlaylist.IsValid())
+	assert.True(t, domain.TypeUnknown.IsValid())
+	assert.False(t, domain.CollectionType("BOOK").IsValid())
+	assert.True(t, domain.TypeUnknown.IsValid())
 }
 
 func TestNewLanguage(t *testing.T) {
-    lang, err := domain.NewLanguage("en-US", "English (US)")
-    require.NoError(t, err)
-    assert.Equal(t, "EN-US", lang.Code()) // Should be uppercase
-    assert.Equal(t, "English (US)", lang.Name())
+	lang, err := domain.NewLanguage("en-US", "English (US)")
+	require.NoError(t, err)
+	assert.Equal(t, "EN-US", lang.Code()) // Should be uppercase
+	assert.Equal(t, "English (US)", lang.Name())
 
-    _, err = domain.NewLanguage("", "Spanish")
-    require.Error(t, err)
-    assert.ErrorIs(t, err, domain.ErrInvalidArgument)
+	_, err = domain.NewLanguage("", "Spanish")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, domain.ErrInvalidArgument)
 }

@@ -5,15 +5,16 @@ package middleware_test
 
 import (
 	"bytes"
-	"io"
+	"context"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware"
+	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"
 )
 
 func TestRequestLogger(t *testing.T) {
@@ -36,7 +37,8 @@ func TestRequestLogger(t *testing.T) {
 	req.RemoteAddr = "192.0.2.1:12345"
 	req.Header.Set("User-Agent", "TestAgent/1.0")
 	// Assuming RequestID middleware runs first and adds ID
-	req = req.WithContext(middleware.SetReqID(req.Context(), "req-test-123"))
+	ctxWithID := context.WithValue(req.Context(), httputil.RequestIDKey, "req-test-123") // Use correct key type
+	req = req.WithContext(ctxWithID)
 
 	rr := httptest.NewRecorder()
 
@@ -59,5 +61,5 @@ func TestRequestLogger(t *testing.T) {
 	assert.Contains(t, logOutput, `user_agent="TestAgent/1.0"`)
 	assert.Contains(t, logOutput, `request_id=req-test-123`)
 	assert.Contains(t, logOutput, `status_code=202`) // Check captured status code
-	assert.Contains(t, logOutput, `duration_ms=`)   // Check duration is logged
+	assert.Contains(t, logOutput, `duration_ms=`)    // Check duration is logged
 }
