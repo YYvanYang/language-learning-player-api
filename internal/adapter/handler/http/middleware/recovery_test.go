@@ -6,16 +6,15 @@ package middleware_test
 import (
 	"bytes"
 	"encoding/json"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware"
-	"github.com/yvanyang/language-learning-player-backend/pkg/httputil" // For ErrorResponseDTO
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware"
+	"github.com/yvanyang/language-learning-player-backend/pkg/httputil" // For ErrorResponseDTO
 )
 
 func TestRecoverer_Panic(t *testing.T) {
@@ -35,7 +34,7 @@ func TestRecoverer_Panic(t *testing.T) {
 	// Prepare request
 	req := httptest.NewRequest(http.MethodGet, "/panic", nil)
 	// Add request ID for logging check
-	req = req.WithContext(middleware.SetReqID(req.Context(), "req-panic-456"))
+	req = req.WithContext(SetReqID(req.Context(), "req-panic-456"))
 	rr := httptest.NewRecorder()
 
 	// Serve through middleware

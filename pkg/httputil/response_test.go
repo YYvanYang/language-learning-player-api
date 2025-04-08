@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -53,11 +54,11 @@ func TestRespondJSON_NilPayload(t *testing.T) {
 
 func TestRespondError_MapsDomainErrors(t *testing.T) {
 	testCases := []struct {
-		name               string
-		err                error
-		expectedStatus     int
-		expectedCode       string
-		expectedMsgSubstr  string // Check substring for specific messages
+		name              string
+		err               error
+		expectedStatus    int
+		expectedCode      string
+		expectedMsgSubstr string // Check substring for specific messages
 	}{
 		{"Not Found", domain.ErrNotFound, http.StatusNotFound, "NOT_FOUND", "resource was not found"},
 		{"Conflict", domain.ErrConflict, http.StatusConflict, "RESOURCE_CONFLICT", "conflict occurred"},
@@ -73,9 +74,9 @@ func TestRespondError_MapsDomainErrors(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			reqID := "req-" + tc.name
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
-            // Add request ID to context for testing propagation
-            ctx := context.WithValue(req.Context(), httputil.RequestIDKey, reqID)
-            req = req.WithContext(ctx)
+			// Add request ID to context for testing propagation
+			ctx := context.WithValue(req.Context(), httputil.RequestIDKey, reqID)
+			req = req.WithContext(ctx)
 
 			rr := httptest.NewRecorder()
 
@@ -90,12 +91,12 @@ func TestRespondError_MapsDomainErrors(t *testing.T) {
 
 			assert.Equal(t, tc.expectedCode, errResp.Code, "Error code mismatch")
 			assert.Contains(t, errResp.Message, tc.expectedMsgSubstr, "Error message mismatch")
-            assert.Equal(t, reqID, errResp.RequestID, "Request ID mismatch in response")
+			assert.Equal(t, reqID, errResp.RequestID, "Request ID mismatch in response")
 
-            // Ensure internal errors are not leaked for 500 status
-            if tc.expectedStatus >= 500 {
-                assert.NotContains(t, errResp.Message, tc.err.Error(), "Internal error details should not be exposed")
-            }
+			// Ensure internal errors are not leaked for 500 status
+			if tc.expectedStatus >= 500 {
+				assert.NotContains(t, errResp.Message, tc.err.Error(), "Internal error details should not be exposed")
+			}
 		})
 	}
 }

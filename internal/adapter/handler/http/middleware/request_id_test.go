@@ -4,21 +4,22 @@
 package middleware_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware"
+	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"
 )
 
 // Helper to set request ID in context for testing GetReqID
 func SetReqID(ctx context.Context, id string) context.Context {
-    return context.WithValue(ctx, middleware.RequestIDKey, id)
+	return context.WithValue(ctx, httputil.RequestIDKey, id)
 }
-
 
 func TestRequestID_GeneratesID(t *testing.T) {
 	// Dummy next handler
@@ -74,19 +75,19 @@ func TestRequestID_UsesExistingHeader(t *testing.T) {
 }
 
 func TestGetReqID(t *testing.T) {
-    // Test getting ID when present
-    expectedID := "test-id-from-ctx"
-    ctxWithID := SetReqID(context.Background(), expectedID)
-    actualID := middleware.GetReqID(ctxWithID)
-    assert.Equal(t, expectedID, actualID)
+	// Test getting ID when present
+	expectedID := "test-id-from-ctx"
+	ctxWithID := SetReqID(context.Background(), expectedID)
+	actualID := middleware.GetReqID(ctxWithID)
+	assert.Equal(t, expectedID, actualID)
 
-    // Test getting ID when not present
-    ctxWithoutID := context.Background()
-    actualID = middleware.GetReqID(ctxWithoutID)
-    assert.Empty(t, actualID)
+	// Test getting ID when not present
+	ctxWithoutID := context.Background()
+	actualID = middleware.GetReqID(ctxWithoutID)
+	assert.Empty(t, actualID)
 
-    // Test getting ID with wrong type (should return empty)
-    ctxWithWrongType := context.WithValue(context.Background(), middleware.RequestIDKey, 123)
-    actualID = middleware.GetReqID(ctxWithWrongType)
-    assert.Empty(t, actualID)
+	// Test getting ID with wrong type (should return empty)
+	ctxWithWrongType := context.WithValue(context.Background(), httputil.RequestIDKey, 123)
+	actualID = middleware.GetReqID(ctxWithWrongType)
+	assert.Empty(t, actualID)
 }
