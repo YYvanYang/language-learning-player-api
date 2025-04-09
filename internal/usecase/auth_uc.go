@@ -48,14 +48,15 @@ func (uc *AuthUseCase) RegisterWithPassword(ctx context.Context, emailStr, passw
 		return nil, "", fmt.Errorf("%w: %v", domain.ErrInvalidArgument, err)
 	}
 
-	existingUser, err := uc.userRepo.FindByEmail(ctx, emailVO)
-	if err == nil && existingUser != nil {
+	// Use EmailExists for a more efficient check
+	exists, err := uc.userRepo.EmailExists(ctx, emailVO)
+	if err != nil {
+		uc.logger.ErrorContext(ctx, "Error checking email existence", "error", err, "email", emailStr)
+		return nil, "", fmt.Errorf("failed to check email existence: %w", err)
+	}
+	if exists {
 		uc.logger.WarnContext(ctx, "Registration attempt with existing email", "email", emailStr)
 		return nil, "", fmt.Errorf("%w: email already registered", domain.ErrConflict)
-	}
-	if err != nil && !errors.Is(err, domain.ErrNotFound) {
-		uc.logger.ErrorContext(ctx, "Error checking for existing email", "error", err, "email", emailStr)
-		return nil, "", fmt.Errorf("failed to check email existence: %w", err)
 	}
 
 	if len(password) < 8 {
@@ -76,9 +77,7 @@ func (uc *AuthUseCase) RegisterWithPassword(ctx context.Context, emailStr, passw
 
 	if err := uc.userRepo.Create(ctx, user); err != nil {
 		uc.logger.ErrorContext(ctx, "Failed to save new user to repository", "error", err, "userID", user.ID)
-		if errors.Is(err, domain.ErrConflict) {
-			return nil, "", fmt.Errorf("%w: email already registered", domain.ErrConflict)
-		}
+		// The Create method already maps unique constraint errors to ErrConflict
 		return nil, "", fmt.Errorf("failed to register user: %w", err)
 	}
 
@@ -96,6 +95,7 @@ func (uc *AuthUseCase) RegisterWithPassword(ctx context.Context, emailStr, passw
 func (uc *AuthUseCase) LoginWithPassword(ctx context.Context, emailStr, password string) (string, error) {
 	emailVO, err := domain.NewEmail(emailStr)
 	if err != nil {
+		// Log invalid email format attempt? Or just fail silently. Let's fail silently.
 		return "", domain.ErrAuthenticationFailed
 	}
 	user, err := uc.userRepo.FindByEmail(ctx, emailVO)
@@ -133,25 +133,33 @@ func (uc *AuthUseCase) AuthenticateWithGoogle(ctx context.Context, googleIdToken
 	}
 
 	extInfo, err := uc.extAuthService.VerifyGoogleToken(ctx, googleIdToken)
-	if err != nil { return "", false, err }
+	if err != nil {
+		return "", false, err
+	} // Propagate verification error
 
+	// Check if user exists by Provider ID first
 	user, err := uc.userRepo.FindByProviderID(ctx, extInfo.Provider, extInfo.ProviderUserID)
 	if err == nil {
 		// Case 1: User found by Google ID -> Login success
 		uc.logger.InfoContext(ctx, "User authenticated via existing Google ID", "userID", user.ID, "googleID", extInfo.ProviderUserID)
 		token, tokenErr := uc.secHelper.GenerateJWT(ctx, user.ID, uc.jwtExpiry)
-		if tokenErr != nil { return "", false, fmt.Errorf("failed to finalize login: %w", tokenErr) }
-		return token, false, nil
+		if tokenErr != nil {
+			uc.logger.ErrorContext(ctx, "Failed to generate JWT for existing Google user", "error", tokenErr, "userID", user.ID)
+			return "", false, fmt.Errorf("failed to finalize login: %w", tokenErr)
+		}
+		return token, false, nil // Not a new user
 	}
 	if !errors.Is(err, domain.ErrNotFound) {
+		// Handle unexpected database errors during provider ID lookup
 		uc.logger.ErrorContext(ctx, "Error finding user by provider ID", "error", err, "provider", extInfo.Provider, "providerUserID", extInfo.ProviderUserID)
 		return "", false, fmt.Errorf("database error during authentication: %w", err)
 	}
 
-	// User not found by Google ID, check email if available
+	// User not found by Google ID, proceed to check by email (if available)
 	if extInfo.Email != "" {
 		emailVO, emailErr := domain.NewEmail(extInfo.Email)
 		if emailErr != nil {
+			// If Google gives an invalid email format, treat as auth failure
 			uc.logger.WarnContext(ctx, "Invalid email format received from Google token", "error", emailErr, "email", extInfo.Email, "googleID", extInfo.ProviderUserID)
 			return "", false, fmt.Errorf("%w: invalid email format from provider", domain.ErrAuthenticationFailed)
 		}
@@ -159,20 +167,25 @@ func (uc *AuthUseCase) AuthenticateWithGoogle(ctx context.Context, googleIdToken
 		userByEmail, errEmail := uc.userRepo.FindByEmail(ctx, emailVO)
 		if errEmail == nil {
 			// Case 2: User found by email -> Conflict (Strategy C)
+			// Email exists, but Google ID wasn't linked or didn't match
 			uc.logger.WarnContext(ctx, "Google auth conflict: Email exists but Google ID did not match or was not linked", "email", extInfo.Email, "existingUserID", userByEmail.ID, "existingProvider", userByEmail.AuthProvider)
 			return "", false, fmt.Errorf("%w: email is already associated with a different account", domain.ErrConflict)
 		} else if !errors.Is(errEmail, domain.ErrNotFound) {
+			// Handle unexpected database errors during email lookup
 			uc.logger.ErrorContext(ctx, "Error finding user by email", "error", errEmail, "email", extInfo.Email)
 			return "", false, fmt.Errorf("database error during authentication: %w", errEmail)
 		}
-		// If errEmail is ErrNotFound, fall through to user creation.
+		// If errEmail is ErrNotFound, continue to user creation
+		uc.logger.DebugContext(ctx, "Email not found, proceeding to create new Google user", "email", extInfo.Email)
 	} else {
+		// No email provided by Google, can only create user based on Google ID
 		uc.logger.InfoContext(ctx, "Google token verified, but no email provided. Proceeding to create new user based on Google ID only.", "googleID", extInfo.ProviderUserID)
 	}
 
-	// Case 3: User not found by Google ID or conflicting Email -> Create new user
-	uc.logger.InfoContext(ctx, "No existing user found by Google ID or conflicting email. Creating new user.", "googleID", extInfo.ProviderUserID, "email", extInfo.Email)
+	// Case 3: User not found by Google ID AND (Email not found OR Email not provided) -> Create new user
+	uc.logger.InfoContext(ctx, "Creating new user via Google authentication", "googleID", extInfo.ProviderUserID, "email", extInfo.Email)
 
+	// Create the new user domain object
 	newUser, err := domain.NewGoogleUser(
 		extInfo.Email, extInfo.Name, extInfo.ProviderUserID, extInfo.PictureURL,
 	)
@@ -181,21 +194,23 @@ func (uc *AuthUseCase) AuthenticateWithGoogle(ctx context.Context, googleIdToken
 		return "", false, fmt.Errorf("failed to process user data from Google: %w", err)
 	}
 
+	// Save the new user to the database
 	if err := uc.userRepo.Create(ctx, newUser); err != nil {
 		uc.logger.ErrorContext(ctx, "Failed to save new Google user to repository", "error", err, "googleID", newUser.GoogleID, "email", newUser.Email.String())
-		if errors.Is(err, domain.ErrConflict) {
-             return "", false, fmt.Errorf("%w: account conflict during creation", domain.ErrConflict)
-        }
+		// Create should handle mapping unique constraints to ErrConflict
 		return "", false, fmt.Errorf("failed to create new user account: %w", err)
 	}
 
-	uc.logger.InfoContext(ctx, "New user created via Google authentication", "userID", newUser.ID, "email", newUser.Email.String())
+	// Generate JWT for the newly created user
+	uc.logger.InfoContext(ctx, "New user created successfully via Google", "userID", newUser.ID, "email", newUser.Email.String())
 	token, tokenErr := uc.secHelper.GenerateJWT(ctx, newUser.ID, uc.jwtExpiry)
 	if tokenErr != nil {
 		uc.logger.ErrorContext(ctx, "Failed to generate JWT for newly created Google user", "error", tokenErr, "userID", newUser.ID)
+		// Consider if user creation should be rolled back here - depends on transaction strategy
 		return "", true, fmt.Errorf("failed to finalize registration: %w", tokenErr)
 	}
-	return token, true, nil
+
+	return token, true, nil // Return token and indicate new user
 }
 
 // Compile-time check to ensure AuthUseCase satisfies the port.AuthUseCase interface

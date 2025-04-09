@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"   // Import pgconn for PgError
+	"github.com/jackc/pgx/v5/pgconn" // Import pgconn for PgError
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
@@ -131,7 +131,6 @@ func (r *UserRepository) FindByProviderID(ctx context.Context, provider domain.A
 	return user, nil
 }
 
-
 func (r *UserRepository) Update(ctx context.Context, user *domain.User) error {
 	// Ensure updated_at is current
 	user.UpdatedAt = time.Now()
@@ -178,6 +177,20 @@ func (r *UserRepository) Update(ctx context.Context, user *domain.User) error {
 	return nil
 }
 
+// EmailExists checks if a user with the given email already exists.
+// ADDED: Implementation for EmailExists
+func (r *UserRepository) EmailExists(ctx context.Context, email domain.Email) (bool, error) {
+	var exists bool
+	query := `SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)`
+	err := r.db.QueryRow(ctx, query, email.String()).Scan(&exists)
+	if err != nil {
+		// Don't treat pgx.ErrNoRows as an error here, EXISTS correctly returns false
+		// Log other potential errors
+		r.logger.ErrorContext(ctx, "Error checking email existence", "error", err, "email", email.String())
+		return false, fmt.Errorf("checking email existence: %w", err)
+	}
+	return exists, nil
+}
 
 // --- Helper Methods ---
 

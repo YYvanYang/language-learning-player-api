@@ -17,6 +17,8 @@ type UserRepository interface {
 	FindByProviderID(ctx context.Context, provider domain.AuthProvider, providerUserID string) (*domain.User, error)
 	Create(ctx context.Context, user *domain.User) error
 	Update(ctx context.Context, user *domain.User) error
+	// ADDED: EmailExists method
+	EmailExists(ctx context.Context, email domain.Email) (bool, error)
 }
 
 // ListTracksFilters defines parameters for filtering/searching tracks at the repository layer.
