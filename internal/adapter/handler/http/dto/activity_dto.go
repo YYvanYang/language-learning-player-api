@@ -72,24 +72,5 @@ func MapDomainBookmarkToResponseDTO(b *domain.Bookmark) BookmarkResponseDTO {
 }
 
 // --- Paginated Response DTOs ---
-// Use common_dto.PaginatedResponseDTO instead, these are just for documentation/structure reference
-
-// PaginatedProgressResponseDTO defines the paginated response for progress list.
-type PaginatedProgressResponseDTO struct {
-	Data       []PlaybackProgressResponseDTO `json:"data"`
-	Total      int                           `json:"total"`
-	Limit      int                           `json:"limit"`
-	Offset     int                           `json:"offset"`
-	Page       int                           `json:"page"`
-	TotalPages int                           `json:"totalPages"`
-}
-
-// PaginatedBookmarksResponseDTO defines the paginated response for bookmark list.
-type PaginatedBookmarksResponseDTO struct {
-	Data       []BookmarkResponseDTO `json:"data"`
-	Total      int                   `json:"total"`
-	Limit      int                   `json:"limit"`
-	Offset     int                   `json:"offset"`
-	Page       int                   `json:"page"`
-	TotalPages int                   `json:"totalPages"`
-}
+// REMOVED PaginatedProgressResponseDTO and PaginatedBookmarksResponseDTO
+// Use common_dto.PaginatedResponseDTO instead.

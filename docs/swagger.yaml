@@ -220,23 +220,6 @@ definitions:
     - email
     - password
     type: object
-  dto.PaginatedProgressResponseDTO:
-    properties:
-      data:
-        items:
-          $ref: '#/definitions/dto.PlaybackProgressResponseDTO'
-        type: array
-      limit:
-        type: integer
-      offset:
-        type: integer
-      page:
-        type: integer
-      total:
-        type: integer
-      totalPages:
-        type: integer
-    type: object
   dto.PaginatedResponseDTO:
     properties:
       data:
@@ -1101,7 +1084,14 @@ paths:
         "200":
           description: Paginated list of playback progress (progressMs in milliseconds)
           schema:
-            $ref: '#/definitions/dto.PaginatedProgressResponseDTO'
+            allOf:
+            - $ref: '#/definitions/dto.PaginatedResponseDTO'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/dto.PlaybackProgressResponseDTO'
+                  type: array
+              type: object
         "401":
           description: Unauthorized
           schema:

@@ -134,7 +134,7 @@ func (h *UserActivityHandler) GetProgress(w http.ResponseWriter, r *http.Request
 // @Security BearerAuth
 // @Param limit query int false "Pagination limit" default(50) minimum(1) maximum(100)
 // @Param offset query int false "Pagination offset" default(0) minimum(0)
-// @Success 200 {object} dto.PaginatedProgressResponseDTO "Paginated list of playback progress (progressMs in milliseconds)"
+// @Success 200 {object} dto.PaginatedResponseDTO{data=[]dto.PlaybackProgressResponseDTO} "Paginated list of playback progress (progressMs in milliseconds)"
 // @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
 // @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
 // @Router /users/me/progress [get]

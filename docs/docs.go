@@ -1094,7 +1094,22 @@ const docTemplate = `{
                     "200": {
                         "description": "Paginated list of playback progress (progressMs in milliseconds)",
                         "schema": {
-                            "$ref": "#/definitions/dto.PaginatedProgressResponseDTO"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/dto.PaginatedResponseDTO"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/dto.PlaybackProgressResponseDTO"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -1551,32 +1566,6 @@ const docTemplate = `{
                 },
                 "password": {
                     "type": "string"
-                }
-            }
-        },
-        "dto.PaginatedProgressResponseDTO": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.PlaybackProgressResponseDTO"
-                    }
-                },
-                "limit": {
-                    "type": "integer"
-                },
-                "offset": {
-                    "type": "integer"
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                },
-                "totalPages": {
-                    "type": "integer"
                 }
             }
         },
