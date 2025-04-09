@@ -24,6 +24,7 @@ CREATE INDEX idx_audiotracks_level ON audio_tracks(level);
 CREATE INDEX idx_audiotracks_uploader ON audio_tracks(uploader_id);
 CREATE INDEX idx_audiotracks_is_public ON audio_tracks(is_public);
 CREATE INDEX idx_audiotracks_tags ON audio_tracks USING GIN (tags); -- GIN index for array searching
+CREATE INDEX idx_audiotracks_created_at ON audio_tracks(created_at DESC);
 
 -- Audio Collections Table
 CREATE TABLE audio_collections (
