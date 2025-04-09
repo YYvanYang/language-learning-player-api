@@ -44,17 +44,18 @@ GOBIN ?= $(firstword $(shell /usr/local/go/bin/go env GOBIN) $(GOPATH)/bin $(HOM
 
 # Tool binaries
 MIGRATE := $(GOBIN)/migrate
-SQLC := $(GOBIN)/sqlc
+# SQLC variable removed
 # SWAG := $(shell go env GOPATH)/bin/swag # Temporarily comment out the dynamic path
 # SWAG := /home/yvan/go/bin/swag # Temporarily hardcode the path - CHANGE IF YOURS IS DIFFERENT!
 SWAG := $(GOBIN)/swag
 GOLANGCILINT := $(GOBIN)/golangci-lint
 GOVULNCHECK := $(GOBIN)/govulncheck
 
-.PHONY: tools install-migrate install-sqlc install-swag install-lint install-vulncheck
+.PHONY: tools install-migrate install-swag install-lint install-vulncheck
+# install-sqlc removed from .PHONY
 
 # Target to install all necessary Go tools
-tools: install-migrate install-sqlc install-swag install-lint install-vulncheck
+tools: install-migrate install-swag install-lint install-vulncheck # install-sqlc removed
 
 # Check if migrate is installed, if not, install it
 install-migrate:
@@ -70,19 +71,7 @@ install-migrate:
 		echo ">>> migrate is already installed."; \
 	fi
 
-# Check if sqlc is installed, if not, install it (Optional, if using sqlc)
-install-sqlc:
-	@if ! command -v sqlc &> /dev/null; then \
-		echo ">>> Installing sqlc CLI..."; \
-		if go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest; then \
-			echo ">>> sqlc installed successfully."; \
-		else \
-			echo ">>> ERROR: Failed to install sqlc. Please check network connectivity and Go proxy settings."; \
-			exit 1; \
-		fi; \
-	else \
-		echo ">>> sqlc is already installed."; \
-	fi
+# install-sqlc target removed
 
 # Check if swag is installed, if not, install it (Optional, if using swaggo/swag)
 install-swag:
@@ -191,16 +180,12 @@ migrate-force: tools check-db-url
 
 
 # --- Code Generation ---
-.PHONY: generate generate-sqlc generate-swag swagger
+.PHONY: generate generate-swag swagger # generate-sqlc removed
 
 # Target to run all generators
-generate: generate-sqlc generate-swag
+generate: generate-swag # generate-sqlc removed
 
-# Generate Go code from SQL queries using sqlc (Optional)
-generate-sqlc: tools
-	@echo ">>> Generating Go code from SQL queries using sqlc..."
-	@$(SQLC) generate
-	@echo ">>> sqlc generation complete."
+# generate-sqlc target removed
 
 # Generate OpenAPI docs using swag (Optional)
 generate-swag: tools
@@ -348,7 +333,8 @@ docker-minio-run:
 		-d minio/minio server /data --console-address ":9001" > /dev/null
 	@echo ">>> Waiting for MinIO to be ready (max $(MINIO_READY_TIMEOUT)s)..."
 	@timeout=$(MINIO_READY_TIMEOUT); \
-	until curl -s --max-time 1 "http://localhost:$(MINIO_API_PORT)/minio/health/live" | grep -q 'OK'; do \
+	# MODIFIED: Use curl --fail to check for 2xx status code instead of grepping body
+	@until curl -s --max-time 1 --output /dev/null --fail "http://localhost:$(MINIO_API_PORT)/minio/health/live"; do \
 		timeout=$$((timeout-1)); \
 		if [ $$timeout -eq 0 ]; then \
 			echo ">>> ERROR: MinIO did not become ready in time."; \
@@ -385,7 +371,7 @@ help:
 	@echo "  run               Run the application locally (requires dependencies: use 'make deps-run')"
 	@echo "  deps-run          Start local PostgreSQL and MinIO containers"
 	@echo "  deps-stop         Stop local PostgreSQL and MinIO containers"
-	@echo "  tools             Install necessary Go CLI tools"
+	@echo "  tools             Install necessary Go CLI tools (migrate, swag, lint, vulncheck)" # Removed sqlc
 	@echo ""
 	@echo "Database Migrations:"
 	@echo "  migrate-create name=<name> Create a new migration file"
@@ -394,8 +380,8 @@ help:
 	@echo "  migrate-force version=<ver> Force migration version (requires DB running and DATABASE_URL set/exported)"
 	@echo ""
 	@echo "Code Generation & Formatting:"
-	@echo "  generate          Run all code generators (sqlc, swag)"
-	@echo "  generate-sqlc     Generate Go code from SQL using sqlc"
+	@echo "  generate          Run all code generators (swag)" # Removed sqlc
+	# Removed generate-sqlc help line
 	@echo "  generate-swag     Generate OpenAPI docs using swag"
 	@echo "  fmt               Format Go code using go fmt and goimports"
 	@echo ""
