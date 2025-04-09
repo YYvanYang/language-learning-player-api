@@ -226,6 +226,117 @@ graph TD
     GOOGLE_AUTH_ADAPTER -- Reports --> LOGGING
 ```
 
+```mermaid
+block-beta
+    %% Define Columns (adjust as needed for layout)
+    columns 6
+
+    %% Define Styles for Layers/Components
+    classDef external fill:#f9f,stroke:#333,stroke-width:1px %% Light Pinkish
+    classDef adapter fill:#cfc,stroke:#333,stroke-width:1px   %% Light Green
+    classDef port fill:#ccf,stroke:#333,stroke-width:1px       %% Light Blue
+    classDef core fill:#f9f,stroke:#333,stroke-width:2px     %% Pinkish (same as external for now)
+    classDef shared fill:#eee,stroke:#666,stroke-width:1px    %% Grey
+    classDef infra fill:#f5f5f5,stroke:#666,stroke-width:1px  %% Light Grey Infra
+
+
+    %% Row 1: External Client / API GW
+    CLIENT["Client (Web/Mobile)"] space:4 API_GW["API Gateway (Optional)"]
+    class CLIENT,API_GW external
+
+    %% Spacer Row
+    space:6
+
+    %% Row 2: Input Adapter (HTTP Handler)
+    space HTTP_HANDLER["HTTP Handler (Adapter)"] space:4
+    class HTTP_HANDLER adapter
+
+    %% Spacer Row
+    space:6
+
+    %% Row 3: Application Core (Usecase & Domain)
+    space USECASE["Use Cases / App Logic"] DOMAIN["Domain Model"] space:3
+    class USECASE,DOMAIN core
+
+    %% Spacer Row
+    space:6
+
+    %% Row 4: Ports (Interfaces) - Conceptual Layer Boundary
+    space PORTS["Ports (Interfaces Defined)"]:3 space:2
+    class PORTS port
+
+    %% Spacer Row
+    space:6
+
+    %% Row 5: Output Adapters (Repositories, Services)
+    space POSTGRES_REPO["Postgres Repo"] MINIO_SVC["MinIO Service"] GOOGLE_AUTH_ADAPTER["Google Auth Svc"] TX_MGR["(TxManager)"] space
+    class POSTGRES_REPO,MINIO_SVC,GOOGLE_AUTH_ADAPTER,TX_MGR adapter
+
+    %% Spacer Row
+    space:6
+
+    %% Row 6: Infrastructure Dependencies
+    space DB[("PostgreSQL")] MINIO[("MinIO / S3")] GOOGLE[("Google OAuth")] space:2
+    class DB,MINIO,GOOGLE infra
+
+    %% --- Side Components ---
+
+    %% Shared Kernel (Positioned Left, conceptually spanning rows)
+    %% block:SHARED_KERNEL["Shared Kernel (pkg)"]:1
+    %%    SK_Logger["Logger"]
+    %%    SK_Errors["Errors"]
+    %%    SK_Validation["Validation"]
+    %%    SK_Security["Security"]
+    %%    SK_HttpUtil["HTTP Utils"]
+    %%    SK_Pagination["Pagination"]
+    %% end
+    %% class SHARED_KERNEL shared
+    %% Note: Drawing arrows from all layers to Shared Kernel clutters the diagram significantly in block diagrams.
+    %% It's better represented conceptually or via text. We'll place a single block for it.
+
+    SHARED_KERNEL["Shared Kernel (pkg)"] space:5
+    class SHARED_KERNEL shared
+
+
+    %% Observability (Positioned Right, conceptually spanning rows)
+    %% block:OBSERVABILITY["Observability"]:1
+    %%     MONITORING["Monitoring (Prometheus, etc)"]
+    %%     LOGGING["Logging (ELK, Loki, etc)"]
+    %% end
+    %% class OBSERVABILITY external
+    %% Note: Similar challenge as Shared Kernel for arrows.
+
+    space:5 OBSERVABILITY["Observability Stack"]
+    class OBSERVABILITY external
+
+    %% --- Connections ---
+
+    %% Request Flow
+    CLIENT --> API_GW
+    API_GW --> HTTP_HANDLER
+    HTTP_HANDLER --> USECASE
+
+    %% Core Dependencies
+    USECASE -- "uses" --> DOMAIN
+    USECASE -- "depends on" --> PORTS
+
+    %% Adapter Implementation & Interaction
+    HTTP_HANDLER -- "calls" --> USECASE %% Shows input adapter interaction
+
+    POSTGRES_REPO -- "implements/calls" --> PORTS %% Represents implementing repo interfaces defined in Ports
+    MINIO_SVC -- "implements/calls" --> PORTS     %% Represents implementing service interfaces defined in Ports
+    GOOGLE_AUTH_ADAPTER -- "implements/calls" --> PORTS
+    TX_MGR -- "implements" --> PORTS %% If TxManager interface is in Ports
+
+    POSTGRES_REPO -- "interacts" --> DB
+    MINIO_SVC -- "interacts" --> MINIO
+    GOOGLE_AUTH_ADAPTER -- "interacts" --> GOOGLE
+
+    %% Conceptual Links to Shared/Observability (Avoid direct arrows for clarity)
+    %% Implicit: Handler, Usecase, Adapters --> Use Shared Kernel
+    %% Implicit: Handler, Usecase, Adapters --> Report to Observability
+```
+
 ### 3.2 核心组件职责
 
 *   **Domain (`internal/domain`):**
