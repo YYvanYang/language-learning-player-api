@@ -100,92 +100,130 @@
 
 ```mermaid
 graph TD
+    %% === 1. Define all nodes globally with simple text ===
+    CLIENT["客户端 Web/Mobile App"]
+    API_GW["API Gateway (Optional)"]
+    DB["数据库 PostgreSQL"]
+    MINIO["对象存储 MinIO / S3 Compatible"]
+    GOOGLE_AUTH["Google OAuth 2.0 / Identity Platform"]
+    MONITORING["可观测性平台 (Prometheus, Grafana, Jaeger/Tempo)"]
+    LOGGING["日志聚合系统 (ELK Stack, Loki+Grafana)"]
+
+    HTTP_HANDLER["HTTP Handler (handler/http) Gin / Chi"]
+    POSTGRES_REPO["PostgreSQL Repository (repository/postgres) pgx / sqlc / GORM"]
+    MINIO_SERVICE["MinIO Service Adapter (service/minio) minio-go SDK"]
+    GOOGLE_AUTH_ADAPTER["Google Auth Adapter (service/google_auth) Google API Client Lib"]
+    POSTGRES_TX_MANAGER["PostgreSQL TxManager (repository/postgres)"]
+
+    REPO_INTERFACE["Repository Interfaces (UserRepository, ...)"]
+    STORAGE_INTERFACE["FileStorageService Interface"]
+    EXT_AUTH_INTERFACE["ExternalAuthService Interface"]
+    TX_MANAGER_INTERFACE["TransactionManager Interface"]
+
+    USECASE["Use Cases / App Logic (internal/usecase)"]
+    DOMAIN["Domain Model (Entities, VO, Rules) (internal/domain)"]
+
+    LOGGER["Logger"]
+    ERRORS["Error Handling"]
+    VALIDATION["Validation Utils"]
+    SECURITY["Security Helpers"]
+    HTTPUTIL["HTTP Utils"]
+    PAGINATION["Pagination Helpers"]
+
+    %% === 2. Define Subgraphs containing node IDs ===
     subgraph External ["外部交互 / 基础设施"]
-        CLIENT([客户端<br/>Web/Mobile App]) -- HTTP/S --> API_GW{API Gateway<br/>(Optional)}
-        API_GW -- HTTP/S --> HTTP_HANDLER
-
-        DB[(数据库<br/>PostgreSQL)]
-        MINIO[(对象存储<br/>MinIO / S3 Compatible)]
-        GOOGLE_AUTH[Google OAuth 2.0<br/>Identity Platform]
-
-        MONITORING[可观测性平台<br/>(Prometheus, Grafana, Jaeger/Tempo)]
-        LOGGING[日志聚合系统<br/>(ELK Stack, Loki+Grafana)]
+        CLIENT
+        API_GW
+        DB
+        MINIO
+        GOOGLE_AUTH
+        MONITORING
+        LOGGING
     end
 
     subgraph Application ["应用后端 (Go Monolith)"]
         subgraph Adapters ["适配器层 (internal/adapter)"]
             style Adapters fill:#cfc,stroke:#333,stroke-width:1px
-            HTTP_HANDLER[HTTP Handler<br/>(handler/http)<br/>Gin / Chi]
-            POSTGRES_REPO[PostgreSQL Repository<br/>(repository/postgres)<br/>pgx / sqlc / GORM]
-            MINIO_SERVICE[MinIO Service Adapter<br/>(service/minio)<br/>minio-go SDK]
-            GOOGLE_AUTH_ADAPTER[Google Auth Adapter<br/>(service/google_auth)<br/>Google API Client Lib]
-            POSTGRES_TX_MANAGER[PostgreSQL TxManager<br/>(repository/postgres)] # Added TX manager adapter
+            HTTP_HANDLER
+            POSTGRES_REPO
+            MINIO_SERVICE
+            GOOGLE_AUTH_ADAPTER
+            POSTGRES_TX_MANAGER
         end
 
         subgraph Ports ["端口层 (internal/port)"]
             style Ports fill:#ccf,stroke:#333,stroke-width:1px
-            REPO_INTERFACE{Repository<br/>Interfaces<br/>(UserRepository, AudioTrackRepository, ...)}
-            STORAGE_INTERFACE{FileStorageService<br/>Interface}
-            EXT_AUTH_INTERFACE{ExternalAuthService<br/>Interface}
-            TX_MANAGER_INTERFACE{TransactionManager<br/>Interface} # Updated TX manager interface location
+            REPO_INTERFACE
+            STORAGE_INTERFACE
+            EXT_AUTH_INTERFACE
+            TX_MANAGER_INTERFACE
         end
 
         subgraph ApplicationCore ["应用核心"]
             style ApplicationCore fill:#f9f,stroke:#333,stroke-width:2px
-            USECASE[Use Cases / Application Logic<br/>(internal/usecase)]
-            DOMAIN[Domain Model<br/>(Entities, Value Objects, Rules)<br/>(internal/domain)]
+            USECASE
+            DOMAIN
         end
 
         subgraph SharedKernel ["共享内核 / 工具库 (pkg)"]
            style SharedKernel fill:#eee,stroke:#666,stroke-width:1px
-            LOGGER[Logger]
-            ERRORS[Error Handling]
-            VALIDATION[Validation Utils]
-            SECURITY[Security Helpers<br/>(Hashing, JWT)]
-            HTTPUTIL[HTTP Utils]
-            PAGINATION[Pagination Helpers]
+            LOGGER
+            ERRORS
+            VALIDATION
+            SECURITY
+            HTTPUTIL
+            PAGINATION
         end
     end
 
-    %% Dependencies
-    CLIENT -- HTTP Request (API Calls, Auth Redirects) --> HTTP_HANDLER
-    HTTP_HANDLER -- Calls --> USECASE
+    %% === 3. Define Connections ===
+    CLIENT -- HTTP/S --> API_GW
+    API_GW -- HTTP/S --> HTTP_HANDLER
+    HTTP_HANDLER -- Returns HTTP Response --> CLIENT
 
+    HTTP_HANDLER -- Calls --> USECASE
     USECASE -- Uses --> DOMAIN
+
     USECASE -- Depends on --> REPO_INTERFACE
     USECASE -- Depends on --> STORAGE_INTERFACE
     USECASE -- Depends on --> EXT_AUTH_INTERFACE
-    USECASE -- Depends on --> TX_MANAGER_INTERFACE # Added dependency
+    USECASE -- Depends on --> TX_MANAGER_INTERFACE
 
     POSTGRES_REPO -- Implements --> REPO_INTERFACE
     POSTGRES_REPO -- Interacts --> DB
-
-    POSTGRES_TX_MANAGER -- Implements --> TX_MANAGER_INTERFACE # Implementation added
-    POSTGRES_TX_MANAGER -- Uses --> DB # Interaction with DB
-
+    POSTGRES_TX_MANAGER -- Implements --> TX_MANAGER_INTERFACE
+    POSTGRES_TX_MANAGER -- Interacts --> DB
     MINIO_SERVICE -- Implements --> STORAGE_INTERFACE
     MINIO_SERVICE -- Interacts --> MINIO
-
     GOOGLE_AUTH_ADAPTER -- Implements --> EXT_AUTH_INTERFACE
     GOOGLE_AUTH_ADAPTER -- Interacts --> GOOGLE_AUTH
 
-    %% Shared Kernel Usage
-    HTTP_HANDLER -- Uses --> SharedKernel
-    USECASE -- Uses --> SharedKernel
-    POSTGRES_REPO -- Uses --> SharedKernel
-    MINIO_SERVICE -- Uses --> SharedKernel
-    GOOGLE_AUTH_ADAPTER -- Uses --> SharedKernel
-    POSTGRES_TX_MANAGER -- Uses --> SharedKernel # Tx manager uses shared kernel too
+    %% Example Shared Kernel Usage Connections
+    HTTP_HANDLER -- Uses --> LOGGER
+    HTTP_HANDLER -- Uses --> VALIDATION
+    HTTP_HANDLER -- Uses --> HTTPUTIL
+    USECASE -- Uses --> LOGGER
+    USECASE -- Uses --> ERRORS
+    USECASE -- Uses --> SECURITY
+    POSTGRES_REPO -- Uses --> LOGGER
+    POSTGRES_REPO -- Uses --> ERRORS
+    MINIO_SERVICE -- Uses --> LOGGER
+    GOOGLE_AUTH_ADAPTER -- Uses --> LOGGER
+    POSTGRES_TX_MANAGER -- Uses --> LOGGER
 
-    %% Observability & Logging
-    HTTP_HANDLER -- Reports Metrics/Logs/Traces --> MONITORING & LOGGING
-    USECASE -- Reports Metrics/Logs/Traces --> MONITORING & LOGGING
-    POSTGRES_REPO -- Reports Metrics/Logs/Traces --> MONITORING & LOGGING
-    POSTGRES_TX_MANAGER -- Reports Metrics/Logs/Traces --> MONITORING & LOGGING # Tx manager logs/traces
-    MINIO_SERVICE -- Reports Metrics/Logs/Traces --> MONITORING & LOGGING
-    GOOGLE_AUTH_ADAPTER -- Reports Metrics/Logs/Traces --> MONITORING & LOGGING
-
-    HTTP_HANDLER -- Returns HTTP Response (Data, Errors, JWT) --> CLIENT
+    %% Example Observability Connections
+    HTTP_HANDLER -- Reports --> MONITORING
+    HTTP_HANDLER -- Reports --> LOGGING
+    USECASE -- Reports --> MONITORING
+    USECASE -- Reports --> LOGGING
+    POSTGRES_REPO -- Reports --> MONITORING
+    POSTGRES_REPO -- Reports --> LOGGING
+    POSTGRES_TX_MANAGER -- Reports --> MONITORING
+    POSTGRES_TX_MANAGER -- Reports --> LOGGING
+    MINIO_SERVICE -- Reports --> MONITORING
+    MINIO_SERVICE -- Reports --> LOGGING
+    GOOGLE_AUTH_ADAPTER -- Reports --> MONITORING
+    GOOGLE_AUTH_ADAPTER -- Reports --> LOGGING
 ```
 
 ### 3.2 核心组件职责
