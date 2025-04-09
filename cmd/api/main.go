@@ -1,4 +1,6 @@
-// cmd/api/main.go
+// ============================================
+// FILE: cmd/api/main.go (MODIFIED)
+// ============================================
 package main
 
 import (
@@ -18,15 +20,15 @@ import (
 	httpSwagger "github.com/swaggo/http-swagger"
 	"golang.org/x/time/rate"
 
-	_ "github.com/yvanyang/language-learning-player-backend/docs" // Keep this - Import generated docs
-	"github.com/yvanyang/language-learning-player-backend/internal/config" // Adjust import path
+	_ "github.com/yvanyang/language-learning-player-backend/docs"                                    // Keep this - Import generated docs
 	httpadapter "github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http" // Alias for http handler package
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware" // Adjust import path for our custom middleware
+	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware"  // Adjust import path for our custom middleware
 	repo "github.com/yvanyang/language-learning-player-backend/internal/adapter/repository/postgres" // Alias for postgres repo package
 	googleauthadapter "github.com/yvanyang/language-learning-player-backend/internal/adapter/service/google_auth"
 	minioadapter "github.com/yvanyang/language-learning-player-backend/internal/adapter/service/minio"
+	"github.com/yvanyang/language-learning-player-backend/internal/config"     // Adjust import path
 	uc "github.com/yvanyang/language-learning-player-backend/internal/usecase" // Alias usecase package if needed elsewhere
-	"github.com/yvanyang/language-learning-player-backend/pkg/logger"      // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/pkg/logger"          // Adjust import path
 	"github.com/yvanyang/language-learning-player-backend/pkg/security"
 	"github.com/yvanyang/language-learning-player-backend/pkg/validation"
 )
@@ -71,7 +73,7 @@ func main() {
 	defer stop()
 
 	// --- Configuration ---
-	cfg, err := config.LoadConfig(".")
+	cfg, err := config.LoadConfig(".") // Pass full config struct
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading configuration: %v\n", err)
 		os.Exit(1)
@@ -93,7 +95,7 @@ func main() {
 	}
 	defer dbPool.Close() // Ensure pool is closed on shutdown
 
-	// --- ADDED: Initialize Transaction Manager ---
+	// Initialize Transaction Manager
 	txManager := repo.NewTxManager(dbPool, appLogger)
 
 	// Repositories
@@ -116,17 +118,20 @@ func main() {
 	}
 	googleAuthService, err := googleauthadapter.NewGoogleAuthService(cfg.Google.ClientID, appLogger)
 	if err != nil {
-		appLogger.Error("Failed to initialize Google Auth service", "error", err)
-		os.Exit(1) // Assuming Google Auth is critical
+		// Optional: Log warning instead of exiting if Google Auth isn't critical for basic functionality
+		appLogger.Warn("Failed to initialize Google Auth service (Google login disabled?)", "error", err)
+		// os.Exit(1) // Only exit if Google Auth is mandatory
 	}
 
 	// Validator
 	validator := validation.New()
 
-	// --- Inject TransactionManager into Use Cases that need it ---
+	// Inject dependencies into Use Cases
 	authUseCase := uc.NewAuthUseCase(cfg.JWT, userRepo, secHelper, googleAuthService, appLogger)
-	audioUseCase := uc.NewAudioContentUseCase(cfg.Minio, trackRepo, collectionRepo, storageService, txManager, appLogger) // Pass txManager
+	// Pass the full config to AudioContentUseCase constructor (as it now needs CDN info too)
+	audioUseCase := uc.NewAudioContentUseCase(cfg, trackRepo, collectionRepo, storageService, txManager, appLogger)
 	activityUseCase := uc.NewUserActivityUseCase(progressRepo, bookmarkRepo, trackRepo, appLogger)
+	// Upload use case constructor might need full cfg if other parts are needed, or just MinioConfig
 	uploadUseCase := uc.NewUploadUseCase(cfg.Minio, trackRepo, storageService, appLogger)
 	userUseCase := uc.NewUserUseCase(userRepo, appLogger)
 
@@ -143,16 +148,14 @@ func main() {
 	appLogger.Info("Setting up HTTP router...")
 	router := chi.NewRouter()
 
-	// --- Middleware Setup ---
-	router.Use(middleware.Recoverer)
-	router.Use(middleware.RequestID)
-	router.Use(middleware.RequestLogger)
-	router.Use(chimiddleware.RealIP)
+	// --- Middleware Setup (Order matters) ---
+	router.Use(middleware.RequestID)                             // 1. Assign Request ID first
+	router.Use(middleware.RequestLogger)                         // 2. Log incoming request (with ID)
+	router.Use(middleware.Recoverer)                             // 3. Recover from panics (logs with ID)
+	router.Use(chimiddleware.RealIP)                             // 4. Get real IP (needed for rate limiting)
 	ipLimiter := middleware.NewIPRateLimiter(rate.Limit(10), 20) // Example: 10 req/sec, burst 20
-	router.Use(middleware.RateLimit(ipLimiter))
-	router.Use(chimiddleware.StripSlashes)
-	router.Use(chimiddleware.Timeout(60 * time.Second)) // Example timeout
-	router.Use(cors.Handler(cors.Options{
+	router.Use(middleware.RateLimit(ipLimiter))                  // 5. Apply rate limiting
+	router.Use(cors.Handler(cors.Options{                        // 6. Handle CORS preflight/requests
 		AllowedOrigins:   cfg.Cors.AllowedOrigins,
 		AllowedMethods:   cfg.Cors.AllowedMethods,
 		AllowedHeaders:   cfg.Cors.AllowedHeaders,
@@ -160,6 +163,9 @@ func main() {
 		AllowCredentials: cfg.Cors.AllowCredentials,
 		MaxAge:           cfg.Cors.MaxAge,
 	}))
+	router.Use(middleware.SecurityHeaders) // 7. Add Security Headers
+	router.Use(chimiddleware.StripSlashes)
+	router.Use(chimiddleware.Timeout(60 * time.Second)) // 8. Apply request timeout
 
 	// --- Routes ---
 	// Health Check
@@ -194,6 +200,7 @@ func main() {
 
 		// Protected routes
 		r.Group(func(r chi.Router) {
+			// Apply authentication middleware ONLY to this group
 			r.Use(middleware.Authenticator(secHelper))
 
 			// User Profile

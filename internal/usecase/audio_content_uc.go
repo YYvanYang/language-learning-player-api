@@ -1,4 +1,6 @@
-// internal/usecase/audio_content_uc.go
+// ==================================================
+// FILE: internal/usecase/audio_content_uc.go (MODIFIED)
+// ==================================================
 package usecase
 
 import (
@@ -6,13 +8,14 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url" // Import net/url for parsing
 	"time"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/config" // Adjust import path (for presign expiry)
-	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
 	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware" // GetUserID
-	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"                      // Import pagination
+	"github.com/yvanyang/language-learning-player-backend/internal/config"                          // Adjust import path (for config types)
+	"github.com/yvanyang/language-learning-player-backend/internal/domain"                          // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/internal/port"                            // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"                           // Import pagination
 )
 
 // AudioContentUseCase handles business logic related to audio tracks and collections.
@@ -22,12 +25,14 @@ type AudioContentUseCase struct {
 	storageService port.FileStorageService
 	txManager      port.TransactionManager
 	presignExpiry  time.Duration
+	cdnBaseURL     *url.URL // Store parsed CDN Base URL
 	logger         *slog.Logger
 }
 
 // NewAudioContentUseCase creates a new AudioContentUseCase.
 func NewAudioContentUseCase(
-	minioCfg config.MinioConfig,
+	// Pass full config or individual configs needed
+	cfg config.Config,
 	tr port.AudioTrackRepository,
 	cr port.AudioCollectionRepository,
 	ss port.FileStorageService,
@@ -37,12 +42,25 @@ func NewAudioContentUseCase(
 	if tm == nil {
 		log.Warn("AudioContentUseCase created without TransactionManager implementation. Transactional operations will fail.")
 	}
+	var parsedCdnBaseURL *url.URL
+	var parseErr error
+	if cfg.CDN.BaseURL != "" {
+		parsedCdnBaseURL, parseErr = url.Parse(cfg.CDN.BaseURL)
+		if parseErr != nil {
+			log.Warn("Invalid CDN BaseURL in config, CDN rewriting disabled", "url", cfg.CDN.BaseURL, "error", parseErr)
+			parsedCdnBaseURL = nil // Ensure it's nil if parsing failed
+		} else {
+			log.Info("CDN Rewriting Enabled", "baseUrl", parsedCdnBaseURL.String())
+		}
+	}
+
 	return &AudioContentUseCase{
 		trackRepo:      tr,
 		collectionRepo: cr,
 		storageService: ss,
 		txManager:      tm,
-		presignExpiry:  minioCfg.PresignExpiry,
+		presignExpiry:  cfg.Minio.PresignExpiry, // Get expiry from Minio config
+		cdnBaseURL:     parsedCdnBaseURL,        // Store the parsed URL
 		logger:         log.With("usecase", "AudioContentUseCase"),
 	}
 }
@@ -50,6 +68,7 @@ func NewAudioContentUseCase(
 // --- Track Use Cases ---
 
 // GetAudioTrackDetails retrieves details for a single audio track, including a presigned URL.
+// The presigned URL will be rewritten to use the CDN Base URL if configured.
 func (uc *AudioContentUseCase) GetAudioTrackDetails(ctx context.Context, trackID domain.TrackID) (*domain.AudioTrack, string, error) {
 	track, err := uc.trackRepo.FindByID(ctx, trackID)
 	if err != nil {
@@ -61,14 +80,35 @@ func (uc *AudioContentUseCase) GetAudioTrackDetails(ctx context.Context, trackID
 		return nil, "", err
 	}
 
-	playURL, err := uc.storageService.GetPresignedGetURL(ctx, track.MinioBucket, track.MinioObjectKey, uc.presignExpiry)
+	presignedURLStr, err := uc.storageService.GetPresignedGetURL(ctx, track.MinioBucket, track.MinioObjectKey, uc.presignExpiry)
 	if err != nil {
 		uc.logger.ErrorContext(ctx, "Failed to generate presigned URL for track", "error", err, "trackID", trackID)
-		return nil, "", fmt.Errorf("could not retrieve playback URL: %w", err)
+		// Return the track info even if URL generation fails, but with an empty URL string
+		return track, "", fmt.Errorf("could not retrieve base playback URL: %w", err) // Indicate base URL failed
+	}
+
+	// Rewrite URL if CDN is configured
+	finalPlayURL := presignedURLStr // Default to original presigned URL
+	if uc.cdnBaseURL != nil {
+		originalURL, parseErr := url.Parse(presignedURLStr)
+		if parseErr != nil {
+			uc.logger.ErrorContext(ctx, "Failed to parse original presigned URL for CDN rewriting", "url", presignedURLStr, "error", parseErr)
+			// Fallback to original URL if parsing fails
+		} else {
+			// Create new URL with CDN base and original path/query
+			rewrittenURL := &url.URL{
+				Scheme:   uc.cdnBaseURL.Scheme,
+				Host:     uc.cdnBaseURL.Host, // Use Host to include port if present in CDN base URL
+				Path:     originalURL.Path,
+				RawQuery: originalURL.RawQuery, // Preserve query string (contains signature)
+			}
+			finalPlayURL = rewrittenURL.String()
+			uc.logger.DebugContext(ctx, "Rewrote presigned URL for CDN", "original", presignedURLStr, "rewritten", finalPlayURL)
+		}
 	}
 
 	uc.logger.InfoContext(ctx, "Successfully retrieved audio track details", "trackID", trackID)
-	return track, playURL, nil
+	return track, finalPlayURL, nil // Return track and potentially rewritten URL
 }
 
 // ListTracks retrieves a paginated list of tracks based on filtering and sorting criteria.
@@ -94,7 +134,6 @@ func (uc *AudioContentUseCase) ListTracks(ctx context.Context, params port.UseCa
 		SortDirection: params.SortDirection,
 	}
 
-
 	tracks, total, err := uc.trackRepo.List(ctx, repoParams, pageParams) // Pass repoParams and pageParams
 	if err != nil {
 		uc.logger.ErrorContext(ctx, "Failed to list audio tracks from repository", "error", err, "params", params, "page", pageParams)
@@ -105,19 +144,19 @@ func (uc *AudioContentUseCase) ListTracks(ctx context.Context, params port.UseCa
 	return tracks, total, pageParams, nil
 }
 
-
 // --- Collection Use Cases --- (Rest of the file remains the same)
 
 // CreateCollection creates a new audio collection, potentially adding initial tracks atomically.
 func (uc *AudioContentUseCase) CreateCollection(ctx context.Context, title, description string, colType domain.CollectionType, initialTrackIDs []domain.TrackID) (*domain.AudioCollection, error) {
 	userID, ok := middleware.GetUserIDFromContext(ctx)
-	if !ok { return nil, domain.ErrUnauthenticated }
+	if !ok {
+		return nil, domain.ErrUnauthenticated
+	}
 
 	if uc.txManager == nil {
 		uc.logger.ErrorContext(ctx, "TransactionManager is nil, cannot create collection atomically")
 		return nil, fmt.Errorf("internal configuration error: transaction manager not available")
 	}
-
 
 	collection, err := domain.NewAudioCollection(title, description, userID, colType)
 	if err != nil {
@@ -172,7 +211,11 @@ func (uc *AudioContentUseCase) GetCollectionDetails(ctx context.Context, collect
 
 	collection, err := uc.collectionRepo.FindWithTracks(ctx, collectionID)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) { uc.logger.WarnContext(ctx, "Audio collection not found", "collectionID", collectionID) } else { uc.logger.ErrorContext(ctx, "Failed to get audio collection from repository", "error", err, "collectionID", collectionID) }
+		if errors.Is(err, domain.ErrNotFound) {
+			uc.logger.WarnContext(ctx, "Audio collection not found", "collectionID", collectionID)
+		} else {
+			uc.logger.ErrorContext(ctx, "Failed to get audio collection from repository", "error", err, "collectionID", collectionID)
+		}
 		return nil, err
 	}
 
@@ -190,29 +233,36 @@ func (uc *AudioContentUseCase) GetCollectionDetails(ctx context.Context, collect
 func (uc *AudioContentUseCase) GetCollectionTracks(ctx context.Context, collectionID domain.CollectionID) ([]*domain.AudioTrack, error) {
 	// NOTE: Assumes authorization check happened before (e.g., in GetCollectionDetails or middleware)
 	collection, err := uc.collectionRepo.FindWithTracks(ctx, collectionID)
-    if err != nil { return nil, err } // Handles NotFound
+	if err != nil {
+		return nil, err
+	} // Handles NotFound
 
-    if len(collection.TrackIDs) == 0 { return []*domain.AudioTrack{}, nil }
+	if len(collection.TrackIDs) == 0 {
+		return []*domain.AudioTrack{}, nil
+	}
 
-    tracks, err := uc.trackRepo.ListByIDs(ctx, collection.TrackIDs)
-    if err != nil {
-        uc.logger.ErrorContext(ctx, "Failed to list tracks by IDs for collection", "error", err, "collectionID", collectionID)
-        return nil, fmt.Errorf("failed to retrieve track details for collection: %w", err)
-    }
-    uc.logger.InfoContext(ctx, "Successfully retrieved tracks for collection", "collectionID", collectionID, "trackCount", len(tracks))
-    return tracks, nil
+	tracks, err := uc.trackRepo.ListByIDs(ctx, collection.TrackIDs)
+	if err != nil {
+		uc.logger.ErrorContext(ctx, "Failed to list tracks by IDs for collection", "error", err, "collectionID", collectionID)
+		return nil, fmt.Errorf("failed to retrieve track details for collection: %w", err)
+	}
+	uc.logger.InfoContext(ctx, "Successfully retrieved tracks for collection", "collectionID", collectionID, "trackCount", len(tracks))
+	return tracks, nil
 }
-
 
 // UpdateCollectionMetadata updates the title and description of a collection owned by the user.
 func (uc *AudioContentUseCase) UpdateCollectionMetadata(ctx context.Context, collectionID domain.CollectionID, title, description string) error {
 	userID, ok := middleware.GetUserIDFromContext(ctx)
-	if !ok { return domain.ErrUnauthenticated }
+	if !ok {
+		return domain.ErrUnauthenticated
+	}
 
-	if title == "" { return fmt.Errorf("%w: collection title cannot be empty", domain.ErrInvalidArgument) }
+	if title == "" {
+		return fmt.Errorf("%w: collection title cannot be empty", domain.ErrInvalidArgument)
+	}
 
 	// Repo update includes owner check in WHERE clause
-	tempCollection := &domain.AudioCollection{ ID: collectionID, OwnerID: userID, Title: title, Description: description }
+	tempCollection := &domain.AudioCollection{ID: collectionID, OwnerID: userID, Title: title, Description: description}
 	err := uc.collectionRepo.UpdateMetadata(ctx, tempCollection)
 	if err != nil {
 		if !errors.Is(err, domain.ErrNotFound) && !errors.Is(err, domain.ErrPermissionDenied) {
@@ -227,19 +277,22 @@ func (uc *AudioContentUseCase) UpdateCollectionMetadata(ctx context.Context, col
 // UpdateCollectionTracks updates the list and order of tracks atomically using TransactionManager.
 func (uc *AudioContentUseCase) UpdateCollectionTracks(ctx context.Context, collectionID domain.CollectionID, orderedTrackIDs []domain.TrackID) error {
 	userID, ok := middleware.GetUserIDFromContext(ctx)
-	if !ok { return domain.ErrUnauthenticated }
+	if !ok {
+		return domain.ErrUnauthenticated
+	}
 
 	if uc.txManager == nil {
 		uc.logger.ErrorContext(ctx, "TransactionManager is nil, cannot update collection tracks atomically")
 		return fmt.Errorf("internal configuration error: transaction manager not available")
 	}
 
-
 	// Wrap the logic in a transaction
 	finalErr := uc.txManager.Execute(ctx, func(txCtx context.Context) error {
 		// 1. Verify collection exists and user owns it (within Tx)
 		collection, err := uc.collectionRepo.FindByID(txCtx, collectionID) // Use txCtx
-		if err != nil { return err } // Propagate error (NotFound or DB error)
+		if err != nil {
+			return err
+		} // Propagate error (NotFound or DB error)
 		if collection.OwnerID != userID {
 			uc.logger.WarnContext(txCtx, "Attempt to modify tracks of collection not owned by user", "collectionID", collectionID, "ownerID", collection.OwnerID, "userID", userID)
 			return domain.ErrPermissionDenied
@@ -248,8 +301,12 @@ func (uc *AudioContentUseCase) UpdateCollectionTracks(ctx context.Context, colle
 		// 2. Validate that all provided track IDs exist (within Tx)
 		if len(orderedTrackIDs) > 0 {
 			exists, validateErr := uc.validateTrackIDsExist(txCtx, orderedTrackIDs) // Use txCtx
-			if validateErr != nil { return fmt.Errorf("validating tracks: %w", validateErr) }
-			if !exists { return fmt.Errorf("%w: one or more track IDs do not exist", domain.ErrInvalidArgument) }
+			if validateErr != nil {
+				return fmt.Errorf("validating tracks: %w", validateErr)
+			}
+			if !exists {
+				return fmt.Errorf("%w: one or more track IDs do not exist", domain.ErrInvalidArgument)
+			}
 		}
 
 		// 3. Call repository method to manage tracks (passes txCtx implicitly via getQuerier)
@@ -268,15 +325,18 @@ func (uc *AudioContentUseCase) UpdateCollectionTracks(ctx context.Context, colle
 	return nil
 }
 
-
 // DeleteCollection deletes a collection owned by the user.
 func (uc *AudioContentUseCase) DeleteCollection(ctx context.Context, collectionID domain.CollectionID) error {
 	userID, ok := middleware.GetUserIDFromContext(ctx)
-	if !ok { return domain.ErrUnauthenticated }
+	if !ok {
+		return domain.ErrUnauthenticated
+	}
 
 	// 1. Verify ownership first (read operation, likely no Tx needed)
 	collection, err := uc.collectionRepo.FindByID(ctx, collectionID)
-	if err != nil { return err } // Handles ErrNotFound
+	if err != nil {
+		return err
+	} // Handles ErrNotFound
 	if collection.OwnerID != userID {
 		uc.logger.WarnContext(ctx, "Attempt to delete collection not owned by user", "collectionID", collectionID, "ownerID", collection.OwnerID, "userID", userID)
 		return domain.ErrPermissionDenied
@@ -285,13 +345,14 @@ func (uc *AudioContentUseCase) DeleteCollection(ctx context.Context, collectionI
 	// 2. Delete from repository (simple delete, likely no Tx needed unless linked hooks exist)
 	err = uc.collectionRepo.Delete(ctx, collectionID)
 	if err != nil {
-		if !errors.Is(err, domain.ErrNotFound) { uc.logger.ErrorContext(ctx, "Failed to delete collection from repository", "error", err, "collectionID", collectionID, "userID", userID) }
+		if !errors.Is(err, domain.ErrNotFound) {
+			uc.logger.ErrorContext(ctx, "Failed to delete collection from repository", "error", err, "collectionID", collectionID, "userID", userID)
+		}
 		return err
 	}
 	uc.logger.InfoContext(ctx, "Collection deleted", "collectionID", collectionID, "userID", userID)
 	return nil
 }
-
 
 // Helper function to validate track IDs exist
 func (uc *AudioContentUseCase) validateTrackIDsExist(ctx context.Context, trackIDs []domain.TrackID) (bool, error) {
@@ -305,7 +366,17 @@ func (uc *AudioContentUseCase) validateTrackIDsExist(ctx context.Context, trackI
 	}
 	if len(existingTracks) != len(trackIDs) {
 		// Find which IDs are missing (optional logging detail)
-		providedSet := make(map[domain.TrackID]struct{}, len(trackIDs)); for _, id := range trackIDs { providedSet[id] = struct{}{} }; for _, track := range existingTracks { delete(providedSet, track.ID) }; missingIDs := make([]string, 0, len(providedSet)); for id := range providedSet { missingIDs = append(missingIDs, id.String()) }
+		providedSet := make(map[domain.TrackID]struct{}, len(trackIDs))
+		for _, id := range trackIDs {
+			providedSet[id] = struct{}{}
+		}
+		for _, track := range existingTracks {
+			delete(providedSet, track.ID)
+		}
+		missingIDs := make([]string, 0, len(providedSet))
+		for id := range providedSet {
+			missingIDs = append(missingIDs, id.String())
+		}
 		uc.logger.WarnContext(ctx, "Attempt to use non-existent track IDs", "missingTrackIDs", missingIDs)
 		return false, nil // Return false, no error (usecase handles returning ErrInvalidArgument)
 	}

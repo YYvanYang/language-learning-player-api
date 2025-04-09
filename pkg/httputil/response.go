@@ -1,4 +1,6 @@
-// pkg/httputil/response.go
+// ============================================
+// FILE: pkg/httputil/response.go (MODIFIED)
+// ============================================
 package httputil
 
 import (
@@ -7,8 +9,10 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
+	"github.com/yvanyang/language-learning-player-backend/pkg/apierrors"   // Import the new package
 )
 
 // ContextKey is a custom type for context keys to avoid collisions.
@@ -56,22 +60,32 @@ func RespondJSON(w http.ResponseWriter, r *http.Request, status int, payload int
 func MapDomainErrorToHTTP(err error) (status int, code string, message string) {
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
-		return http.StatusNotFound, "NOT_FOUND", "The requested resource was not found."
+		// Use constant from apierrors package
+		return http.StatusNotFound, apierrors.CodeNotFound, "The requested resource was not found."
 	case errors.Is(err, domain.ErrConflict):
-		return http.StatusConflict, "RESOURCE_CONFLICT", "A conflict occurred with the current state of the resource." // Generic message
-		// Consider more specific messages based on context if err wraps more info
-		// if strings.Contains(err.Error(), "email") { message = "Email already exists."} ...
+		// Use constant from apierrors package
+		return http.StatusConflict, apierrors.CodeConflict, "A conflict occurred with the current state of the resource."
 	case errors.Is(err, domain.ErrInvalidArgument):
-		return http.StatusBadRequest, "INVALID_INPUT", err.Error() // Use error message directly for validation details
+		// Use constant from apierrors package
+		// Use the specific error message for validation details
+		return http.StatusBadRequest, apierrors.CodeInvalidInput, err.Error()
 	case errors.Is(err, domain.ErrPermissionDenied):
-		return http.StatusForbidden, "FORBIDDEN", "You do not have permission to perform this action."
+		// Use constant from apierrors package
+		// Check for specific rate limit error message if needed, otherwise use generic forbidden
+		if strings.Contains(err.Error(), "rate limit exceeded") {
+			return http.StatusTooManyRequests, apierrors.CodeRateLimitExceeded, "Too many requests. Please try again later."
+		}
+		return http.StatusForbidden, apierrors.CodeForbidden, "You do not have permission to perform this action."
 	case errors.Is(err, domain.ErrAuthenticationFailed):
-		return http.StatusUnauthorized, "UNAUTHENTICATED", "Authentication failed. Please check your credentials." // Use 401 for auth failure
+		// Use constant from apierrors package
+		return http.StatusUnauthorized, apierrors.CodeUnauthenticated, "Authentication failed. Please check your credentials."
 	case errors.Is(err, domain.ErrUnauthenticated):
-		return http.StatusUnauthorized, "UNAUTHENTICATED", "Authentication required. Please log in." // Also 401
+		// Use constant from apierrors package
+		return http.StatusUnauthorized, apierrors.CodeUnauthenticated, "Authentication required. Please log in."
 	default:
 		// Any other error is treated as an internal server error
-		return http.StatusInternalServerError, "INTERNAL_ERROR", "An unexpected internal error occurred."
+		// Use constant from apierrors package
+		return http.StatusInternalServerError, apierrors.CodeInternalError, "An unexpected internal error occurred."
 	}
 }
 

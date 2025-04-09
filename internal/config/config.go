@@ -1,8 +1,11 @@
-// internal/config/config.go
+// ============================================
+// FILE: internal/config/config.go (MODIFIED)
+// ============================================
 package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -19,6 +22,7 @@ type Config struct {
 	Google   GoogleConfig   `mapstructure:"google"`
 	Log      LogConfig      `mapstructure:"log"`
 	Cors     CorsConfig     `mapstructure:"cors"`
+	CDN      CDNConfig      `mapstructure:"cdn"` // Uncommented CDN config
 }
 
 // ServerConfig holds server specific configuration.
@@ -77,6 +81,10 @@ type CorsConfig struct {
 	MaxAge           int      `mapstructure:"maxAge"`
 }
 
+// CDNConfig holds optional CDN configuration. (Uncommented)
+type CDNConfig struct {
+	BaseURL string `mapstructure:"baseUrl"` // e.g., "https://cdn.mydomain.com"
+}
 
 // LoadConfig reads configuration from file or environment variables.
 // It looks for config files in the specified path (e.g., "." for current directory).
@@ -87,9 +95,9 @@ func LoadConfig(path string) (config Config, err error) {
 	setDefaultValues(v)
 
 	// Configure Viper
-	v.AddConfigPath(path)         // Path to look for the config file in
+	v.AddConfigPath(path) // Path to look for the config file in
 	v.SetConfigType("yaml")
-	v.AutomaticEnv()              // Read in environment variables that match
+	v.AutomaticEnv()                                   // Read in environment variables that match
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_")) // Replace dots with underscores for env var names (e.g., server.port -> SERVER_PORT)
 
 	// 1. Load base configuration (config.yaml)
@@ -122,58 +130,68 @@ func LoadConfig(path string) (config Config, err error) {
 	// Unmarshal the final merged configuration
 	err = v.Unmarshal(&config)
 	if err != nil {
-		 return config, fmt.Errorf("failed to unmarshal configuration: %w", err)
+		return config, fmt.Errorf("failed to unmarshal configuration: %w", err)
 	}
 
 	// Optional: Add validation logic here if needed
-    // For example, check if required fields like database DSN are set:
-    if config.Database.DSN == "" {
-        // Attempt to get from DATABASE_URL env var as a fallback
-        envDSN := os.Getenv("DATABASE_URL")
-        if envDSN != "" {
-            fmt.Fprintln(os.Stderr, "Info: Database DSN not found in config, using DATABASE_URL environment variable.")
-            config.Database.DSN = envDSN
-        } else {
-            // If still empty after checking env var, return error
-            return config, fmt.Errorf("database DSN is required but not found in config or DATABASE_URL environment variable")
-        }
-    }
+	// For example, check if required fields like database DSN are set:
+	if config.Database.DSN == "" {
+		// Attempt to get from DATABASE_URL env var as a fallback
+		envDSN := os.Getenv("DATABASE_URL")
+		if envDSN != "" {
+			fmt.Fprintln(os.Stderr, "Info: Database DSN not found in config, using DATABASE_URL environment variable.")
+			config.Database.DSN = envDSN
+		} else {
+			// If still empty after checking env var, return error
+			return config, fmt.Errorf("database DSN is required but not found in config or DATABASE_URL environment variable")
+		}
+	}
+
+	// Validate CDN BaseURL if provided
+	if config.CDN.BaseURL != "" {
+		_, parseErr := url.ParseRequestURI(config.CDN.BaseURL)
+		if parseErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: Invalid CDN BaseURL configured ('%s'): %v. CDN rewriting will be disabled.\n", config.CDN.BaseURL, parseErr)
+			config.CDN.BaseURL = "" // Disable CDN rewriting if URL is invalid
+		}
+	}
 
 	return config, nil
 }
 
 // Use a dedicated viper instance for defaults to avoid conflicts
 func setDefaultValues(v *viper.Viper) {
-    // Server Defaults
-    v.SetDefault("server.port", "8080")
-    v.SetDefault("server.readTimeout", "5s")
-    v.SetDefault("server.writeTimeout", "10s")
-    v.SetDefault("server.idleTimeout", "120s")
+	// Server Defaults
+	v.SetDefault("server.port", "8080")
+	v.SetDefault("server.readTimeout", "5s")
+	v.SetDefault("server.writeTimeout", "10s")
+	v.SetDefault("server.idleTimeout", "120s")
 
-    // Database Defaults (Note: DSN has no sensible default)
-    v.SetDefault("database.maxOpenConns", 25)
-    v.SetDefault("database.maxIdleConns", 25)
-    v.SetDefault("database.connMaxLifetime", "5m")
+	// Database Defaults (Note: DSN has no sensible default)
+	v.SetDefault("database.maxOpenConns", 25)
+	v.SetDefault("database.maxIdleConns", 25)
+	v.SetDefault("database.connMaxLifetime", "5m")
 	v.SetDefault("database.connMaxIdleTime", "5m") // Usually same as lifetime
 
-    // JWT Defaults
+	// JWT Defaults
 	v.SetDefault("jwt.secretKey", "default-insecure-secret-key-please-override") // Provide a default but stress it's insecure
-    v.SetDefault("jwt.accessTokenExpiry", "1h")
+	v.SetDefault("jwt.accessTokenExpiry", "1h")
 
-    // MinIO Defaults
+	// MinIO Defaults
 	v.SetDefault("minio.endpoint", "localhost:9000")
 	v.SetDefault("minio.accessKeyId", "minioadmin")
 	v.SetDefault("minio.secretAccessKey", "minioadmin")
-    v.SetDefault("minio.useSsl", false)
-    v.SetDefault("minio.presignExpiry", "1h") // Default URL expiry
+	v.SetDefault("minio.useSsl", false)
+	v.SetDefault("minio.bucketName", "language-audio") // Ensure bucket name is set
+	v.SetDefault("minio.presignExpiry", "1h")          // Default URL expiry
 
 	// Google Defaults
 	v.SetDefault("google.clientId", "")
 	v.SetDefault("google.clientSecret", "")
 
-    // Log Defaults
-    v.SetDefault("log.level", "info")
-    v.SetDefault("log.json", false) // Easier to read logs for dev default
+	// Log Defaults
+	v.SetDefault("log.level", "info")
+	v.SetDefault("log.json", false) // Easier to read logs for dev default
 
 	// CORS Defaults (Example: Allow local dev server)
 	v.SetDefault("cors.allowedOrigins", []string{"http://localhost:3000", "http://127.0.0.1:3000"})
@@ -181,10 +199,13 @@ func setDefaultValues(v *viper.Viper) {
 	v.SetDefault("cors.allowedHeaders", []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"})
 	v.SetDefault("cors.allowCredentials", true)
 	v.SetDefault("cors.maxAge", 300) // 5 minutes
+
+	// CDN Default (Uncommented)
+	v.SetDefault("cdn.baseUrl", "") // Default is empty, meaning CDN rewriting is disabled
 }
 
 // GetConfig is a helper function to load config, often called from main.
 // Assumes config files are in the current working directory (".")
 func GetConfig() (Config, error) {
-    return LoadConfig(".")
+	return LoadConfig(".")
 }

@@ -1,5 +1,5 @@
 // ============================================
-// FILE: pkg/httputil/response_test.go
+// FILE: pkg/httputil/response_test.go (MODIFIED)
 // ============================================
 package httputil_test
 
@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust
+	"github.com/yvanyang/language-learning-player-backend/pkg/apierrors"   // Import constants
 	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"    // Adjust
 
 	"github.com/stretchr/testify/assert"
@@ -57,17 +58,18 @@ func TestRespondError_MapsDomainErrors(t *testing.T) {
 		name              string
 		err               error
 		expectedStatus    int
-		expectedCode      string
+		expectedCode      string // Use constant value here
 		expectedMsgSubstr string // Check substring for specific messages
 	}{
-		{"Not Found", domain.ErrNotFound, http.StatusNotFound, "NOT_FOUND", "resource was not found"},
-		{"Conflict", domain.ErrConflict, http.StatusConflict, "RESOURCE_CONFLICT", "conflict occurred"},
-		{"Invalid Argument", fmt.Errorf("%w: email format invalid", domain.ErrInvalidArgument), http.StatusBadRequest, "INVALID_INPUT", "email format invalid"},
-		{"Permission Denied", domain.ErrPermissionDenied, http.StatusForbidden, "FORBIDDEN", "permission to perform"},
-		{"Auth Failed", domain.ErrAuthenticationFailed, http.StatusUnauthorized, "UNAUTHENTICATED", "Authentication failed"},
-		{"Unauthenticated", domain.ErrUnauthenticated, http.StatusUnauthorized, "UNAUTHENTICATED", "Authentication required"},
-		{"Internal Error", errors.New("database connection lost"), http.StatusInternalServerError, "INTERNAL_ERROR", "unexpected internal error"},
-		{"Wrapped Internal Error", fmt.Errorf("repo failed: %w", errors.New("db timeout")), http.StatusInternalServerError, "INTERNAL_ERROR", "unexpected internal error"},
+		{"Not Found", domain.ErrNotFound, http.StatusNotFound, apierrors.CodeNotFound, "resource was not found"},
+		{"Conflict", domain.ErrConflict, http.StatusConflict, apierrors.CodeConflict, "conflict occurred"},
+		{"Invalid Argument", fmt.Errorf("%w: email format invalid", domain.ErrInvalidArgument), http.StatusBadRequest, apierrors.CodeInvalidInput, "email format invalid"},
+		{"Permission Denied", domain.ErrPermissionDenied, http.StatusForbidden, apierrors.CodeForbidden, "permission to perform"},
+		{"Rate Limit Denied", fmt.Errorf("%w: rate limit exceeded", domain.ErrPermissionDenied), http.StatusTooManyRequests, apierrors.CodeRateLimitExceeded, "Too many requests"}, // Test rate limit mapping
+		{"Auth Failed", domain.ErrAuthenticationFailed, http.StatusUnauthorized, apierrors.CodeUnauthenticated, "Authentication failed"},
+		{"Unauthenticated", domain.ErrUnauthenticated, http.StatusUnauthorized, apierrors.CodeUnauthenticated, "Authentication required"},
+		{"Internal Error", errors.New("database connection lost"), http.StatusInternalServerError, apierrors.CodeInternalError, "unexpected internal error"},
+		{"Wrapped Internal Error", fmt.Errorf("repo failed: %w", errors.New("db timeout")), http.StatusInternalServerError, apierrors.CodeInternalError, "unexpected internal error"},
 	}
 
 	for _, tc := range testCases {
