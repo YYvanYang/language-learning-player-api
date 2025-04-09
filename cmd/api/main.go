@@ -128,19 +128,17 @@ func main() {
 
 	// Inject dependencies into Use Cases
 	authUseCase := uc.NewAuthUseCase(cfg.JWT, userRepo, secHelper, googleAuthService, appLogger)
-	// Pass the newly required progressRepo and bookmarkRepo to NewAudioContentUseCase
 	audioUseCase := uc.NewAudioContentUseCase(
 		cfg,            // config.Config
 		trackRepo,      // port.AudioTrackRepository
 		collectionRepo, // port.AudioCollectionRepository
 		storageService, // port.FileStorageService
 		txManager,      // port.TransactionManager
-		progressRepo,   // port.PlaybackProgressRepository (ADDED)
-		bookmarkRepo,   // port.BookmarkRepository (ADDED)
+		progressRepo,   // port.PlaybackProgressRepository
+		bookmarkRepo,   // port.BookmarkRepository
 		appLogger,      // *slog.Logger
 	)
 	activityUseCase := uc.NewUserActivityUseCase(progressRepo, bookmarkRepo, trackRepo, appLogger)
-	// Upload use case constructor might need full cfg if other parts are needed, or just MinioConfig
 	uploadUseCase := uc.NewUploadUseCase(cfg.Minio, trackRepo, storageService, appLogger)
 	userUseCase := uc.NewUserUseCase(userRepo, appLogger)
 
@@ -157,14 +155,21 @@ func main() {
 	appLogger.Info("Setting up HTTP router...")
 	router := chi.NewRouter()
 
-	// --- Middleware Setup (Order matters) ---
+	// --- Global Middleware Setup (Applied to ALL routes) ---
+	// Order matters!
 	router.Use(middleware.RequestID)                             // 1. Assign Request ID first
 	router.Use(middleware.RequestLogger)                         // 2. Log incoming request (with ID)
 	router.Use(middleware.Recoverer)                             // 3. Recover from panics (logs with ID)
 	router.Use(chimiddleware.RealIP)                             // 4. Get real IP (needed for rate limiting)
 	ipLimiter := middleware.NewIPRateLimiter(rate.Limit(10), 20) // Example: 10 req/sec, burst 20
-	router.Use(middleware.RateLimit(ipLimiter))                  // 5. Apply rate limiting
-	router.Use(cors.Handler(cors.Options{                        // 6. Handle CORS preflight/requests
+	router.Use(middleware.RateLimit(ipLimiter))                  // 5. Apply rate limiting (consider if Swagger needs limiting)
+	// Note: CORS is applied globally below, before routing groups
+	// router.Use(middleware.SecurityHeaders) // REMOVED global security headers
+	router.Use(chimiddleware.StripSlashes)
+	router.Use(chimiddleware.Timeout(60 * time.Second)) // 6. Apply request timeout
+
+	// --- CORS Middleware (Applied globally before specific route groups) ---
+	router.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   cfg.Cors.AllowedOrigins,
 		AllowedMethods:   cfg.Cors.AllowedMethods,
 		AllowedHeaders:   cfg.Cors.AllowedHeaders,
@@ -172,12 +177,10 @@ func main() {
 		AllowCredentials: cfg.Cors.AllowCredentials,
 		MaxAge:           cfg.Cors.MaxAge,
 	}))
-	router.Use(middleware.SecurityHeaders) // 7. Add Security Headers
-	router.Use(chimiddleware.StripSlashes)
-	router.Use(chimiddleware.Timeout(60 * time.Second)) // 8. Apply request timeout
 
 	// --- Routes ---
-	// Health Check
+
+	// Health Check (Outside specific security groups, likely doesn't need CSP etc.)
 	router.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		// TODO: Add deeper health checks (e.g., DB ping) if needed
 		w.Header().Set("Content-Type", "text/plain")
@@ -185,15 +188,22 @@ func main() {
 		fmt.Fprintln(w, "OK")
 	})
 
-	// Swagger Docs
-	router.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/swagger/index.html", http.StatusFound)
-	})
-	router.Get("/swagger/*", httpSwagger.WrapHandler)
+	// Swagger Docs Group - Apply relaxed security headers
+	router.Group(func(r chi.Router) {
+		r.Use(middleware.SwaggerSecurityHeaders) // Apply Swagger-specific headers
 
-	// API v1 Routes
+		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/swagger/index.html", http.StatusFound)
+		})
+		r.Get("/swagger/*", httpSwagger.WrapHandler)
+	})
+
+	// API v1 Routes Group - Apply strict security headers and authentication
 	router.Route("/api/v1", func(r chi.Router) {
-		// Public routes
+		// Apply API-specific security headers to all /api/v1 routes
+		r.Use(middleware.ApiSecurityHeaders)
+
+		// Public API routes (Still get ApiSecurityHeaders)
 		r.Group(func(r chi.Router) {
 			r.Post("/auth/register", authHandler.Register)
 			r.Post("/auth/login", authHandler.Login)
@@ -201,13 +211,11 @@ func main() {
 
 			// Public Audio Routes
 			r.Get("/audio/tracks", audioHandler.ListTracks)
-			r.Get("/audio/tracks/{trackId}", audioHandler.GetTrackDetails) // Maybe requires auth if track is private? Handled in usecase/handler for now.
-			// Public Collection Routes (If any? e.g., listing public courses)
-			// r.Get("/audio/collections", audioHandler.ListPublicCollections) // Example
-			r.Get("/audio/collections/{collectionId}", audioHandler.GetCollectionDetails) // Requires auth if collection is private
+			r.Get("/audio/tracks/{trackId}", audioHandler.GetTrackDetails)
+			r.Get("/audio/collections/{collectionId}", audioHandler.GetCollectionDetails) // Needs auth check inside if private
 		})
 
-		// Protected routes
+		// Protected API routes (Apply Authenticator middleware + ApiSecurityHeaders)
 		r.Group(func(r chi.Router) {
 			// Apply authentication middleware ONLY to this group
 			r.Use(middleware.Authenticator(secHelper))
@@ -218,19 +226,14 @@ func main() {
 
 			// Authenticated Collection Actions
 			r.Post("/audio/collections", audioHandler.CreateCollection)
-			// r.Get("/users/me/collections", audioHandler.ListMyCollections) // Endpoint to list *only* user's collections
 			r.Put("/audio/collections/{collectionId}", audioHandler.UpdateCollectionMetadata)
 			r.Delete("/audio/collections/{collectionId}", audioHandler.DeleteCollection)
 			r.Put("/audio/collections/{collectionId}/tracks", audioHandler.UpdateCollectionTracks)
-			// Add/Remove single track endpoints?
-			// r.Post("/audio/collections/{collectionId}/tracks", audioHandler.AddTrackToCollection)
-			// r.Delete("/audio/collections/{collectionId}/tracks/{trackId}", audioHandler.RemoveTrackFromCollection)
 
 			// User Activity Routes
 			r.Post("/users/me/progress", activityHandler.RecordProgress)
 			r.Get("/users/me/progress", activityHandler.ListProgress)
 			r.Get("/users/me/progress/{trackId}", activityHandler.GetProgress)
-
 			r.Post("/bookmarks", activityHandler.CreateBookmark)
 			r.Get("/bookmarks", activityHandler.ListBookmarks)
 			r.Delete("/bookmarks/{bookmarkId}", activityHandler.DeleteBookmark)
