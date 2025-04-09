@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/dto"
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware"
-	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"
-	"github.com/yvanyang/language-learning-player-backend/pkg/validation"
-	"github.com/yvanyang/language-learning-player-backend/internal/usecase"
+	"github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http/dto"
+	"github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http/middleware"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/internal/usecase"
+	"github.com/yvanyang/language-learning-player-api/pkg/httputil"
+	"github.com/yvanyang/language-learning-player-api/pkg/validation"
 )
 
 // UploadHandler handles HTTP requests related to file uploads.
@@ -138,6 +138,6 @@ func (h *UploadHandler) CompleteUploadAndCreateTrack(w http.ResponseWriter, r *h
 	}
 
 	// Return the newly created track details
-	resp := dto.MapDomainTrackToResponseDTO(track) // Reuse existing mapping
+	resp := dto.MapDomainTrackToResponseDTO(track)       // Reuse existing mapping
 	httputil.RespondJSON(w, r, http.StatusCreated, resp) // 201 Created
-} 
+}

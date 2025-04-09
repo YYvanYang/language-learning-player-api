@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"github.com/google/uuid" // Using google/uuid for request IDs
-	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"
+	"github.com/yvanyang/language-learning-player-api/pkg/httputil"
 )
 
 // RequestID is a middleware that injects a unique request ID into the context

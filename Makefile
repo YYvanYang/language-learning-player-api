@@ -1,4 +1,4 @@
-# Makefile for the Language Learning Player Backend
+# Makefile for the Language Learning Player API
 
 # --- Variables ---
 # Go related variables

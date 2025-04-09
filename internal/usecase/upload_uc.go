@@ -12,9 +12,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/config"
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/internal/port"
+	"github.com/yvanyang/language-learning-player-api/internal/config"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/internal/port"
 )
 
 // UploadUseCase handles the business logic for file uploads.
@@ -69,9 +69,8 @@ func (uc *UploadUseCase) RequestUpload(ctx context.Context, userID domain.UserID
 		// Or allow it, but log warning. Let's allow for now.
 	}
 
-
 	// Generate a unique object key
-	extension := filepath.Ext(filename)                    // Get extension (e.g., ".mp3")
+	extension := filepath.Ext(filename) // Get extension (e.g., ".mp3")
 	randomUUID := uuid.NewString()
 	objectKey := fmt.Sprintf("user-uploads/%s/%s%s", userID.String(), randomUUID, extension) // Structure: prefix/userID/uuid.ext
 
@@ -97,14 +96,14 @@ func (uc *UploadUseCase) RequestUpload(ctx context.Context, userID domain.UserID
 
 // CompleteUploadRequest holds the data needed to finalize an upload and create a track record.
 type CompleteUploadRequest struct {
-	ObjectKey    string
-	Title        string
-	Description  string
-	LanguageCode string
-	Level        string // e.g., "A1", "B2"
-	DurationMs   int64  // Duration in milliseconds (client needs to provide this, e.g., from HTML5 audio duration property)
-	IsPublic     bool
-	Tags         []string
+	ObjectKey     string
+	Title         string
+	Description   string
+	LanguageCode  string
+	Level         string // e.g., "A1", "B2"
+	DurationMs    int64  // Duration in milliseconds (client needs to provide this, e.g., from HTML5 audio duration property)
+	IsPublic      bool
+	Tags          []string
 	CoverImageURL *string
 }
 
@@ -113,10 +112,18 @@ func (uc *UploadUseCase) CompleteUpload(ctx context.Context, userID domain.UserI
 	log := uc.logger.With("userID", userID.String(), "objectKey", req.ObjectKey)
 
 	// --- Validation ---
-	if req.ObjectKey == "" { return nil, fmt.Errorf("%w: objectKey is required", domain.ErrInvalidArgument)}
-	if req.Title == "" { return nil, fmt.Errorf("%w: title is required", domain.ErrInvalidArgument)}
-	if req.LanguageCode == "" { return nil, fmt.Errorf("%w: languageCode is required", domain.ErrInvalidArgument)}
-	if req.DurationMs <= 0 { return nil, fmt.Errorf("%w: valid durationMs is required", domain.ErrInvalidArgument)}
+	if req.ObjectKey == "" {
+		return nil, fmt.Errorf("%w: objectKey is required", domain.ErrInvalidArgument)
+	}
+	if req.Title == "" {
+		return nil, fmt.Errorf("%w: title is required", domain.ErrInvalidArgument)
+	}
+	if req.LanguageCode == "" {
+		return nil, fmt.Errorf("%w: languageCode is required", domain.ErrInvalidArgument)
+	}
+	if req.DurationMs <= 0 {
+		return nil, fmt.Errorf("%w: valid durationMs is required", domain.ErrInvalidArgument)
+	}
 
 	// Validate object key prefix belongs to the user (basic security check)
 	expectedPrefix := fmt.Sprintf("user-uploads/%s/", userID.String())
@@ -139,13 +146,14 @@ func (uc *UploadUseCase) CompleteUpload(ctx context.Context, userID domain.UserI
 
 	// Validate Language and Level
 	langVO, err := domain.NewLanguage(req.LanguageCode, "") // Name not stored
-	if err != nil { return nil, err}
+	if err != nil {
+		return nil, err
+	}
 	levelVO := domain.AudioLevel(req.Level)
 	if req.Level != "" && !levelVO.IsValid() { // Allow empty level
 		return nil, fmt.Errorf("%w: invalid audio level '%s'", domain.ErrInvalidArgument, req.Level)
 	}
 	// --- End Validation ---
-
 
 	// --- Create Domain Object ---
 	duration := time.Duration(req.DurationMs) * time.Millisecond
@@ -170,7 +178,6 @@ func (uc *UploadUseCase) CompleteUpload(ctx context.Context, userID domain.UserI
 	}
 	// --- End Create Domain Object ---
 
-
 	// --- Save to Repository ---
 	err = uc.trackRepo.Create(ctx, track)
 	if err != nil {
@@ -186,4 +193,4 @@ func (uc *UploadUseCase) CompleteUpload(ctx context.Context, userID domain.UserI
 
 	log.Info("Upload completed and track record created", "trackID", track.ID)
 	return track, nil
-} 
+}

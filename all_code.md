@@ -3,7 +3,7 @@
 ## `go.mod`
 
 ```
-module github.com/yvanyang/language-learning-player-backend
+module github.com/yvanyang/language-learning-player-api
 
 go 1.23.3
 
@@ -976,17 +976,17 @@ import (
 	httpSwagger "github.com/swaggo/http-swagger"
 	"golang.org/x/time/rate"
 
-	_ "github.com/yvanyang/language-learning-player-backend/docs"                                    // Keep this - Import generated docs
-	httpadapter "github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http" // Alias for http handler package
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware"  // Adjust import path for our custom middleware
-	repo "github.com/yvanyang/language-learning-player-backend/internal/adapter/repository/postgres" // Alias for postgres repo package
-	googleauthadapter "github.com/yvanyang/language-learning-player-backend/internal/adapter/service/google_auth"
-	minioadapter "github.com/yvanyang/language-learning-player-backend/internal/adapter/service/minio"
-	"github.com/yvanyang/language-learning-player-backend/internal/config"     // Adjust import path
-	uc "github.com/yvanyang/language-learning-player-backend/internal/usecase" // Alias usecase package if needed elsewhere
-	"github.com/yvanyang/language-learning-player-backend/pkg/logger"          // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/pkg/security"
-	"github.com/yvanyang/language-learning-player-backend/pkg/validation"
+	_ "github.com/yvanyang/language-learning-player-api/docs"                                    // Keep this - Import generated docs
+	httpadapter "github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http" // Alias for http handler package
+	"github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http/middleware"  // Adjust import path for our custom middleware
+	repo "github.com/yvanyang/language-learning-player-api/internal/adapter/repository/postgres" // Alias for postgres repo package
+	googleauthadapter "github.com/yvanyang/language-learning-player-api/internal/adapter/service/google_auth"
+	minioadapter "github.com/yvanyang/language-learning-player-api/internal/adapter/service/minio"
+	"github.com/yvanyang/language-learning-player-api/internal/config"     // Adjust import path
+	uc "github.com/yvanyang/language-learning-player-api/internal/usecase" // Alias usecase package if needed elsewhere
+	"github.com/yvanyang/language-learning-player-api/pkg/logger"          // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/pkg/security"
+	"github.com/yvanyang/language-learning-player-api/pkg/validation"
 )
 
 // @title Language Learning Audio Player API
@@ -1665,13 +1665,13 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/dto"
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware"
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/internal/port"
-	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"
-	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"
-	"github.com/yvanyang/language-learning-player-backend/pkg/validation"
+	"github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http/dto"
+	"github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http/middleware"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/internal/port"
+	"github.com/yvanyang/language-learning-player-api/pkg/httputil"
+	"github.com/yvanyang/language-learning-player-api/pkg/pagination"
+	"github.com/yvanyang/language-learning-player-api/pkg/validation"
 )
 
 // UserActivityHandler handles HTTP requests related to user progress and bookmarks.
@@ -2021,11 +2021,11 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain" 
-	"github.com/yvanyang/language-learning-player-backend/internal/port"   
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/dto" 
-	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"    
-	"github.com/yvanyang/language-learning-player-backend/pkg/validation"  
+	"github.com/yvanyang/language-learning-player-api/internal/domain" 
+	"github.com/yvanyang/language-learning-player-api/internal/port"   
+	"github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http/dto" 
+	"github.com/yvanyang/language-learning-player-api/pkg/httputil"    
+	"github.com/yvanyang/language-learning-player-api/pkg/validation"  
 )
 
 // AuthHandler handles HTTP requests related to authentication.
@@ -2182,12 +2182,12 @@ import (
 	"strings" // Import strings
 
 	"github.com/go-chi/chi/v5"
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/dto" // Import for GetUserIDFromContext
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/internal/port"
-	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"
-	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"
-	"github.com/yvanyang/language-learning-player-backend/pkg/validation"
+	"github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http/dto" // Import for GetUserIDFromContext
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/internal/port"
+	"github.com/yvanyang/language-learning-player-api/pkg/httputil"
+	"github.com/yvanyang/language-learning-player-api/pkg/pagination"
+	"github.com/yvanyang/language-learning-player-api/pkg/validation"
 )
 
 // AudioHandler handles HTTP requests related to audio tracks and collections.
@@ -2570,11 +2570,11 @@ import (
 	// REMOVED: "context" - Not needed directly here
 	"net/http"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/dto" // Import dto package
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware"
-	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"
-	"github.com/yvanyang/language-learning-player-backend/internal/port" // Import port package for UserUseCase interface
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http/dto" // Import dto package
+	"github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http/middleware"
+	"github.com/yvanyang/language-learning-player-api/pkg/httputil"
+	"github.com/yvanyang/language-learning-player-api/internal/port" // Import port package for UserUseCase interface
 )
 
 // UserHandler handles HTTP requests related to user profiles.
@@ -2633,12 +2633,12 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/dto"
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware"
-	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"
-	"github.com/yvanyang/language-learning-player-backend/pkg/validation"
-	"github.com/yvanyang/language-learning-player-backend/internal/usecase"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http/dto"
+	"github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http/middleware"
+	"github.com/yvanyang/language-learning-player-api/pkg/httputil"
+	"github.com/yvanyang/language-learning-player-api/pkg/validation"
+	"github.com/yvanyang/language-learning-player-api/internal/usecase"
 )
 
 // UploadHandler handles HTTP requests related to file uploads.
@@ -2778,7 +2778,7 @@ package dto
 import (
 	"time"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
 )
 
 // --- Request DTOs ---
@@ -2895,7 +2895,7 @@ package dto
 import (
 	"time"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/internal/domain" // Adjust import path
 )
 
 // UserResponseDTO defines the JSON representation of a user profile.
@@ -2934,8 +2934,8 @@ package dto
 import (
 	"time"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/internal/port" // Import port for result struct
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/internal/port" // Import port for result struct
 )
 
 // --- Request DTOs ---
@@ -3208,7 +3208,7 @@ import (
 	"net/http"
 	"runtime/debug"
 	
-	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"
+	"github.com/yvanyang/language-learning-player-api/pkg/httputil"
 )
 
 // Recoverer is a middleware that recovers from panics, logs the panic,
@@ -3250,9 +3250,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path (for SecurityHelper interface)
-	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"    // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/internal/domain" // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/internal/port"   // Adjust import path (for SecurityHelper interface)
+	"github.com/yvanyang/language-learning-player-api/pkg/httputil"    // Adjust import path
 )
 
 const UserIDKey httputil.ContextKey = "userID" // Use httputil.ContextKey type
@@ -3379,8 +3379,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/pkg/httputil"
 	"golang.org/x/time/rate"
 )
 
@@ -3586,7 +3586,7 @@ import (
 	"net/http"
 
 	"github.com/google/uuid" // Using google/uuid for request IDs
-	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"
+	"github.com/yvanyang/language-learning-player-api/pkg/httputil"
 )
 
 // RequestID is a middleware that injects a unique request ID into the context
@@ -3637,9 +3637,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lib/pq" // Using lib/pq for array handling with pgx and error codes
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/internal/port"
-	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/internal/port"
+	"github.com/yvanyang/language-learning-player-api/pkg/pagination"
 )
 
 type AudioTrackRepository struct {
@@ -3994,9 +3994,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/internal/port"
-	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/internal/port"
+	"github.com/yvanyang/language-learning-player-api/pkg/pagination"
 )
 
 type PlaybackProgressRepository struct {
@@ -4140,7 +4140,7 @@ import (
 	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/yvanyang/language-learning-player-backend/internal/config" // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/internal/config" // Adjust import path
 )
 
 // NewPgxPool creates a new PostgreSQL connection pool.
@@ -4197,9 +4197,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/internal/port"
-	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/internal/port"
+	"github.com/yvanyang/language-learning-player-api/pkg/pagination"
 )
 
 // BookmarkRepository implements port.BookmarkRepository using PostgreSQL.
@@ -4428,9 +4428,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	// "github.com/jackc/pgx/v5/pgconn" // Needed only if checking specific pg error codes
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/pkg/pagination" // Import pagination
+	"github.com/yvanyang/language-learning-player-api/internal/domain" // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/internal/port"   // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/pkg/pagination" // Import pagination
 )
 
 type AudioCollectionRepository struct {
@@ -4714,8 +4714,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"   // Import pgconn for PgError
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/internal/domain" // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/internal/port"   // Adjust import path
 )
 
 type UserRepository struct {
@@ -4935,7 +4935,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn" // ADDED: Import pgconn
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/port" // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/internal/port" // Adjust import path
 )
 
 type txKey struct{} // Private key type for context value
@@ -5108,8 +5108,8 @@ import (
 	// Use the official Google idtoken verifier
 	"google.golang.org/api/idtoken"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/internal/domain" // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/internal/port"   // Adjust import path
 )
 
 // GoogleAuthService implements the port.ExternalAuthService interface for Google.
@@ -5209,8 +5209,8 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/config" // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/internal/config" // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/internal/port"   // Adjust import path
 )
 
 // MinioStorageService implements the port.FileStorageService interface using MinIO.
@@ -5368,8 +5368,8 @@ var _ port.FileStorageService = (*MinioStorageService)(nil)
 package port
 
 import (
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/pkg/pagination"
 )
 
 // === Use Case Layer Parameter Structs ===
@@ -5412,7 +5412,7 @@ package port
 import (
 	"context"
 	"time"
-	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/internal/domain" // Adjust import path
 )
 
 // --- External Service Interfaces ---
@@ -5488,8 +5488,8 @@ package port
 import (
 	"context"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/pkg/pagination"
 )
 
 // --- Repository Interfaces ---
@@ -5578,8 +5578,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/pkg/pagination"
 )
 
 // AuthUseCase defines the methods for the Auth use case layer.
@@ -5651,7 +5651,7 @@ package mocks
 
 import (
 	"context"
-	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust
+	"github.com/yvanyang/language-learning-player-api/internal/domain" // Adjust
 	"github.com/stretchr/testify/mock"
 )
 
@@ -5733,11 +5733,11 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware"
-	"github.com/yvanyang/language-learning-player-backend/internal/config"
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/internal/port"
-	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"
+	"github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http/middleware"
+	"github.com/yvanyang/language-learning-player-api/internal/config"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/internal/port"
+	"github.com/yvanyang/language-learning-player-api/pkg/pagination"
 )
 
 // AudioContentUseCase handles business logic related to audio tracks and collections.
@@ -6086,8 +6086,8 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/internal/port"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/internal/port"
 )
 
 // userUseCase implements the port.UserUseCase interface.
@@ -6132,9 +6132,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/config"
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/internal/port"
+	"github.com/yvanyang/language-learning-player-api/internal/config"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/internal/port"
 )
 
 type AuthUseCase struct {
@@ -6343,9 +6343,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/config"
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/internal/port"
+	"github.com/yvanyang/language-learning-player-api/internal/config"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/internal/port"
 )
 
 // UploadUseCase handles the business logic for file uploads.
@@ -6533,9 +6533,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/internal/port"
-	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/internal/port"
+	"github.com/yvanyang/language-learning-player-api/pkg/pagination"
 )
 
 type UserActivityUseCase struct {
@@ -6702,7 +6702,7 @@ package mocks
 import (
 	"context"
 	
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -13058,8 +13058,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/pkg/apierrors"   // Import the new package
+	"github.com/yvanyang/language-learning-player-api/internal/domain" // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/pkg/apierrors"   // Import the new package
 )
 
 // ContextKey is a custom type for context keys to avoid collisions.
@@ -13296,7 +13296,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
-	"github.com/yvanyang/language-learning-player-backend/internal/config" // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/internal/config" // Adjust import path
 )
 
 // NewLogger creates and returns a new slog.Logger based on the provided configuration.
@@ -13346,8 +13346,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/internal/domain" // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/internal/port"   // Adjust import path
 )
 
 // Security implements the port.SecurityHelper interface.
@@ -13412,7 +13412,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/internal/domain" // Adjust import path
 )
 
 // JWTHelper provides JWT generation and verification functionality.

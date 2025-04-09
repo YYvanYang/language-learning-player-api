@@ -5,8 +5,8 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/internal/port"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/internal/port"
 )
 
 // userUseCase implements the port.UserUseCase interface.
@@ -35,4 +35,4 @@ func (uc *userUseCase) GetUserProfile(ctx context.Context, userID domain.UserID)
 	// instead of the full domain.User if there's sensitive info like password hash.
 	// However, the repository FindByID should already exclude the hash if necessary.
 	return user, nil
-} 
+}

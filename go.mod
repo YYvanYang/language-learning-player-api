@@ -1,4 +1,4 @@
-module github.com/yvanyang/language-learning-player-backend
+module github.com/yvanyang/language-learning-player-api
 
 go 1.23.3
 

@@ -10,11 +10,12 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
 	// "github.com/jackc/pgx/v5/pgconn" // Needed only if checking specific pg error codes
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/pkg/pagination" // Import pagination
+	"github.com/yvanyang/language-learning-player-api/internal/domain" // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/internal/port"   // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/pkg/pagination"  // Import pagination
 )
 
 type AudioCollectionRepository struct {
@@ -66,7 +67,9 @@ func (r *AudioCollectionRepository) FindByID(ctx context.Context, id domain.Coll
     `
 	collection, err := r.scanCollection(ctx, q.QueryRow(ctx, query, id)) // Pass QueryRow
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) { return nil, domain.ErrNotFound }
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
+		}
 		r.logger.ErrorContext(ctx, "Error finding collection by ID", "error", err, "collectionID", id)
 		return nil, fmt.Errorf("finding collection by ID: %w", err)
 	}
@@ -115,7 +118,6 @@ func (r *AudioCollectionRepository) FindWithTracks(ctx context.Context, id domai
 	return collection, nil
 }
 
-
 func (r *AudioCollectionRepository) ListByOwner(ctx context.Context, ownerID domain.UserID, page pagination.Page) ([]*domain.AudioCollection, int, error) {
 	q := r.getQuerier(ctx)
 	args := []interface{}{ownerID}
@@ -130,7 +132,9 @@ func (r *AudioCollectionRepository) ListByOwner(ctx context.Context, ownerID dom
 		r.logger.ErrorContext(ctx, "Error counting collections by owner", "error", err, "ownerID", ownerID)
 		return nil, 0, fmt.Errorf("counting collections by owner: %w", err)
 	}
-	if total == 0 { return []*domain.AudioCollection{}, 0, nil }
+	if total == 0 {
+		return []*domain.AudioCollection{}, 0, nil
+	}
 
 	orderByClause := " ORDER BY created_at DESC"
 	paginationClause := fmt.Sprintf(" LIMIT $%d OFFSET $%d", argID, argID+1)
@@ -146,7 +150,10 @@ func (r *AudioCollectionRepository) ListByOwner(ctx context.Context, ownerID dom
 	collections := make([]*domain.AudioCollection, 0, page.Limit)
 	for rows.Next() {
 		collection, err := r.scanCollection(ctx, rows) // Use RowScanner compatible scan
-		if err != nil { r.logger.ErrorContext(ctx, "Error scanning collection in ListByOwner", "error", err); continue }
+		if err != nil {
+			r.logger.ErrorContext(ctx, "Error scanning collection in ListByOwner", "error", err)
+			continue
+		}
 		collection.TrackIDs = make([]domain.TrackID, 0)
 		collections = append(collections, collection)
 	}
@@ -175,13 +182,14 @@ func (r *AudioCollectionRepository) UpdateMetadata(ctx context.Context, collecti
 	}
 	if cmdTag.RowsAffected() == 0 {
 		exists, _ := r.exists(ctx, collection.ID) // Check existence
-		if !exists { return domain.ErrNotFound }
+		if !exists {
+			return domain.ErrNotFound
+		}
 		return domain.ErrPermissionDenied // Assume owner mismatch if exists but not updated
 	}
 	r.logger.InfoContext(ctx, "Collection metadata updated", "collectionID", collection.ID)
 	return nil
 }
-
 
 // ManageTracks replaces the entire set of tracks associated with a collection.
 // This method now expects to run within a transaction context provided by the Usecase.
@@ -232,7 +240,6 @@ func (r *AudioCollectionRepository) ManageTracks(ctx context.Context, collection
 	return nil // Usecase layer handles commit/rollback
 }
 
-
 func (r *AudioCollectionRepository) Delete(ctx context.Context, id domain.CollectionID) error {
 	q := r.getQuerier(ctx)
 	// Ownership check is done in Usecase layer
@@ -243,7 +250,9 @@ func (r *AudioCollectionRepository) Delete(ctx context.Context, id domain.Collec
 		r.logger.ErrorContext(ctx, "Error deleting audio collection", "error", err, "collectionID", id)
 		return fmt.Errorf("deleting audio collection: %w", err)
 	}
-	if cmdTag.RowsAffected() == 0 { return domain.ErrNotFound }
+	if cmdTag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
 	r.logger.InfoContext(ctx, "Audio collection deleted successfully", "collectionID", id)
 	return nil
 }
@@ -263,7 +272,6 @@ func (r *AudioCollectionRepository) exists(ctx context.Context, id domain.Collec
 	return exists, nil
 }
 
-
 // scanCollection scans a single row into a domain.AudioCollection.
 // CHANGED: Accepts RowScanner interface
 func (r *AudioCollectionRepository) scanCollection(ctx context.Context, row RowScanner) (*domain.AudioCollection, error) {
@@ -272,7 +280,9 @@ func (r *AudioCollectionRepository) scanCollection(ctx context.Context, row RowS
 		&collection.ID, &collection.Title, &collection.Description, &collection.OwnerID,
 		&collection.Type, &collection.CreatedAt, &collection.UpdatedAt,
 	)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	return &collection, nil
 }
 

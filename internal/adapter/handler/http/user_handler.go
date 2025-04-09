@@ -5,11 +5,11 @@ import (
 	// REMOVED: "context" - Not needed directly here
 	"net/http"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/dto" // Import dto package
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware"
-	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"
-	"github.com/yvanyang/language-learning-player-backend/internal/port" // Import port package for UserUseCase interface
+	"github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http/dto" // Import dto package
+	"github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http/middleware"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/internal/port" // Import port package for UserUseCase interface
+	"github.com/yvanyang/language-learning-player-api/pkg/httputil"
 )
 
 // UserHandler handles HTTP requests related to user profiles.

@@ -4,8 +4,8 @@ package port
 import (
 	"context"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/pkg/pagination"
 )
 
 // --- Repository Interfaces ---

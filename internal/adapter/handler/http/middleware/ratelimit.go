@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/pkg/httputil"
 	"golang.org/x/time/rate"
 )
 

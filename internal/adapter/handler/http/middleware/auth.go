@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path (for SecurityHelper interface)
-	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"    // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/internal/domain" // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/internal/port"   // Adjust import path (for SecurityHelper interface)
+	"github.com/yvanyang/language-learning-player-api/pkg/httputil"    // Adjust import path
 )
 
 const UserIDKey httputil.ContextKey = "userID" // Use httputil.ContextKey type

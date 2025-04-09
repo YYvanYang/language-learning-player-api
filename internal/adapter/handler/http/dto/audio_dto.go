@@ -4,8 +4,8 @@ package dto
 import (
 	"time"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/internal/port" // Import port for result struct
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/internal/port" // Import port for result struct
 )
 
 // --- Request DTOs ---

@@ -9,8 +9,8 @@ import (
 	// Use the official Google idtoken verifier
 	"google.golang.org/api/idtoken"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/internal/domain" // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/internal/port"   // Adjust import path
 )
 
 // GoogleAuthService implements the port.ExternalAuthService interface for Google.
@@ -56,10 +56,10 @@ func (s *GoogleAuthService) VerifyGoogleToken(ctx context.Context, idToken strin
 		return nil, fmt.Errorf("%w: missing required user identifier in token", domain.ErrAuthenticationFailed)
 	}
 
-	email, _ := payload.Claims["email"].(string) // Email claim
+	email, _ := payload.Claims["email"].(string)                // Email claim
 	emailVerified, _ := payload.Claims["email_verified"].(bool) // Email verified claim
-	name, _ := payload.Claims["name"].(string) // Name claim
-	picture, _ := payload.Claims["picture"].(string) // Picture URL claim
+	name, _ := payload.Claims["name"].(string)                  // Name claim
+	picture, _ := payload.Claims["picture"].(string)            // Picture URL claim
 
 	// Basic check: ensure we have at least an email if email_verified is true
 	if emailVerified && email == "" {
@@ -70,7 +70,6 @@ func (s *GoogleAuthService) VerifyGoogleToken(ctx context.Context, idToken strin
 	// If email is not verified by Google, maybe we shouldn't trust it for login/registration?
 	// Current policy: Use the email regardless, but store the verification status.
 	// Consider enforcing emailVerified == true if needed.
-
 
 	s.logger.InfoContext(ctx, "Google ID token verified successfully", "subject", userID, "email", email)
 

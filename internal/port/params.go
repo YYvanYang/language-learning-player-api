@@ -2,8 +2,8 @@
 package port
 
 import (
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/pkg/pagination"
 )
 
 // === Use Case Layer Parameter Structs ===
@@ -12,15 +12,15 @@ import (
 // It embeds pagination.Page.
 // RENAMED from ListTracksParams to avoid conflict with repository params.
 type UseCaseListTracksParams struct {
-	Query         *string           // Search query (title, description, maybe tags)
-	LanguageCode  *string           // Filter by language code
-	Level         *domain.AudioLevel// Filter by level
-	IsPublic      *bool             // Filter by public status
-	UploaderID    *domain.UserID    // Filter by uploader
-	Tags          []string          // Filter by tags (match any)
-	SortBy        string            // e.g., "createdAt", "title", "duration"
-	SortDirection string            // "asc" or "desc"
-	Page          pagination.Page   // Embed pagination parameters
+	Query         *string            // Search query (title, description, maybe tags)
+	LanguageCode  *string            // Filter by language code
+	Level         *domain.AudioLevel // Filter by level
+	IsPublic      *bool              // Filter by public status
+	UploaderID    *domain.UserID     // Filter by uploader
+	Tags          []string           // Filter by tags (match any)
+	SortBy        string             // e.g., "createdAt", "title", "duration"
+	SortDirection string             // "asc" or "desc"
+	Page          pagination.Page    // Embed pagination parameters
 }
 
 // ListProgressParams defines parameters for listing user progress at the use case layer.

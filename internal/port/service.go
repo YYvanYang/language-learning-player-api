@@ -4,7 +4,8 @@ package port
 import (
 	"context"
 	"time"
-	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
+
+	"github.com/yvanyang/language-learning-player-api/internal/domain" // Adjust import path
 )
 
 // --- External Service Interfaces ---
@@ -32,7 +33,7 @@ type ExternalUserInfo struct {
 	Email           string              // Email address provided by the provider
 	IsEmailVerified bool                // Whether the provider claims the email is verified
 	Name            string
-	PictureURL      *string             // Optional profile picture URL
+	PictureURL      *string // Optional profile picture URL
 }
 
 // ExternalAuthService defines the contract for verifying external authentication credentials.
@@ -44,22 +45,21 @@ type ExternalAuthService interface {
 	// Add methods for other providers if needed (e.g., VerifyFacebookToken, VerifyAppleToken)
 }
 
-
 // --- Internal Helper Service Interfaces ---
 
 // SecurityHelper defines cryptographic operations needed by use cases.
 type SecurityHelper interface {
-	 // HashPassword generates a secure hash (e.g., bcrypt) of the password.
-	 HashPassword(ctx context.Context, password string) (string, error)
-	 // CheckPasswordHash compares a plain password with a stored hash.
-	 CheckPasswordHash(ctx context.Context, password, hash string) bool
-	 // GenerateJWT creates a signed JWT (Access Token) for the given user ID.
-	 GenerateJWT(ctx context.Context, userID domain.UserID, duration time.Duration) (string, error)
-	 // VerifyJWT validates a JWT string and returns the UserID contained within.
-	 // Returns domain.ErrUnauthenticated or domain.ErrAuthenticationFailed on failure.
-	 VerifyJWT(ctx context.Context, tokenString string) (domain.UserID, error)
+	// HashPassword generates a secure hash (e.g., bcrypt) of the password.
+	HashPassword(ctx context.Context, password string) (string, error)
+	// CheckPasswordHash compares a plain password with a stored hash.
+	CheckPasswordHash(ctx context.Context, password, hash string) bool
+	// GenerateJWT creates a signed JWT (Access Token) for the given user ID.
+	GenerateJWT(ctx context.Context, userID domain.UserID, duration time.Duration) (string, error)
+	// VerifyJWT validates a JWT string and returns the UserID contained within.
+	// Returns domain.ErrUnauthenticated or domain.ErrAuthenticationFailed on failure.
+	VerifyJWT(ctx context.Context, tokenString string) (domain.UserID, error)
 
-	 // TODO: Add methods for Refresh Token generation/validation if implementing that flow.
+	// TODO: Add methods for Refresh Token generation/validation if implementing that flow.
 }
 
 // REMOVED UserUseCase interface from here

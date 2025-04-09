@@ -9,11 +9,11 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware"
-	"github.com/yvanyang/language-learning-player-backend/internal/config"
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/internal/port"
-	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"
+	"github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http/middleware"
+	"github.com/yvanyang/language-learning-player-api/internal/config"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/internal/port"
+	"github.com/yvanyang/language-learning-player-api/pkg/pagination"
 )
 
 // AudioContentUseCase handles business logic related to audio tracks and collections.

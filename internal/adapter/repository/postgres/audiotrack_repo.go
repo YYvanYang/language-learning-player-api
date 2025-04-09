@@ -15,9 +15,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lib/pq" // Using lib/pq for array handling with pgx and error codes
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/internal/port"
-	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/internal/port"
+	"github.com/yvanyang/language-learning-player-api/pkg/pagination"
 )
 
 type AudioTrackRepository struct {

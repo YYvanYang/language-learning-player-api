@@ -3,8 +3,9 @@ package mocks
 
 import (
 	"context"
-	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust
+
 	"github.com/stretchr/testify/mock"
+	"github.com/yvanyang/language-learning-player-api/internal/domain" // Adjust
 )
 
 // MockUserRepository is a mock type for the UserRepository type
@@ -38,7 +39,9 @@ func (_m *MockUserRepository) FindByEmail(ctx context.Context, email domain.Emai
 	// ... (similar pattern for return values) ...
 	// Simplified:
 	var r0 *domain.User
-	if ret.Get(0) != nil { r0 = ret.Get(0).(*domain.User)}
+	if ret.Get(0) != nil {
+		r0 = ret.Get(0).(*domain.User)
+	}
 	var r1 error = ret.Error(1)
 	return r0, r1
 }
@@ -48,7 +51,9 @@ func (_m *MockUserRepository) FindByProviderID(ctx context.Context, provider dom
 	ret := _m.Called(ctx, provider, providerUserID)
 	// ... (similar pattern) ...
 	var r0 *domain.User
-	if ret.Get(0) != nil { r0 = ret.Get(0).(*domain.User)}
+	if ret.Get(0) != nil {
+		r0 = ret.Get(0).(*domain.User)
+	}
 	var r1 error = ret.Error(1)
 	return r0, r1
 }

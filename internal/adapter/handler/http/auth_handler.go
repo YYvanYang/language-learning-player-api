@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain" 
-	"github.com/yvanyang/language-learning-player-backend/internal/port"   
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/dto" 
-	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"    
-	"github.com/yvanyang/language-learning-player-backend/pkg/validation"  
+	"github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http/dto"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/internal/port"
+	"github.com/yvanyang/language-learning-player-api/pkg/httputil"
+	"github.com/yvanyang/language-learning-player-api/pkg/validation"
 )
 
 // AuthHandler handles HTTP requests related to authentication.

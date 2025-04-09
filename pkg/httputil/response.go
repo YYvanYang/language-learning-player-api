@@ -11,8 +11,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/pkg/apierrors"   // Import the new package
+	"github.com/yvanyang/language-learning-player-api/internal/domain" // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/pkg/apierrors"   // Import the new package
 )
 
 // ContextKey is a custom type for context keys to avoid collisions.

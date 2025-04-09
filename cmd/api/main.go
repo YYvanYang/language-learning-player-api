@@ -1,5 +1,5 @@
 // ============================================
-// FILE: cmd/api/main.go (MODIFIED)
+// FILE: cmd/api/main.go
 // ============================================
 package main
 
@@ -20,17 +20,17 @@ import (
 	httpSwagger "github.com/swaggo/http-swagger"
 	"golang.org/x/time/rate"
 
-	_ "github.com/yvanyang/language-learning-player-backend/docs"                                    // Keep this - Import generated docs
-	httpadapter "github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http" // Alias for http handler package
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware"  // Adjust import path for our custom middleware
-	repo "github.com/yvanyang/language-learning-player-backend/internal/adapter/repository/postgres" // Alias for postgres repo package
-	googleauthadapter "github.com/yvanyang/language-learning-player-backend/internal/adapter/service/google_auth"
-	minioadapter "github.com/yvanyang/language-learning-player-backend/internal/adapter/service/minio"
-	"github.com/yvanyang/language-learning-player-backend/internal/config"     // Adjust import path
-	uc "github.com/yvanyang/language-learning-player-backend/internal/usecase" // Alias usecase package if needed elsewhere
-	"github.com/yvanyang/language-learning-player-backend/pkg/logger"          // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/pkg/security"
-	"github.com/yvanyang/language-learning-player-backend/pkg/validation"
+	_ "github.com/yvanyang/language-learning-player-api/docs"                                    // Keep this - Import generated docs
+	httpadapter "github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http" // Alias for http handler package
+	"github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http/middleware"  // Adjust import path for our custom middleware
+	repo "github.com/yvanyang/language-learning-player-api/internal/adapter/repository/postgres" // Alias for postgres repo package
+	googleauthadapter "github.com/yvanyang/language-learning-player-api/internal/adapter/service/google_auth"
+	minioadapter "github.com/yvanyang/language-learning-player-api/internal/adapter/service/minio"
+	"github.com/yvanyang/language-learning-player-api/internal/config"     // Adjust import path
+	uc "github.com/yvanyang/language-learning-player-api/internal/usecase" // Alias usecase package if needed elsewhere
+	"github.com/yvanyang/language-learning-player-api/pkg/logger"          // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/pkg/security"
+	"github.com/yvanyang/language-learning-player-api/pkg/validation"
 )
 
 // @title Language Learning Audio Player API

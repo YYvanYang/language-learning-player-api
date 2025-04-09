@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 	"runtime/debug"
-	
-	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"
+
+	"github.com/yvanyang/language-learning-player-api/pkg/httputil"
 )
 
 // Recoverer is a middleware that recovers from panics, logs the panic,

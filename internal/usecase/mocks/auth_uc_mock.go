@@ -3,9 +3,9 @@ package mocks
 
 import (
 	"context"
-	
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
+
 	"github.com/stretchr/testify/mock"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
 )
 
 // MockAuthUseCase is a mock implementation of the AuthUseCase interface
@@ -21,12 +21,12 @@ func NewMockAuthUseCase(t interface{}) *MockAuthUseCase {
 // RegisterWithPassword is a mock implementation of the RegisterWithPassword method
 func (m *MockAuthUseCase) RegisterWithPassword(ctx context.Context, emailStr, password, name string) (*domain.User, string, error) {
 	args := m.Called(ctx, emailStr, password, name)
-	
+
 	var user *domain.User
 	if args.Get(0) != nil {
 		user = args.Get(0).(*domain.User)
 	}
-	
+
 	return user, args.String(1), args.Error(2)
 }
 
@@ -40,4 +40,4 @@ func (m *MockAuthUseCase) LoginWithPassword(ctx context.Context, emailStr, passw
 func (m *MockAuthUseCase) AuthenticateWithGoogle(ctx context.Context, googleIDToken string) (string, bool, error) {
 	args := m.Called(ctx, googleIDToken)
 	return args.String(0), args.Bool(1), args.Error(2)
-} 
+}

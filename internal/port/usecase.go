@@ -5,8 +5,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/pkg/pagination"
 )
 
 // AuthUseCase defines the methods for the Auth use case layer.

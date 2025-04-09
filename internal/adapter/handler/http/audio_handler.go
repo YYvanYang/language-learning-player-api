@@ -10,12 +10,12 @@ import (
 	"strings" // Import strings
 
 	"github.com/go-chi/chi/v5"
-	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/dto" // Import for GetUserIDFromContext
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/internal/port"
-	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"
-	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"
-	"github.com/yvanyang/language-learning-player-backend/pkg/validation"
+	"github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http/dto" // Import for GetUserIDFromContext
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/internal/port"
+	"github.com/yvanyang/language-learning-player-api/pkg/httputil"
+	"github.com/yvanyang/language-learning-player-api/pkg/pagination"
+	"github.com/yvanyang/language-learning-player-api/pkg/validation"
 )
 
 // AudioHandler handles HTTP requests related to audio tracks and collections.

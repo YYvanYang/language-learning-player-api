@@ -11,16 +11,16 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/config" // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/internal/config" // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/internal/port"   // Adjust import path
 )
 
 // MinioStorageService implements the port.FileStorageService interface using MinIO.
 type MinioStorageService struct {
-	client         *minio.Client
-	defaultBucket  string
-	defaultExpiry  time.Duration
-	logger         *slog.Logger
+	client        *minio.Client
+	defaultBucket string
+	defaultExpiry time.Duration
+	logger        *slog.Logger
 }
 
 // NewMinioStorageService creates a new MinioStorageService.
@@ -62,12 +62,11 @@ func NewMinioStorageService(cfg config.MinioConfig, logger *slog.Logger) (*Minio
 		log.Info("MinIO bucket found", "bucket", cfg.BucketName)
 	}
 
-
 	return &MinioStorageService{
-		client:         minioClient,
-		defaultBucket:  cfg.BucketName,
-		defaultExpiry:  cfg.PresignExpiry, // Use expiry from config
-		logger:         log,
+		client:        minioClient,
+		defaultBucket: cfg.BucketName,
+		defaultExpiry: cfg.PresignExpiry, // Use expiry from config
+		logger:        log,
 	}, nil
 }
 
@@ -95,68 +94,66 @@ func (s *MinioStorageService) GetPresignedGetURL(ctx context.Context, bucket, ob
 	return presignedURL.String(), nil
 }
 
-
 // DeleteObject removes an object from MinIO storage.
 func (s *MinioStorageService) DeleteObject(ctx context.Context, bucket, objectKey string) error {
-	 if bucket == "" {
-		 bucket = s.defaultBucket
-	 }
+	if bucket == "" {
+		bucket = s.defaultBucket
+	}
 
-	 opts := minio.RemoveObjectOptions{
-		 // GovernanceBypass: true, // Set to true to bypass object retention locks if configured
-	 }
+	opts := minio.RemoveObjectOptions{
+		// GovernanceBypass: true, // Set to true to bypass object retention locks if configured
+	}
 
-	 err := s.client.RemoveObject(ctx, bucket, objectKey, opts)
-	 if err != nil {
-		 s.logger.ErrorContext(ctx, "Failed to delete object from MinIO", "error", err, "bucket", bucket, "key", objectKey)
-		 // Check if the error indicates the object wasn't found - might not be a fatal error depending on use case
-		 // errResp := minio.ToErrorResponse(err)
-		 // if errResp.Code == "NoSuchKey" { return nil } // Example: treat not found as success
-		 return fmt.Errorf("failed to delete object %s/%s: %w", bucket, objectKey, err)
-	 }
+	err := s.client.RemoveObject(ctx, bucket, objectKey, opts)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to delete object from MinIO", "error", err, "bucket", bucket, "key", objectKey)
+		// Check if the error indicates the object wasn't found - might not be a fatal error depending on use case
+		// errResp := minio.ToErrorResponse(err)
+		// if errResp.Code == "NoSuchKey" { return nil } // Example: treat not found as success
+		return fmt.Errorf("failed to delete object %s/%s: %w", bucket, objectKey, err)
+	}
 
-	 s.logger.InfoContext(ctx, "Deleted object from MinIO", "bucket", bucket, "key", objectKey)
-	 return nil
+	s.logger.InfoContext(ctx, "Deleted object from MinIO", "bucket", bucket, "key", objectKey)
+	return nil
 }
-
 
 // GetPresignedPutURL generates a temporary URL for uploading an object.
 func (s *MinioStorageService) GetPresignedPutURL(ctx context.Context, bucket, objectKey string, expiry time.Duration /*, opts port.PutObjectOptions? */) (string, error) {
-    if bucket == "" {
-        bucket = s.defaultBucket
-    }
-    if expiry <= 0 {
-        expiry = s.defaultExpiry
-    }
+	if bucket == "" {
+		bucket = s.defaultBucket
+	}
+	if expiry <= 0 {
+		expiry = s.defaultExpiry
+	}
 
-    // Removed unused putOpts variable
-    // putOpts := minio.PutObjectOptions{}
-    // if opts != nil && opts.ContentType != "" {
-    //     putOpts.ContentType = opts.ContentType
-    // }
+	// Removed unused putOpts variable
+	// putOpts := minio.PutObjectOptions{}
+	// if opts != nil && opts.ContentType != "" {
+	//     putOpts.ContentType = opts.ContentType
+	// }
 
-    // Note: PresignedPutObject might require url.Values for certain headers like content-type constraints
-    // Check minio-go SDK documentation for the exact way to enforce Content-Type if needed.
-    // Example (conceptual, check SDK):
-     policy := minio.NewPostPolicy()
-     policy.SetBucket(bucket)
-     policy.SetKey(objectKey)
-     policy.SetExpires(time.Now().UTC().Add(expiry))
-     // if opts != nil && opts.ContentType != "" {
-     //    policy.SetContentType(opts.ContentType)
-     // }
-     // presignedURL, err := s.client.PresignedPostPolicy(ctx, policy) // For POST uploads
-     // OR use PresignedPutObject directly, potentially setting headers via request parameters
+	// Note: PresignedPutObject might require url.Values for certain headers like content-type constraints
+	// Check minio-go SDK documentation for the exact way to enforce Content-Type if needed.
+	// Example (conceptual, check SDK):
+	policy := minio.NewPostPolicy()
+	policy.SetBucket(bucket)
+	policy.SetKey(objectKey)
+	policy.SetExpires(time.Now().UTC().Add(expiry))
+	// if opts != nil && opts.ContentType != "" {
+	//    policy.SetContentType(opts.ContentType)
+	// }
+	// presignedURL, err := s.client.PresignedPostPolicy(ctx, policy) // For POST uploads
+	// OR use PresignedPutObject directly, potentially setting headers via request parameters
 
-    // Simpler version using PresignedPutObject without strict header enforcement in signature itself:
-     presignedURL, err := s.client.PresignedPutObject(ctx, bucket, objectKey, expiry)
-    if err != nil {
-        s.logger.ErrorContext(ctx, "Failed to generate presigned PUT URL", "error", err, "bucket", bucket, "key", objectKey)
-        return "", fmt.Errorf("failed to get presigned PUT URL for %s/%s: %w", bucket, objectKey, err)
-    }
+	// Simpler version using PresignedPutObject without strict header enforcement in signature itself:
+	presignedURL, err := s.client.PresignedPutObject(ctx, bucket, objectKey, expiry)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "Failed to generate presigned PUT URL", "error", err, "bucket", bucket, "key", objectKey)
+		return "", fmt.Errorf("failed to get presigned PUT URL for %s/%s: %w", bucket, objectKey, err)
+	}
 
-    s.logger.DebugContext(ctx, "Generated presigned PUT URL", "bucket", bucket, "key", objectKey, "expiry", expiry)
-    return presignedURL.String(), nil
+	s.logger.DebugContext(ctx, "Generated presigned PUT URL", "bucket", bucket, "key", objectKey, "expiry", expiry)
+	return presignedURL.String(), nil
 }
 
 // Compile-time check to ensure MinioStorageService satisfies the port.FileStorageService interface

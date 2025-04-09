@@ -13,8 +13,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn" // Import pgconn for PgError
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/internal/domain" // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/internal/port"   // Adjust import path
 )
 
 type UserRepository struct {

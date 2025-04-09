@@ -4,7 +4,7 @@ package dto
 import (
 	"time"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/internal/domain" // Adjust import path
 )
 
 // UserResponseDTO defines the JSON representation of a user profile.

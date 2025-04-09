@@ -4,7 +4,7 @@ package dto
 import (
 	"time"
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
 )
 
 // --- Request DTOs ---
