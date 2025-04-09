@@ -321,12 +321,16 @@ block-beta
     USECASE -- "depends on" --> PORTS
 
     %% Adapter Implementation & Interaction
-    HTTP_HANDLER -- "calls" --> USECASE %% Shows input adapter interaction
+    %% Shows input adapter interaction
+    HTTP_HANDLER -- "calls" --> USECASE 
 
-    POSTGRES_REPO -- "implements/calls" --> PORTS %% Represents implementing repo interfaces defined in Ports
-    MINIO_SVC -- "implements/calls" --> PORTS     %% Represents implementing service interfaces defined in Ports
+    %% Represents implementing repo interfaces defined in Ports
+    POSTGRES_REPO -- "implements/calls" --> PORTS 
+    %% Represents implementing service interfaces defined in Ports
+    MINIO_SVC -- "implements/calls" --> PORTS     
     GOOGLE_AUTH_ADAPTER -- "implements/calls" --> PORTS
-    TX_MGR -- "implements" --> PORTS %% If TxManager interface is in Ports
+    %% If TxManager interface is in Ports
+    TX_MGR -- "implements" --> PORTS 
 
     POSTGRES_REPO -- "interacts" --> DB
     MINIO_SVC -- "interacts" --> MINIO
