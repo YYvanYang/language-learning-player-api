@@ -13,7 +13,6 @@ definitions:
       title:
         type: string
       tracks:
-        description: Include full track details if needed by frontend
         items:
           $ref: '#/definitions/dto.AudioTrackResponseDTO'
         type: array
@@ -27,12 +26,11 @@ definitions:
       coverImageUrl:
         type: string
       createdAt:
-        description: Use time.Time, will marshal to RFC3339
         type: string
       description:
         type: string
       durationMs:
-        description: 'CORRECTED: Use milliseconds'
+        description: 'Point 1: Use milliseconds (int64)'
         type: integer
       id:
         type: string
@@ -41,7 +39,6 @@ definitions:
       languageCode:
         type: string
       level:
-        description: Domain type maps to string here
         type: string
       playUrl:
         description: Presigned URL
@@ -55,20 +52,26 @@ definitions:
       updatedAt:
         type: string
       uploaderId:
-        description: Use string UUID
         type: string
+      userBookmarks:
+        description: Array of user bookmarks for this track
+        items:
+          $ref: '#/definitions/dto.BookmarkDTO'
+        type: array
+      userProgressMs:
+        description: 'Point 1: User progress in ms'
+        type: integer
     type: object
   dto.AudioTrackResponseDTO:
     properties:
       coverImageUrl:
         type: string
       createdAt:
-        description: Use time.Time, will marshal to RFC3339
         type: string
       description:
         type: string
       durationMs:
-        description: 'CORRECTED: Use milliseconds'
+        description: 'Point 1: Use milliseconds (int64)'
         type: integer
       id:
         type: string
@@ -77,7 +80,6 @@ definitions:
       languageCode:
         type: string
       level:
-        description: Domain type maps to string here
         type: string
       tags:
         items:
@@ -88,7 +90,6 @@ definitions:
       updatedAt:
         type: string
       uploaderId:
-        description: Use string UUID
         type: string
     type: object
   dto.AuthResponseDTO:
@@ -100,6 +101,18 @@ definitions:
         description: The JWT access token
         type: string
     type: object
+  dto.BookmarkDTO:
+    properties:
+      createdAt:
+        type: string
+      id:
+        type: string
+      note:
+        type: string
+      timestampMs:
+        description: 'Point 1: Use ms'
+        type: integer
+    type: object
   dto.BookmarkResponseDTO:
     properties:
       createdAt:
@@ -109,7 +122,7 @@ definitions:
       note:
         type: string
       timestampMs:
-        description: 'CORRECTED: Use milliseconds'
+        description: 'Point 1: Already uses ms'
         type: integer
       trackId:
         type: string
@@ -159,10 +172,9 @@ definitions:
   dto.CreateBookmarkRequestDTO:
     properties:
       note:
-        description: Optional note
         type: string
       timestampMs:
-        description: 'CORRECTED: Use milliseconds (int64)'
+        description: 'Point 1: Already uses ms'
         minimum: 0
         type: integer
       trackId:
@@ -176,7 +188,6 @@ definitions:
       description:
         type: string
       initialTrackIds:
-        description: Add validation for slice elements
         items:
           type: string
         type: array
@@ -184,7 +195,6 @@ definitions:
         maxLength: 255
         type: string
       type:
-        description: Matches domain.CollectionType
         enum:
         - COURSE
         - PLAYLIST
@@ -210,23 +220,6 @@ definitions:
     - email
     - password
     type: object
-  dto.PaginatedBookmarksResponseDTO:
-    properties:
-      data:
-        items:
-          $ref: '#/definitions/dto.BookmarkResponseDTO'
-        type: array
-      limit:
-        type: integer
-      offset:
-        type: integer
-      page:
-        type: integer
-      total:
-        type: integer
-      totalPages:
-        type: integer
-    type: object
   dto.PaginatedProgressResponseDTO:
     properties:
       data:
@@ -244,21 +237,24 @@ definitions:
       totalPages:
         type: integer
     type: object
-  dto.PaginatedTracksResponseDTO:
+  dto.PaginatedResponseDTO:
     properties:
       data:
-        items:
-          $ref: '#/definitions/dto.AudioTrackResponseDTO'
-        type: array
+        description: The slice of items for the current page (e.g., []AudioTrackResponseDTO)
       limit:
+        description: The limit used for this page
         type: integer
       offset:
+        description: The offset used for this page
         type: integer
       page:
+        description: Current page number (1-based)
         type: integer
       total:
+        description: Total number of items matching the query
         type: integer
       totalPages:
+        description: Total number of pages
         type: integer
     type: object
   dto.PlaybackProgressResponseDTO:
@@ -266,7 +262,7 @@ definitions:
       lastListenedAt:
         type: string
       progressMs:
-        description: 'CORRECTED: Use milliseconds'
+        description: 'Point 1: Already uses ms'
         type: integer
       trackId:
         type: string
@@ -276,7 +272,7 @@ definitions:
   dto.RecordProgressRequestDTO:
     properties:
       progressMs:
-        description: 'CORRECTED: Use milliseconds (int64)'
+        description: 'Point 1: Already uses ms'
         minimum: 0
         type: integer
       trackId:
@@ -339,7 +335,6 @@ definitions:
   dto.UpdateCollectionTracksRequestDTO:
     properties:
       orderedTrackIds:
-        description: Add validation
         items:
           type: string
         type: array
@@ -666,7 +661,14 @@ paths:
         "200":
           description: Paginated list of audio tracks
           schema:
-            $ref: '#/definitions/dto.PaginatedTracksResponseDTO'
+            allOf:
+            - $ref: '#/definitions/dto.PaginatedResponseDTO'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/dto.AudioTrackResponseDTO'
+                  type: array
+              type: object
         "400":
           description: Invalid Query Parameter Format
           schema:
@@ -723,8 +725,8 @@ paths:
       - Uploads
   /audio/tracks/{trackId}:
     get:
-      description: Retrieves details for a specific audio track, including metadata
-        and a temporary playback URL.
+      description: Retrieves details for a specific audio track, including metadata,
+        playback URL, and user-specific progress/bookmarks if authenticated.
       operationId: get-track-details
       parameters:
       - description: Audio Track UUID
@@ -744,6 +746,10 @@ paths:
           description: Invalid Track ID Format
           schema:
             $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "401":
+          description: Unauthorized (if accessing private track without auth)
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
         "404":
           description: Track Not Found
           schema:
@@ -752,6 +758,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/httputil.ErrorResponseDTO'
+      security:
+      - 'BearerAuth // Optional: Indicate that auth affects the response (user data)': []
       summary: Get audio track details
       tags:
       - Audio Tracks
@@ -898,7 +906,14 @@ paths:
         "200":
           description: Paginated list of bookmarks (timestampMs in milliseconds)
           schema:
-            $ref: '#/definitions/dto.PaginatedBookmarksResponseDTO'
+            allOf:
+            - $ref: '#/definitions/dto.PaginatedResponseDTO'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/dto.BookmarkResponseDTO'
+                  type: array
+              type: object
         "400":
           description: Invalid Track ID Format (if provided)
           schema:

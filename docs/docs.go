@@ -429,7 +429,22 @@ const docTemplate = `{
                     "200": {
                         "description": "Paginated list of audio tracks",
                         "schema": {
-                            "$ref": "#/definitions/dto.PaginatedTracksResponseDTO"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/dto.PaginatedResponseDTO"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/dto.AudioTrackResponseDTO"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -511,7 +526,12 @@ const docTemplate = `{
         },
         "/audio/tracks/{trackId}": {
             "get": {
-                "description": "Retrieves details for a specific audio track, including metadata and a temporary playback URL.",
+                "security": [
+                    {
+                        "BearerAuth // Optional: Indicate that auth affects the response (user data)": []
+                    }
+                ],
+                "description": "Retrieves details for a specific audio track, including metadata, playback URL, and user-specific progress/bookmarks if authenticated.",
                 "produces": [
                     "application/json"
                 ],
@@ -539,6 +559,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Invalid Track ID Format",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized (if accessing private track without auth)",
                         "schema": {
                             "$ref": "#/definitions/httputil.ErrorResponseDTO"
                         }
@@ -769,7 +795,22 @@ const docTemplate = `{
                     "200": {
                         "description": "Paginated list of bookmarks (timestampMs in milliseconds)",
                         "schema": {
-                            "$ref": "#/definitions/dto.PaginatedBookmarksResponseDTO"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/dto.PaginatedResponseDTO"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/dto.BookmarkResponseDTO"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -1211,7 +1252,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "tracks": {
-                    "description": "Include full track details if needed by frontend",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/dto.AudioTrackResponseDTO"
@@ -1232,14 +1272,13 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "createdAt": {
-                    "description": "Use time.Time, will marshal to RFC3339",
                     "type": "string"
                 },
                 "description": {
                     "type": "string"
                 },
                 "durationMs": {
-                    "description": "CORRECTED: Use milliseconds",
+                    "description": "Point 1: Use milliseconds (int64)",
                     "type": "integer"
                 },
                 "id": {
@@ -1252,7 +1291,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "level": {
-                    "description": "Domain type maps to string here",
                     "type": "string"
                 },
                 "playUrl": {
@@ -1272,8 +1310,18 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "uploaderId": {
-                    "description": "Use string UUID",
                     "type": "string"
+                },
+                "userBookmarks": {
+                    "description": "Array of user bookmarks for this track",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.BookmarkDTO"
+                    }
+                },
+                "userProgressMs": {
+                    "description": "Point 1: User progress in ms",
+                    "type": "integer"
                 }
             }
         },
@@ -1284,14 +1332,13 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "createdAt": {
-                    "description": "Use time.Time, will marshal to RFC3339",
                     "type": "string"
                 },
                 "description": {
                     "type": "string"
                 },
                 "durationMs": {
-                    "description": "CORRECTED: Use milliseconds",
+                    "description": "Point 1: Use milliseconds (int64)",
                     "type": "integer"
                 },
                 "id": {
@@ -1304,7 +1351,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "level": {
-                    "description": "Domain type maps to string here",
                     "type": "string"
                 },
                 "tags": {
@@ -1320,7 +1366,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "uploaderId": {
-                    "description": "Use string UUID",
                     "type": "string"
                 }
             }
@@ -1338,6 +1383,24 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.BookmarkDTO": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "timestampMs": {
+                    "description": "Point 1: Use ms",
+                    "type": "integer"
+                }
+            }
+        },
         "dto.BookmarkResponseDTO": {
             "type": "object",
             "properties": {
@@ -1351,7 +1414,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "timestampMs": {
-                    "description": "CORRECTED: Use milliseconds",
+                    "description": "Point 1: Already uses ms",
                     "type": "integer"
                 },
                 "trackId": {
@@ -1424,11 +1487,10 @@ const docTemplate = `{
             ],
             "properties": {
                 "note": {
-                    "description": "Optional note",
                     "type": "string"
                 },
                 "timestampMs": {
-                    "description": "CORRECTED: Use milliseconds (int64)",
+                    "description": "Point 1: Already uses ms",
                     "type": "integer",
                     "minimum": 0
                 },
@@ -1448,7 +1510,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "initialTrackIds": {
-                    "description": "Add validation for slice elements",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -1459,7 +1520,6 @@ const docTemplate = `{
                     "maxLength": 255
                 },
                 "type": {
-                    "description": "Matches domain.CollectionType",
                     "type": "string",
                     "enum": [
                         "COURSE",
@@ -1494,32 +1554,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.PaginatedBookmarksResponseDTO": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.BookmarkResponseDTO"
-                    }
-                },
-                "limit": {
-                    "type": "integer"
-                },
-                "offset": {
-                    "type": "integer"
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                },
-                "totalPages": {
-                    "type": "integer"
-                }
-            }
-        },
         "dto.PaginatedProgressResponseDTO": {
             "type": "object",
             "properties": {
@@ -1546,28 +1580,30 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.PaginatedTracksResponseDTO": {
+        "dto.PaginatedResponseDTO": {
             "type": "object",
             "properties": {
                 "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.AudioTrackResponseDTO"
-                    }
+                    "description": "The slice of items for the current page (e.g., []AudioTrackResponseDTO)"
                 },
                 "limit": {
+                    "description": "The limit used for this page",
                     "type": "integer"
                 },
                 "offset": {
+                    "description": "The offset used for this page",
                     "type": "integer"
                 },
                 "page": {
+                    "description": "Current page number (1-based)",
                     "type": "integer"
                 },
                 "total": {
+                    "description": "Total number of items matching the query",
                     "type": "integer"
                 },
                 "totalPages": {
+                    "description": "Total number of pages",
                     "type": "integer"
                 }
             }
@@ -1579,7 +1615,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "progressMs": {
-                    "description": "CORRECTED: Use milliseconds",
+                    "description": "Point 1: Already uses ms",
                     "type": "integer"
                 },
                 "trackId": {
@@ -1598,7 +1634,7 @@ const docTemplate = `{
             ],
             "properties": {
                 "progressMs": {
-                    "description": "CORRECTED: Use milliseconds (int64)",
+                    "description": "Point 1: Already uses ms",
                     "type": "integer",
                     "minimum": 0
                 },
@@ -1682,7 +1718,6 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "orderedTrackIds": {
-                    "description": "Add validation",
                     "type": "array",
                     "items": {
                         "type": "string"

@@ -12,14 +12,14 @@ import (
 // RecordProgressRequestDTO defines the JSON body for recording playback progress.
 type RecordProgressRequestDTO struct {
 	TrackID    string `json:"trackId" validate:"required,uuid"`
-	ProgressMs int64  `json:"progressMs" validate:"required,gte=0"` // CORRECTED: Use milliseconds (int64)
+	ProgressMs int64  `json:"progressMs" validate:"required,gte=0"` // Point 1: Already uses ms
 }
 
 // CreateBookmarkRequestDTO defines the JSON body for creating a bookmark.
 type CreateBookmarkRequestDTO struct {
 	TrackID     string `json:"trackId" validate:"required,uuid"`
-	TimestampMs int64  `json:"timestampMs" validate:"required,gte=0"` // CORRECTED: Use milliseconds (int64)
-	Note        string `json:"note"`                                  // Optional note
+	TimestampMs int64  `json:"timestampMs" validate:"required,gte=0"` // Point 1: Already uses ms
+	Note        string `json:"note"`
 }
 
 // --- Response DTOs ---
@@ -28,54 +28,60 @@ type CreateBookmarkRequestDTO struct {
 type PlaybackProgressResponseDTO struct {
 	UserID         string    `json:"userId"`
 	TrackID        string    `json:"trackId"`
-	ProgressMs     int64     `json:"progressMs"` // CORRECTED: Use milliseconds
+	ProgressMs     int64     `json:"progressMs"` // Point 1: Already uses ms
 	LastListenedAt time.Time `json:"lastListenedAt"`
 }
 
-// MapDomainProgressToResponseDTO converts domain progress to DTO.
+// Point 1: MapDomainProgressToResponseDTO converts domain progress (with time.Duration) to DTO (with int64 ms).
 func MapDomainProgressToResponseDTO(p *domain.PlaybackProgress) PlaybackProgressResponseDTO {
+	if p == nil {
+		return PlaybackProgressResponseDTO{}
+	} // Handle nil gracefully
 	return PlaybackProgressResponseDTO{
 		UserID:         p.UserID.String(),
 		TrackID:        p.TrackID.String(),
-		ProgressMs:     p.Progress.Milliseconds(), // CORRECTED: Get milliseconds
+		ProgressMs:     p.Progress.Milliseconds(), // Convert duration to ms
 		LastListenedAt: p.LastListenedAt,
 	}
 }
 
 // BookmarkResponseDTO defines the JSON representation of a bookmark.
+// NOTE: Also defined in audio_dto.go for embedding. Ensure consistency.
 type BookmarkResponseDTO struct {
 	ID          string    `json:"id"`
 	UserID      string    `json:"userId"`
 	TrackID     string    `json:"trackId"`
-	TimestampMs int64     `json:"timestampMs"` // CORRECTED: Use milliseconds
+	TimestampMs int64     `json:"timestampMs"` // Point 1: Already uses ms
 	Note        string    `json:"note,omitempty"`
 	CreatedAt   time.Time `json:"createdAt"`
 }
 
-// MapDomainBookmarkToResponseDTO converts domain bookmark to DTO.
+// Point 1: MapDomainBookmarkToResponseDTO converts domain bookmark (with time.Duration) to DTO (with int64 ms).
 func MapDomainBookmarkToResponseDTO(b *domain.Bookmark) BookmarkResponseDTO {
+	if b == nil {
+		return BookmarkResponseDTO{}
+	} // Handle nil gracefully
 	return BookmarkResponseDTO{
 		ID:          b.ID.String(),
 		UserID:      b.UserID.String(),
 		TrackID:     b.TrackID.String(),
-		TimestampMs: b.Timestamp.Milliseconds(), // CORRECTED: Get milliseconds
+		TimestampMs: b.Timestamp.Milliseconds(), // Convert duration to ms
 		Note:        b.Note,
 		CreatedAt:   b.CreatedAt,
 	}
 }
 
-// --- Paginated Response DTOs (using generic one now) ---
-// Keep these structs defined if you intend to use them in Swagger or for type safety,
-// even if the actual response uses the generic common_dto.PaginatedResponseDTO.
+// --- Paginated Response DTOs ---
+// Use common_dto.PaginatedResponseDTO instead, these are just for documentation/structure reference
 
 // PaginatedProgressResponseDTO defines the paginated response for progress list.
 type PaginatedProgressResponseDTO struct {
 	Data       []PlaybackProgressResponseDTO `json:"data"`
-	Total      int                         `json:"total"`
-	Limit      int                         `json:"limit"`
-	Offset     int                         `json:"offset"`
-	Page       int                         `json:"page"`
-	TotalPages int                         `json:"totalPages"`
+	Total      int                           `json:"total"`
+	Limit      int                           `json:"limit"`
+	Offset     int                           `json:"offset"`
+	Page       int                           `json:"page"`
+	TotalPages int                           `json:"totalPages"`
 }
 
 // PaginatedBookmarksResponseDTO defines the paginated response for bookmark list.

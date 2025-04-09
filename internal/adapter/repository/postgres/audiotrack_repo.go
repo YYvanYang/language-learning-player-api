@@ -9,21 +9,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lib/pq" // Using lib/pq for array handling with pgx and error codes
-	"github.com/google/uuid" // For uuid.NullUUID
 
-	"github.com/yvanyang/language-learning-player-backend/internal/domain" // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/internal/port"   // Adjust import path
-	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"                       // Import pagination
+	"github.com/yvanyang/language-learning-player-backend/internal/domain"
+	"github.com/yvanyang/language-learning-player-backend/internal/port"
+	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"
 )
 
 type AudioTrackRepository struct {
-	db     *pgxpool.Pool
-	logger *slog.Logger
-	// Use Querier interface to work with both pool and transaction
+	db         *pgxpool.Pool
+	logger     *slog.Logger
 	getQuerier func(ctx context.Context) Querier
 }
 
@@ -33,7 +32,7 @@ func NewAudioTrackRepository(db *pgxpool.Pool, logger *slog.Logger) *AudioTrackR
 		logger: logger.With("repository", "AudioTrackRepository"),
 	}
 	repo.getQuerier = func(ctx context.Context) Querier {
-		return getQuerier(ctx, repo.db) // Use the helper defined in tx_manager.go or here
+		return getQuerier(ctx, repo.db)
 	}
 	return repo
 }
@@ -54,15 +53,15 @@ func (r *AudioTrackRepository) Create(ctx context.Context, track *domain.AudioTr
 		track.ID,
 		track.Title,
 		track.Description,
-		track.Language.Code(),      // Use code from Language VO
-		track.Level,                // Use AudioLevel directly (string)
-		track.Duration.Milliseconds(), // CORRECTED: Store as milliseconds BIGINT
+		track.Language.Code(),
+		track.Level,
+		track.Duration.Milliseconds(), // Point 1: Convert domain Duration to int64 ms
 		track.MinioBucket,
 		track.MinioObjectKey,
 		track.CoverImageURL,
 		track.UploaderID,
 		track.IsPublic,
-		pq.Array(track.Tags), // Use pq.Array to handle []string -> TEXT[]
+		pq.Array(track.Tags),
 		track.CreatedAt,
 		track.UpdatedAt,
 	)
@@ -95,10 +94,10 @@ func (r *AudioTrackRepository) FindByID(ctx context.Context, id domain.TrackID) 
         FROM audio_tracks
         WHERE id = $1
     `
-	track, err := r.scanTrack(ctx, q.QueryRow(ctx, query, id)) // Pass QueryRow directly
+	track, err := r.scanTrack(ctx, q.QueryRow(ctx, query, id))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, domain.ErrNotFound // Map to domain error
+			return nil, domain.ErrNotFound
 		}
 		r.logger.ErrorContext(ctx, "Error finding audio track by ID", "error", err, "trackID", id)
 		return nil, fmt.Errorf("finding audio track by ID: %w", err)
@@ -111,12 +110,10 @@ func (r *AudioTrackRepository) ListByIDs(ctx context.Context, ids []domain.Track
 	if len(ids) == 0 {
 		return []*domain.AudioTrack{}, nil
 	}
-	// Convert domain.TrackID slice to primitive UUID slice for the query parameter
 	uuidStrs := make([]string, len(ids))
 	for i, id := range ids {
 		uuidStrs[i] = id.String()
 	}
-	// REMOVED unused 'query' variable
 	querySimple := `
         SELECT id, title, description, language_code, level, duration_ms,
                minio_bucket, minio_object_key, cover_image_url, uploader_id,
@@ -124,7 +121,7 @@ func (r *AudioTrackRepository) ListByIDs(ctx context.Context, ids []domain.Track
         FROM audio_tracks
         WHERE id = ANY($1)
     `
-	rows, err := q.Query(ctx, querySimple, uuidStrs) // Use simpler query
+	rows, err := q.Query(ctx, querySimple, uuidStrs)
 	if err != nil {
 		r.logger.ErrorContext(ctx, "Error listing audio tracks by IDs", "error", err)
 		return nil, fmt.Errorf("listing audio tracks by IDs: %w", err)
@@ -143,7 +140,6 @@ func (r *AudioTrackRepository) ListByIDs(ctx context.Context, ids []domain.Track
 		r.logger.ErrorContext(ctx, "Error iterating track rows in ListByIDs", "error", err)
 		return nil, fmt.Errorf("iterating track rows: %w", err)
 	}
-	// Re-order in Go code
 	orderedTracks := make([]*domain.AudioTrack, 0, len(ids))
 	for _, id := range ids {
 		if t, ok := trackMap[id]; ok {
@@ -153,7 +149,8 @@ func (r *AudioTrackRepository) ListByIDs(ctx context.Context, ids []domain.Track
 	return orderedTracks, nil
 }
 
-func (r *AudioTrackRepository) List(ctx context.Context, params port.ListTracksParams, page pagination.Page) ([]*domain.AudioTrack, int, error) {
+// Point 5: Updated to use filters port.ListTracksFilters
+func (r *AudioTrackRepository) List(ctx context.Context, filters port.ListTracksFilters, page pagination.Page) ([]*domain.AudioTrack, int, error) {
 	q := r.getQuerier(ctx)
 	var args []interface{}
 	argID := 1
@@ -162,53 +159,62 @@ func (r *AudioTrackRepository) List(ctx context.Context, params port.ListTracksP
 	selectQuery := `SELECT id, title, description, language_code, level, duration_ms, minio_bucket, minio_object_key, cover_image_url, uploader_id, is_public, tags, created_at, updated_at ` + baseQuery
 	whereClause := " WHERE 1=1"
 
-	if params.Query != nil && *params.Query != "" {
+	// Apply filters from ListTracksFilters
+	if filters.Query != nil && *filters.Query != "" {
 		whereClause += fmt.Sprintf(" AND (title ILIKE $%d OR description ILIKE $%d)", argID, argID)
-		args = append(args, "%"+*params.Query+"%")
+		args = append(args, "%"+*filters.Query+"%")
 		argID++
 	}
-	if params.LanguageCode != nil && *params.LanguageCode != "" {
+	if filters.LanguageCode != nil && *filters.LanguageCode != "" {
 		whereClause += fmt.Sprintf(" AND language_code = $%d", argID)
-		args = append(args, *params.LanguageCode)
+		args = append(args, *filters.LanguageCode)
 		argID++
 	}
-	if params.Level != nil && *params.Level != "" {
+	if filters.Level != nil && *filters.Level != "" {
 		whereClause += fmt.Sprintf(" AND level = $%d", argID)
-		args = append(args, *params.Level)
+		args = append(args, *filters.Level)
 		argID++
 	}
-	if params.IsPublic != nil {
+	if filters.IsPublic != nil {
 		whereClause += fmt.Sprintf(" AND is_public = $%d", argID)
-		args = append(args, *params.IsPublic)
+		args = append(args, *filters.IsPublic)
 		argID++
 	}
-	if params.UploaderID != nil {
+	if filters.UploaderID != nil {
 		whereClause += fmt.Sprintf(" AND uploader_id = $%d", argID)
-		args = append(args, *params.UploaderID)
+		args = append(args, *filters.UploaderID)
 		argID++
 	}
-	if len(params.Tags) > 0 {
-		whereClause += fmt.Sprintf(" AND tags @> $%d", argID) // Check if array contains elements
-		args = append(args, pq.Array(params.Tags))
+	if len(filters.Tags) > 0 {
+		whereClause += fmt.Sprintf(" AND tags @> $%d", argID)
+		args = append(args, pq.Array(filters.Tags))
 		argID++
 	}
 
 	var total int
 	err := q.QueryRow(ctx, countQuery+whereClause, args...).Scan(&total)
 	if err != nil {
-		r.logger.ErrorContext(ctx, "Error counting audio tracks", "error", err, "filters", params)
+		r.logger.ErrorContext(ctx, "Error counting audio tracks", "error", err, "filters", filters)
 		return nil, 0, fmt.Errorf("counting audio tracks: %w", err)
 	}
-	if total == 0 { return []*domain.AudioTrack{}, 0, nil }
+	if total == 0 {
+		return []*domain.AudioTrack{}, 0, nil
+	}
 
-	orderByClause := " ORDER BY created_at DESC" // Default sort
-	if params.SortBy != "" {
-		allowedSorts := map[string]string{"createdAt": "created_at", "title": "title", "duration": "duration_ms", "level": "level"}
-		dbColumn, ok := allowedSorts[params.SortBy]
+	orderByClause := " ORDER BY created_at DESC"
+	if filters.SortBy != "" {
+		// Point 1 & 5: Use duration_ms for sorting if specified
+		allowedSorts := map[string]string{"createdAt": "created_at", "title": "title", "durationMs": "duration_ms", "level": "level"}
+		dbColumn, ok := allowedSorts[filters.SortBy]
 		if ok {
-			direction := " ASC"; if strings.ToLower(params.SortDirection) == "desc" { direction = " DESC" }
+			direction := " ASC"
+			if strings.ToLower(filters.SortDirection) == "desc" {
+				direction = " DESC"
+			}
 			orderByClause = fmt.Sprintf(" ORDER BY %s%s", dbColumn, direction)
-		} else { r.logger.WarnContext(ctx, "Invalid sort field requested", "sortBy", params.SortBy) }
+		} else {
+			r.logger.WarnContext(ctx, "Invalid sort field requested", "sortBy", filters.SortBy)
+		}
 	}
 	paginationClause := fmt.Sprintf(" LIMIT $%d OFFSET $%d", argID, argID+1)
 	args = append(args, page.Limit, page.Offset)
@@ -216,14 +222,17 @@ func (r *AudioTrackRepository) List(ctx context.Context, params port.ListTracksP
 
 	rows, err := q.Query(ctx, finalQuery, args...)
 	if err != nil {
-		r.logger.ErrorContext(ctx, "Error listing audio tracks", "error", err, "filters", params, "page", page)
+		r.logger.ErrorContext(ctx, "Error listing audio tracks", "error", err, "filters", filters, "page", page)
 		return nil, 0, fmt.Errorf("listing audio tracks: %w", err)
 	}
 	defer rows.Close()
 	tracks := make([]*domain.AudioTrack, 0, page.Limit)
 	for rows.Next() {
 		track, err := r.scanTrack(ctx, rows)
-		if err != nil { r.logger.ErrorContext(ctx, "Error scanning track in List", "error", err); continue }
+		if err != nil {
+			r.logger.ErrorContext(ctx, "Error scanning track in List", "error", err)
+			continue
+		}
 		tracks = append(tracks, track)
 	}
 	if err = rows.Err(); err != nil {
@@ -245,9 +254,9 @@ func (r *AudioTrackRepository) Update(ctx context.Context, track *domain.AudioTr
 	`
 	cmdTag, err := q.Exec(ctx, query,
 		track.ID, track.Title, track.Description,
-		track.Language.Code(),      // CORRECTED: Use VO code
-		track.Level,                // CORRECTED: Use domain type directly
-		track.Duration.Milliseconds(), // CORRECTED: Save milliseconds
+		track.Language.Code(),
+		track.Level,
+		track.Duration.Milliseconds(), // Point 1: Convert domain Duration to int64 ms
 		track.MinioBucket, track.MinioObjectKey, track.CoverImageURL, track.UploaderID,
 		track.IsPublic, pq.Array(track.Tags), track.UpdatedAt,
 	)
@@ -263,7 +272,9 @@ func (r *AudioTrackRepository) Update(ctx context.Context, track *domain.AudioTr
 		r.logger.ErrorContext(ctx, "Error updating audio track", "error", err, "trackID", track.ID)
 		return fmt.Errorf("updating audio track: %w", err)
 	}
-	if cmdTag.RowsAffected() == 0 { return domain.ErrNotFound }
+	if cmdTag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
 	r.logger.InfoContext(ctx, "Audio track updated successfully", "trackID", track.ID)
 	return nil
 }
@@ -276,7 +287,9 @@ func (r *AudioTrackRepository) Delete(ctx context.Context, id domain.TrackID) er
 		r.logger.ErrorContext(ctx, "Error deleting audio track", "error", err, "trackID", id)
 		return fmt.Errorf("deleting audio track: %w", err)
 	}
-	if cmdTag.RowsAffected() == 0 { return domain.ErrNotFound }
+	if cmdTag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
 	r.logger.InfoContext(ctx, "Audio track deleted successfully", "trackID", id)
 	return nil
 }
@@ -293,13 +306,12 @@ func (r *AudioTrackRepository) Exists(ctx context.Context, id domain.TrackID) (b
 	return exists, nil
 }
 
-// scanTrack scans a single row into a domain.AudioTrack.
-// CHANGED: Accepts RowScanner interface
+// Point 1: Updated scanTrack
 func (r *AudioTrackRepository) scanTrack(ctx context.Context, row RowScanner) (*domain.AudioTrack, error) {
 	var track domain.AudioTrack
 	var langCode string
 	var levelStr string
-	var durationMs int64
+	var durationMs int64 // Scan into int64
 	var tags pq.StringArray
 	var uploaderID uuid.NullUUID
 
@@ -307,12 +319,14 @@ func (r *AudioTrackRepository) scanTrack(ctx context.Context, row RowScanner) (*
 		&track.ID, &track.Title, &track.Description,
 		&langCode,
 		&levelStr,
-		&durationMs,
+		&durationMs, // Scan duration_ms column
 		&track.MinioBucket, &track.MinioObjectKey, &track.CoverImageURL,
 		&uploaderID,
 		&track.IsPublic, &tags, &track.CreatedAt, &track.UpdatedAt,
 	)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 
 	langVO, langErr := domain.NewLanguage(langCode, "")
 	if langErr != nil {
@@ -322,16 +336,19 @@ func (r *AudioTrackRepository) scanTrack(ctx context.Context, row RowScanner) (*
 	track.Language = langVO
 	track.Level = domain.AudioLevel(levelStr)
 	if !track.Level.IsValid() {
-         r.logger.WarnContext(ctx, "Invalid audio level found in database", "level", levelStr, "trackID", track.ID)
-         track.Level = domain.LevelUnknown
-    }
+		r.logger.WarnContext(ctx, "Invalid audio level found in database", "level", levelStr, "trackID", track.ID)
+		track.Level = domain.LevelUnknown
+	}
+	// Convert scanned milliseconds back to time.Duration
 	track.Duration = time.Duration(durationMs) * time.Millisecond
 	track.Tags = tags
 
 	if uploaderID.Valid {
 		uid := domain.UserID(uploaderID.UUID)
 		track.UploaderID = &uid
-	} else { track.UploaderID = nil }
+	} else {
+		track.UploaderID = nil
+	}
 
 	return &track, nil
 }

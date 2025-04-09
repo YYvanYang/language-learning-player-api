@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/yvanyang/language-learning-player-backend/internal/domain"
-	"github.com/yvanyang/language-learning-player-backend/internal/port"
 	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/dto"
 	"github.com/yvanyang/language-learning-player-backend/internal/adapter/handler/http/middleware"
+	"github.com/yvanyang/language-learning-player-backend/internal/domain"
+	"github.com/yvanyang/language-learning-player-backend/internal/port"
 	"github.com/yvanyang/language-learning-player-backend/pkg/httputil"
 	"github.com/yvanyang/language-learning-player-backend/pkg/pagination"
 	"github.com/yvanyang/language-learning-player-backend/pkg/validation"
@@ -146,7 +146,7 @@ func (h *UserActivityHandler) ListProgress(w http.ResponseWriter, r *http.Reques
 	}
 
 	q := r.URL.Query()
-	limit, _ := strconv.Atoi(q.Get("limit")) // Use 0 if parsing fails
+	limit, _ := strconv.Atoi(q.Get("limit"))   // Use 0 if parsing fails
 	offset, _ := strconv.Atoi(q.Get("offset")) // Use 0 if parsing fails
 
 	// Create pagination parameters and apply defaults/constraints
@@ -251,7 +251,7 @@ func (h *UserActivityHandler) CreateBookmark(w http.ResponseWriter, r *http.Requ
 // @Param trackId query string false "Filter by Audio Track UUID" Format(uuid)
 // @Param limit query int false "Pagination limit" default(50) minimum(1) maximum(100)
 // @Param offset query int false "Pagination offset" default(0) minimum(0)
-// @Success 200 {object} dto.PaginatedBookmarksResponseDTO "Paginated list of bookmarks (timestampMs in milliseconds)"
+// @Success 200 {object} dto.PaginatedResponseDTO{data=[]dto.BookmarkResponseDTO} "Paginated list of bookmarks (timestampMs in milliseconds)"
 // @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Track ID Format (if provided)"
 // @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
 // @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"

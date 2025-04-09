@@ -16,11 +16,36 @@ type AuthUseCase interface {
 	AuthenticateWithGoogle(ctx context.Context, googleIdToken string) (authToken string, isNewUser bool, err error)
 }
 
+// ListTracksInput defines parameters for listing/searching tracks at the use case layer.
+// It embeds pagination.Page.
+// RENAMED from UseCaseListTracksParams
+type ListTracksInput struct {
+	Query         *string            // Search query (title, description, maybe tags)
+	LanguageCode  *string            // Filter by language code
+	Level         *domain.AudioLevel // Filter by level
+	IsPublic      *bool              // Filter by public status
+	UploaderID    *domain.UserID     // Filter by uploader
+	Tags          []string           // Filter by tags (match any)
+	SortBy        string             // e.g., "createdAt", "title", "durationMs"
+	SortDirection string             // "asc" or "desc"
+	Page          pagination.Page    // Embed pagination parameters
+}
+
+// GetAudioTrackDetailsResult holds the combined result for getting track details.
+// ADDED: Struct to cleanly return multiple values from usecase.
+type GetAudioTrackDetailsResult struct {
+	Track         *domain.AudioTrack
+	PlayURL       string
+	UserProgress  *domain.PlaybackProgress // Nil if user not logged in or no progress
+	UserBookmarks []*domain.Bookmark       // Empty slice if user not logged in or no bookmarks
+}
+
 // AudioContentUseCase defines the methods for the Audio Content use case layer.
 type AudioContentUseCase interface {
-	GetAudioTrackDetails(ctx context.Context, trackID domain.TrackID) (*domain.AudioTrack, string, error)
-	// CHANGED: ListTracks now takes UseCaseListTracksParams
-	ListTracks(ctx context.Context, params UseCaseListTracksParams) ([]*domain.AudioTrack, int, pagination.Page, error)
+	// CHANGED: GetAudioTrackDetails now returns a result struct
+	GetAudioTrackDetails(ctx context.Context, trackID domain.TrackID) (*GetAudioTrackDetailsResult, error)
+	// CHANGED: ListTracks now takes ListTracksInput and returns actual Page used
+	ListTracks(ctx context.Context, input ListTracksInput) ([]*domain.AudioTrack, int, pagination.Page, error)
 	CreateCollection(ctx context.Context, title, description string, colType domain.CollectionType, initialTrackIDs []domain.TrackID) (*domain.AudioCollection, error)
 	GetCollectionDetails(ctx context.Context, collectionID domain.CollectionID) (*domain.AudioCollection, error)
 	GetCollectionTracks(ctx context.Context, collectionID domain.CollectionID) ([]*domain.AudioTrack, error)
@@ -33,10 +58,8 @@ type AudioContentUseCase interface {
 type UserActivityUseCase interface {
 	RecordPlaybackProgress(ctx context.Context, userID domain.UserID, trackID domain.TrackID, progress time.Duration) error
 	GetPlaybackProgress(ctx context.Context, userID domain.UserID, trackID domain.TrackID) (*domain.PlaybackProgress, error)
-	// CHANGED: ListUserProgress now takes ListProgressParams
 	ListUserProgress(ctx context.Context, params ListProgressParams) ([]*domain.PlaybackProgress, int, pagination.Page, error)
 	CreateBookmark(ctx context.Context, userID domain.UserID, trackID domain.TrackID, timestamp time.Duration, note string) (*domain.Bookmark, error)
-	// CHANGED: ListBookmarks now takes ListBookmarksParams
 	ListBookmarks(ctx context.Context, params ListBookmarksParams) ([]*domain.Bookmark, int, pagination.Page, error)
 	DeleteBookmark(ctx context.Context, userID domain.UserID, bookmarkID domain.BookmarkID) error
 }
@@ -44,5 +67,4 @@ type UserActivityUseCase interface {
 // UserUseCase defines the interface for user-related operations (e.g., profile)
 type UserUseCase interface {
 	GetUserProfile(ctx context.Context, userID domain.UserID) (*domain.User, error)
-	// Add UpdateUserProfile, etc. here later
 }

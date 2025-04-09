@@ -128,8 +128,17 @@ func main() {
 
 	// Inject dependencies into Use Cases
 	authUseCase := uc.NewAuthUseCase(cfg.JWT, userRepo, secHelper, googleAuthService, appLogger)
-	// Pass the full config to AudioContentUseCase constructor (as it now needs CDN info too)
-	audioUseCase := uc.NewAudioContentUseCase(cfg, trackRepo, collectionRepo, storageService, txManager, appLogger)
+	// Pass the newly required progressRepo and bookmarkRepo to NewAudioContentUseCase
+	audioUseCase := uc.NewAudioContentUseCase(
+		cfg,            // config.Config
+		trackRepo,      // port.AudioTrackRepository
+		collectionRepo, // port.AudioCollectionRepository
+		storageService, // port.FileStorageService
+		txManager,      // port.TransactionManager
+		progressRepo,   // port.PlaybackProgressRepository (ADDED)
+		bookmarkRepo,   // port.BookmarkRepository (ADDED)
+		appLogger,      // *slog.Logger
+	)
 	activityUseCase := uc.NewUserActivityUseCase(progressRepo, bookmarkRepo, trackRepo, appLogger)
 	// Upload use case constructor might need full cfg if other parts are needed, or just MinioConfig
 	uploadUseCase := uc.NewUploadUseCase(cfg.Minio, trackRepo, storageService, appLogger)
