@@ -1,4 +1,6 @@
-// internal/usecase/auth_uc.go
+// ============================================
+// FILE: internal/usecase/auth_uc.go (MODIFIED)
+// ============================================
 package usecase
 
 import (
@@ -14,16 +16,19 @@ import (
 )
 
 type AuthUseCase struct {
-	userRepo       port.UserRepository
-	secHelper      port.SecurityHelper
-	extAuthService port.ExternalAuthService
-	jwtExpiry      time.Duration
-	logger         *slog.Logger
+	userRepo         port.UserRepository
+	refreshTokenRepo port.RefreshTokenRepository // Dependency for refresh token storage
+	secHelper        port.SecurityHelper
+	extAuthService   port.ExternalAuthService
+	cfg              config.JWTConfig // Store the whole JWT config for expiries
+	logger           *slog.Logger
 }
 
+// NewAuthUseCase creates a new AuthUseCase.
 func NewAuthUseCase(
-	cfg config.JWTConfig,
+	cfg config.JWTConfig, // Pass whole JWTConfig
 	ur port.UserRepository,
+	rtr port.RefreshTokenRepository, // Inject RefreshTokenRepository
 	sh port.SecurityHelper,
 	eas port.ExternalAuthService,
 	log *slog.Logger,
@@ -31,186 +36,306 @@ func NewAuthUseCase(
 	if eas == nil {
 		log.Warn("AuthUseCase created without ExternalAuthService implementation.")
 	}
+	// Add check for RefreshTokenRepository
+	if rtr == nil {
+		// Log as error because refresh token functionality will be broken
+		log.Error("AuthUseCase created without RefreshTokenRepository implementation. Refresh tokens cannot be stored or validated.")
+	}
 	return &AuthUseCase{
-		userRepo:       ur,
-		secHelper:      sh,
-		extAuthService: eas,
-		jwtExpiry:      cfg.AccessTokenExpiry,
-		logger:         log.With("usecase", "AuthUseCase"),
+		userRepo:         ur,
+		refreshTokenRepo: rtr, // Assign injected repo
+		secHelper:        sh,
+		extAuthService:   eas,
+		cfg:              cfg, // Store config
+		logger:           log.With("usecase", "AuthUseCase"),
 	}
 }
 
+// generateAndStoreTokens is a helper to create access/refresh tokens and store the refresh token hash.
+func (uc *AuthUseCase) generateAndStoreTokens(ctx context.Context, userID domain.UserID) (accessToken, refreshTokenValue string, err error) {
+	// Ensure repo dependency is available before proceeding
+	if uc.refreshTokenRepo == nil {
+		uc.logger.ErrorContext(ctx, "RefreshTokenRepository is nil, cannot generate/store tokens", "userID", userID)
+		return "", "", fmt.Errorf("internal server error: authentication system misconfigured")
+	}
+
+	accessToken, err = uc.secHelper.GenerateJWT(ctx, userID, uc.cfg.AccessTokenExpiry)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to generate access token: %w", err)
+	}
+
+	refreshTokenValue, err = uc.secHelper.GenerateRefreshTokenValue()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to generate refresh token value: %w", err)
+	}
+
+	refreshTokenHash := uc.secHelper.HashRefreshTokenValue(refreshTokenValue)
+	expiresAt := time.Now().Add(uc.cfg.RefreshTokenExpiry)
+
+	tokenData := &port.RefreshTokenData{
+		TokenHash: refreshTokenHash,
+		UserID:    userID,
+		ExpiresAt: expiresAt,
+		CreatedAt: time.Now(), // Set creation time here
+	}
+
+	// Save the refresh token data to the repository
+	if err = uc.refreshTokenRepo.Save(ctx, tokenData); err != nil {
+		return "", "", fmt.Errorf("failed to store refresh token: %w", err)
+	}
+
+	return accessToken, refreshTokenValue, nil
+}
+
 // RegisterWithPassword handles user registration with email and password.
-func (uc *AuthUseCase) RegisterWithPassword(ctx context.Context, emailStr, password, name string) (*domain.User, string, error) {
+func (uc *AuthUseCase) RegisterWithPassword(ctx context.Context, emailStr, password, name string) (*domain.User, port.AuthResult, error) {
 	emailVO, err := domain.NewEmail(emailStr)
 	if err != nil {
 		uc.logger.WarnContext(ctx, "Invalid email provided during registration", "email", emailStr, "error", err)
-		return nil, "", fmt.Errorf("%w: %v", domain.ErrInvalidArgument, err)
+		return nil, port.AuthResult{}, fmt.Errorf("%w: %v", domain.ErrInvalidArgument, err)
 	}
 
-	// Use EmailExists for a more efficient check
 	exists, err := uc.userRepo.EmailExists(ctx, emailVO)
 	if err != nil {
 		uc.logger.ErrorContext(ctx, "Error checking email existence", "error", err, "email", emailStr)
-		return nil, "", fmt.Errorf("failed to check email existence: %w", err)
+		return nil, port.AuthResult{}, fmt.Errorf("failed to check email existence: %w", err)
 	}
 	if exists {
 		uc.logger.WarnContext(ctx, "Registration attempt with existing email", "email", emailStr)
-		return nil, "", fmt.Errorf("%w: email already registered", domain.ErrConflict)
+		return nil, port.AuthResult{}, fmt.Errorf("%w: email already registered", domain.ErrConflict)
 	}
 
 	if len(password) < 8 {
-		return nil, "", fmt.Errorf("%w: password must be at least 8 characters long", domain.ErrInvalidArgument)
+		return nil, port.AuthResult{}, fmt.Errorf("%w: password must be at least 8 characters long", domain.ErrInvalidArgument)
 	}
 
 	hashedPassword, err := uc.secHelper.HashPassword(ctx, password)
 	if err != nil {
 		uc.logger.ErrorContext(ctx, "Failed to hash password during registration", "error", err)
-		return nil, "", fmt.Errorf("failed to process password: %w", err)
+		return nil, port.AuthResult{}, fmt.Errorf("failed to process password: %w", err)
 	}
 
 	user, err := domain.NewLocalUser(emailStr, name, hashedPassword)
 	if err != nil {
 		uc.logger.ErrorContext(ctx, "Failed to create domain user object", "error", err)
-		return nil, "", fmt.Errorf("failed to create user data: %w", err)
+		return nil, port.AuthResult{}, fmt.Errorf("failed to create user data: %w", err)
 	}
 
 	if err := uc.userRepo.Create(ctx, user); err != nil {
 		uc.logger.ErrorContext(ctx, "Failed to save new user to repository", "error", err, "userID", user.ID)
-		// The Create method already maps unique constraint errors to ErrConflict
-		return nil, "", fmt.Errorf("failed to register user: %w", err)
+		// Create should map unique constraints to ErrConflict
+		return nil, port.AuthResult{}, fmt.Errorf("failed to register user: %w", err)
 	}
 
-	token, err := uc.secHelper.GenerateJWT(ctx, user.ID, uc.jwtExpiry)
-	if err != nil {
-		uc.logger.ErrorContext(ctx, "Failed to generate JWT after registration", "error", err, "userID", user.ID)
-		return nil, "", fmt.Errorf("failed to finalize registration: %w", err)
+	// Generate and store tokens
+	accessToken, refreshToken, tokenErr := uc.generateAndStoreTokens(ctx, user.ID)
+	if tokenErr != nil {
+		uc.logger.ErrorContext(ctx, "Failed to generate/store tokens after registration", "error", tokenErr, "userID", user.ID)
+		return nil, port.AuthResult{}, fmt.Errorf("failed to finalize registration session: %w", tokenErr)
 	}
 
 	uc.logger.InfoContext(ctx, "User registered successfully via password", "userID", user.ID, "email", emailStr)
-	return user, token, nil
+	return user, port.AuthResult{AccessToken: accessToken, RefreshToken: refreshToken}, nil
 }
 
 // LoginWithPassword handles user login with email and password.
-func (uc *AuthUseCase) LoginWithPassword(ctx context.Context, emailStr, password string) (string, error) {
+func (uc *AuthUseCase) LoginWithPassword(ctx context.Context, emailStr, password string) (port.AuthResult, error) {
 	emailVO, err := domain.NewEmail(emailStr)
 	if err != nil {
-		// Log invalid email format attempt? Or just fail silently. Let's fail silently.
-		return "", domain.ErrAuthenticationFailed
+		return port.AuthResult{}, domain.ErrAuthenticationFailed
 	}
 	user, err := uc.userRepo.FindByEmail(ctx, emailVO)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			uc.logger.WarnContext(ctx, "Login attempt for non-existent email", "email", emailStr)
-			return "", domain.ErrAuthenticationFailed
+			return port.AuthResult{}, domain.ErrAuthenticationFailed
 		}
 		uc.logger.ErrorContext(ctx, "Error finding user by email during login", "error", err, "email", emailStr)
-		return "", fmt.Errorf("failed during login process: %w", err)
+		return port.AuthResult{}, fmt.Errorf("failed during login process: %w", err)
 	}
 	if user.AuthProvider != domain.AuthProviderLocal || user.HashedPassword == nil {
 		uc.logger.WarnContext(ctx, "Login attempt for user with non-local provider or no password", "email", emailStr, "userID", user.ID, "provider", user.AuthProvider)
-		return "", domain.ErrAuthenticationFailed
+		return port.AuthResult{}, domain.ErrAuthenticationFailed
 	}
 	if !uc.secHelper.CheckPasswordHash(ctx, password, *user.HashedPassword) {
 		uc.logger.WarnContext(ctx, "Incorrect password provided for user", "email", emailStr, "userID", user.ID)
-		return "", domain.ErrAuthenticationFailed
+		return port.AuthResult{}, domain.ErrAuthenticationFailed
 	}
-	token, err := uc.secHelper.GenerateJWT(ctx, user.ID, uc.jwtExpiry)
-	if err != nil {
-		uc.logger.ErrorContext(ctx, "Failed to generate JWT during login", "error", err, "userID", user.ID)
-		return "", fmt.Errorf("failed to finalize login: %w", err)
+
+	// Generate and store tokens
+	accessToken, refreshToken, tokenErr := uc.generateAndStoreTokens(ctx, user.ID)
+	if tokenErr != nil {
+		uc.logger.ErrorContext(ctx, "Failed to generate/store tokens during login", "error", tokenErr, "userID", user.ID)
+		return port.AuthResult{}, fmt.Errorf("failed to finalize login session: %w", tokenErr)
 	}
+
 	uc.logger.InfoContext(ctx, "User logged in successfully via password", "userID", user.ID)
-	return token, nil
+	return port.AuthResult{AccessToken: accessToken, RefreshToken: refreshToken}, nil
 }
 
 // AuthenticateWithGoogle handles login or registration via Google ID Token.
-// Implements Strategy C: Conflict if email exists with a different provider/link.
-func (uc *AuthUseCase) AuthenticateWithGoogle(ctx context.Context, googleIdToken string) (authToken string, isNewUser bool, err error) {
+func (uc *AuthUseCase) AuthenticateWithGoogle(ctx context.Context, googleIdToken string) (port.AuthResult, error) {
 	if uc.extAuthService == nil {
 		uc.logger.ErrorContext(ctx, "ExternalAuthService not configured for Google authentication")
-		return "", false, fmt.Errorf("google authentication is not enabled")
+		return port.AuthResult{}, fmt.Errorf("google authentication is not enabled")
 	}
 
 	extInfo, err := uc.extAuthService.VerifyGoogleToken(ctx, googleIdToken)
 	if err != nil {
-		return "", false, err
-	} // Propagate verification error
+		return port.AuthResult{}, err // Propagate verification error
+	}
+
+	var targetUser *domain.User
+	var isNewUser bool
 
 	// Check if user exists by Provider ID first
 	user, err := uc.userRepo.FindByProviderID(ctx, extInfo.Provider, extInfo.ProviderUserID)
 	if err == nil {
 		// Case 1: User found by Google ID -> Login success
 		uc.logger.InfoContext(ctx, "User authenticated via existing Google ID", "userID", user.ID, "googleID", extInfo.ProviderUserID)
-		token, tokenErr := uc.secHelper.GenerateJWT(ctx, user.ID, uc.jwtExpiry)
-		if tokenErr != nil {
-			uc.logger.ErrorContext(ctx, "Failed to generate JWT for existing Google user", "error", tokenErr, "userID", user.ID)
-			return "", false, fmt.Errorf("failed to finalize login: %w", tokenErr)
+		targetUser = user
+		isNewUser = false
+	} else if errors.Is(err, domain.ErrNotFound) {
+		// User not found by Google ID, proceed to check by email (if available)
+		if extInfo.Email != "" {
+			emailVO, emailErr := domain.NewEmail(extInfo.Email)
+			if emailErr != nil {
+				uc.logger.WarnContext(ctx, "Invalid email format received from Google token", "error", emailErr, "email", extInfo.Email, "googleID", extInfo.ProviderUserID)
+				return port.AuthResult{}, fmt.Errorf("%w: invalid email format from provider", domain.ErrAuthenticationFailed)
+			}
+
+			userByEmail, errEmail := uc.userRepo.FindByEmail(ctx, emailVO)
+			if errEmail == nil {
+				// Case 2: User found by email -> Conflict (Strategy C)
+				uc.logger.WarnContext(ctx, "Google auth conflict: Email exists but Google ID did not match or was not linked", "email", extInfo.Email, "existingUserID", userByEmail.ID, "existingProvider", userByEmail.AuthProvider)
+				return port.AuthResult{}, fmt.Errorf("%w: email is already associated with a different account", domain.ErrConflict)
+			} else if !errors.Is(errEmail, domain.ErrNotFound) {
+				uc.logger.ErrorContext(ctx, "Error finding user by email", "error", errEmail, "email", extInfo.Email)
+				return port.AuthResult{}, fmt.Errorf("database error during authentication: %w", errEmail)
+			}
+			uc.logger.DebugContext(ctx, "Email not found, proceeding to create new Google user", "email", extInfo.Email)
+		} else {
+			uc.logger.InfoContext(ctx, "Google token verified, but no email provided. Proceeding to create new user based on Google ID only.", "googleID", extInfo.ProviderUserID)
 		}
-		return token, false, nil // Not a new user
-	}
-	if !errors.Is(err, domain.ErrNotFound) {
+
+		// Case 3: Create new user
+		uc.logger.InfoContext(ctx, "Creating new user via Google authentication", "googleID", extInfo.ProviderUserID, "email", extInfo.Email)
+		newUser, errCreate := domain.NewGoogleUser(extInfo.Email, extInfo.Name, extInfo.ProviderUserID, extInfo.PictureURL)
+		if errCreate != nil {
+			uc.logger.ErrorContext(ctx, "Failed to create new Google user domain object", "error", errCreate, "extInfo", extInfo)
+			return port.AuthResult{}, fmt.Errorf("failed to process user data from Google: %w", errCreate)
+		}
+		if errDb := uc.userRepo.Create(ctx, newUser); errDb != nil {
+			uc.logger.ErrorContext(ctx, "Failed to save new Google user to repository", "error", errDb, "googleID", newUser.GoogleID, "email", newUser.Email.String())
+			// Create maps unique constraints to ErrConflict
+			return port.AuthResult{}, fmt.Errorf("failed to create new user account: %w", errDb)
+		}
+		uc.logger.InfoContext(ctx, "New user created successfully via Google", "userID", newUser.ID, "email", newUser.Email.String())
+		targetUser = newUser
+		isNewUser = true
+
+	} else {
 		// Handle unexpected database errors during provider ID lookup
 		uc.logger.ErrorContext(ctx, "Error finding user by provider ID", "error", err, "provider", extInfo.Provider, "providerUserID", extInfo.ProviderUserID)
-		return "", false, fmt.Errorf("database error during authentication: %w", err)
+		return port.AuthResult{}, fmt.Errorf("database error during authentication: %w", err)
 	}
 
-	// User not found by Google ID, proceed to check by email (if available)
-	if extInfo.Email != "" {
-		emailVO, emailErr := domain.NewEmail(extInfo.Email)
-		if emailErr != nil {
-			// If Google gives an invalid email format, treat as auth failure
-			uc.logger.WarnContext(ctx, "Invalid email format received from Google token", "error", emailErr, "email", extInfo.Email, "googleID", extInfo.ProviderUserID)
-			return "", false, fmt.Errorf("%w: invalid email format from provider", domain.ErrAuthenticationFailed)
-		}
-
-		userByEmail, errEmail := uc.userRepo.FindByEmail(ctx, emailVO)
-		if errEmail == nil {
-			// Case 2: User found by email -> Conflict (Strategy C)
-			// Email exists, but Google ID wasn't linked or didn't match
-			uc.logger.WarnContext(ctx, "Google auth conflict: Email exists but Google ID did not match or was not linked", "email", extInfo.Email, "existingUserID", userByEmail.ID, "existingProvider", userByEmail.AuthProvider)
-			return "", false, fmt.Errorf("%w: email is already associated with a different account", domain.ErrConflict)
-		} else if !errors.Is(errEmail, domain.ErrNotFound) {
-			// Handle unexpected database errors during email lookup
-			uc.logger.ErrorContext(ctx, "Error finding user by email", "error", errEmail, "email", extInfo.Email)
-			return "", false, fmt.Errorf("database error during authentication: %w", errEmail)
-		}
-		// If errEmail is ErrNotFound, continue to user creation
-		uc.logger.DebugContext(ctx, "Email not found, proceeding to create new Google user", "email", extInfo.Email)
-	} else {
-		// No email provided by Google, can only create user based on Google ID
-		uc.logger.InfoContext(ctx, "Google token verified, but no email provided. Proceeding to create new user based on Google ID only.", "googleID", extInfo.ProviderUserID)
-	}
-
-	// Case 3: User not found by Google ID AND (Email not found OR Email not provided) -> Create new user
-	uc.logger.InfoContext(ctx, "Creating new user via Google authentication", "googleID", extInfo.ProviderUserID, "email", extInfo.Email)
-
-	// Create the new user domain object
-	newUser, err := domain.NewGoogleUser(
-		extInfo.Email, extInfo.Name, extInfo.ProviderUserID, extInfo.PictureURL,
-	)
-	if err != nil {
-		uc.logger.ErrorContext(ctx, "Failed to create new Google user domain object", "error", err, "extInfo", extInfo)
-		return "", false, fmt.Errorf("failed to process user data from Google: %w", err)
-	}
-
-	// Save the new user to the database
-	if err := uc.userRepo.Create(ctx, newUser); err != nil {
-		uc.logger.ErrorContext(ctx, "Failed to save new Google user to repository", "error", err, "googleID", newUser.GoogleID, "email", newUser.Email.String())
-		// Create should handle mapping unique constraints to ErrConflict
-		return "", false, fmt.Errorf("failed to create new user account: %w", err)
-	}
-
-	// Generate JWT for the newly created user
-	uc.logger.InfoContext(ctx, "New user created successfully via Google", "userID", newUser.ID, "email", newUser.Email.String())
-	token, tokenErr := uc.secHelper.GenerateJWT(ctx, newUser.ID, uc.jwtExpiry)
+	// Generate and store tokens for the targetUser (either found or newly created)
+	accessToken, refreshToken, tokenErr := uc.generateAndStoreTokens(ctx, targetUser.ID)
 	if tokenErr != nil {
-		uc.logger.ErrorContext(ctx, "Failed to generate JWT for newly created Google user", "error", tokenErr, "userID", newUser.ID)
-		// Consider if user creation should be rolled back here - depends on transaction strategy
-		return "", true, fmt.Errorf("failed to finalize registration: %w", tokenErr)
+		uc.logger.ErrorContext(ctx, "Failed to generate/store tokens for Google auth", "error", tokenErr, "userID", targetUser.ID)
+		return port.AuthResult{}, fmt.Errorf("failed to finalize authentication session: %w", tokenErr)
 	}
 
-	return token, true, nil // Return token and indicate new user
+	return port.AuthResult{AccessToken: accessToken, RefreshToken: refreshToken, IsNewUser: isNewUser}, nil
+}
+
+// RefreshAccessToken validates a refresh token, revokes it, and issues new access/refresh tokens.
+func (uc *AuthUseCase) RefreshAccessToken(ctx context.Context, refreshTokenValue string) (port.AuthResult, error) {
+	// Ensure repo dependency is available before proceeding
+	if uc.refreshTokenRepo == nil {
+		uc.logger.ErrorContext(ctx, "RefreshTokenRepository is nil, cannot refresh token")
+		return port.AuthResult{}, fmt.Errorf("internal server error: authentication system misconfigured")
+	}
+
+	if refreshTokenValue == "" {
+		return port.AuthResult{}, fmt.Errorf("%w: refresh token is required", domain.ErrAuthenticationFailed)
+	}
+
+	tokenHash := uc.secHelper.HashRefreshTokenValue(refreshTokenValue)
+
+	// Find the token data by hash
+	tokenData, err := uc.refreshTokenRepo.FindByTokenHash(ctx, tokenHash)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			uc.logger.WarnContext(ctx, "Refresh token hash not found in storage during refresh attempt")
+			// It's crucial to return an authentication error here to prevent probing attacks
+			return port.AuthResult{}, domain.ErrAuthenticationFailed
+		}
+		uc.logger.ErrorContext(ctx, "Error finding refresh token by hash", "error", err)
+		return port.AuthResult{}, fmt.Errorf("failed to validate refresh token: %w", err)
+	}
+
+	// Check expiry
+	if time.Now().After(tokenData.ExpiresAt) {
+		uc.logger.WarnContext(ctx, "Expired refresh token presented", "userID", tokenData.UserID, "expiresAt", tokenData.ExpiresAt)
+		// Delete the expired token (best effort)
+		_ = uc.refreshTokenRepo.DeleteByTokenHash(ctx, tokenHash)
+		return port.AuthResult{}, fmt.Errorf("%w: refresh token expired", domain.ErrAuthenticationFailed)
+	}
+
+	// --- Rotation: Invalidate the old token ---
+	delErr := uc.refreshTokenRepo.DeleteByTokenHash(ctx, tokenHash)
+	if delErr != nil && !errors.Is(delErr, domain.ErrNotFound) {
+		// Log the failure but proceed to issue new tokens.
+		// The user presented a valid token, failure to delete shouldn't block refresh.
+		// A background job could clean up orphaned tokens later if needed.
+		uc.logger.ErrorContext(ctx, "Failed to delete used refresh token during rotation, proceeding anyway", "error", delErr, "userID", tokenData.UserID)
+	}
+
+	// --- Issue new tokens ---
+	newAccessToken, newRefreshTokenValue, tokenErr := uc.generateAndStoreTokens(ctx, tokenData.UserID)
+	if tokenErr != nil {
+		uc.logger.ErrorContext(ctx, "Failed to generate/store new tokens during refresh", "error", tokenErr, "userID", tokenData.UserID)
+		// This is a more critical failure. User might be left logged out.
+		return port.AuthResult{}, fmt.Errorf("failed to issue new tokens after validating refresh token: %w", tokenErr)
+	}
+
+	uc.logger.InfoContext(ctx, "Access token refreshed successfully", "userID", tokenData.UserID)
+	return port.AuthResult{AccessToken: newAccessToken, RefreshToken: newRefreshTokenValue}, nil
+}
+
+// Logout invalidates a specific refresh token.
+func (uc *AuthUseCase) Logout(ctx context.Context, refreshTokenValue string) error {
+	// Ensure repo dependency is available before proceeding
+	if uc.refreshTokenRepo == nil {
+		uc.logger.ErrorContext(ctx, "RefreshTokenRepository is nil, cannot logout")
+		return fmt.Errorf("internal server error: authentication system misconfigured")
+	}
+
+	if refreshTokenValue == "" {
+		// Nothing to invalidate if no token is provided.
+		uc.logger.DebugContext(ctx, "Logout called with empty refresh token, nothing to do.")
+		return nil
+	}
+
+	tokenHash := uc.secHelper.HashRefreshTokenValue(refreshTokenValue)
+
+	// Delete the token by hash. ErrNotFound is acceptable.
+	err := uc.refreshTokenRepo.DeleteByTokenHash(ctx, tokenHash)
+	if err != nil && !errors.Is(err, domain.ErrNotFound) {
+		// Log actual errors during deletion
+		uc.logger.ErrorContext(ctx, "Failed to delete refresh token during logout", "error", err)
+		// Return a generic internal error to the client
+		return fmt.Errorf("failed to process logout request: %w", err)
+	}
+
+	if errors.Is(err, domain.ErrNotFound) {
+		uc.logger.InfoContext(ctx, "Logout attempt for a refresh token that was already invalid or deleted.")
+	} else {
+		uc.logger.InfoContext(ctx, "User session logged out (refresh token invalidated).")
+	}
+	return nil
 }
 
 // Compile-time check to ensure AuthUseCase satisfies the port.AuthUseCase interface

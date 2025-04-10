@@ -3,12 +3,29 @@ package port
 
 import (
 	"context"
+	"time"
 
 	"github.com/yvanyang/language-learning-player-api/internal/domain"
 	"github.com/yvanyang/language-learning-player-api/pkg/pagination"
 )
 
 // --- Repository Interfaces ---
+
+// RefreshTokenData holds the details of a stored refresh token.
+type RefreshTokenData struct {
+	TokenHash string // SHA-256 hash
+	UserID    domain.UserID
+	ExpiresAt time.Time
+	CreatedAt time.Time
+}
+
+// RefreshTokenRepository defines persistence operations for refresh tokens.
+type RefreshTokenRepository interface {
+	Save(ctx context.Context, tokenData *RefreshTokenData) error
+	FindByTokenHash(ctx context.Context, tokenHash string) (*RefreshTokenData, error)
+	DeleteByTokenHash(ctx context.Context, tokenHash string) error
+	DeleteByUser(ctx context.Context, userID domain.UserID) (int64, error) // Returns number of tokens deleted
+}
 
 // UserRepository defines the persistence operations for User entities.
 type UserRepository interface {

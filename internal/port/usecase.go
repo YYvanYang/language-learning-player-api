@@ -1,4 +1,6 @@
-// internal/port/usecase.go
+// ============================================
+// FILE: internal/port/usecase.go (MODIFIED)
+// ============================================
 package port
 
 import (
@@ -9,11 +11,33 @@ import (
 	"github.com/yvanyang/language-learning-player-api/pkg/pagination"
 )
 
+// AuthResult holds both access and refresh tokens, and registration status.
+type AuthResult struct {
+	AccessToken  string
+	RefreshToken string
+	IsNewUser    bool // Only relevant for external auth methods like Google sign-in
+}
+
 // AuthUseCase defines the methods for the Auth use case layer.
 type AuthUseCase interface {
-	RegisterWithPassword(ctx context.Context, emailStr, password, name string) (*domain.User, string, error)
-	LoginWithPassword(ctx context.Context, emailStr, password string) (string, error)
-	AuthenticateWithGoogle(ctx context.Context, googleIdToken string) (authToken string, isNewUser bool, err error)
+	// RegisterWithPassword registers a new user with email/password.
+	// Returns the created user, auth tokens, and error.
+	RegisterWithPassword(ctx context.Context, emailStr, password, name string) (*domain.User, AuthResult, error)
+
+	// LoginWithPassword authenticates a user with email/password.
+	// Returns auth tokens and error.
+	LoginWithPassword(ctx context.Context, emailStr, password string) (AuthResult, error)
+
+	// AuthenticateWithGoogle handles login or registration via Google ID Token.
+	// Returns auth tokens and error. The IsNewUser field in AuthResult indicates
+	// if a new account was created during this process.
+	AuthenticateWithGoogle(ctx context.Context, googleIdToken string) (AuthResult, error)
+
+	// RefreshAccessToken validates a refresh token and issues a new pair of access/refresh tokens.
+	RefreshAccessToken(ctx context.Context, refreshTokenValue string) (AuthResult, error)
+
+	// Logout invalidates the provided refresh token.
+	Logout(ctx context.Context, refreshTokenValue string) error
 }
 
 // AudioContentUseCase defines the methods for the Audio Content use case layer.

@@ -662,7 +662,7 @@ const docTemplate = `{
         },
         "/auth/google/callback": {
             "post": {
-                "description": "Receives the ID token from the frontend after Google sign-in, verifies it, and performs user registration or login, returning a JWT.",
+                "description": "Receives the ID token from the frontend after Google sign-in, verifies it, and performs user registration or login, returning access and refresh tokens. // MODIFIED DESCRIPTION",
                 "consumes": [
                     "application/json"
                 ],
@@ -687,7 +687,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Authentication successful, returns JWT. isNewUser field indicates if a new account was created.",
+                        "description": "Authentication successful, returns access/refresh tokens. isNewUser indicates new account creation.\" // MODIFIED DESCRIPTION",
                         "schema": {
                             "$ref": "#/definitions/dto.AuthResponseDTO"
                         }
@@ -721,7 +721,7 @@ const docTemplate = `{
         },
         "/auth/login": {
             "post": {
-                "description": "Authenticates a user with email and password, returns a JWT token.",
+                "description": "Authenticates a user with email and password, returns access and refresh tokens. // MODIFIED DESCRIPTION",
                 "consumes": [
                     "application/json"
                 ],
@@ -746,7 +746,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Login successful, returns JWT",
+                        "description": "Login successful, returns access and refresh tokens\" // MODIFIED DESCRIPTION",
                         "schema": {
                             "$ref": "#/definitions/dto.AuthResponseDTO"
                         }
@@ -759,6 +759,103 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Authentication Failed",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/logout": {
+            "post": {
+                "description": "Invalidates the provided refresh token, effectively logging the user out of that session/device.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Logout user",
+                "operationId": "logout-user",
+                "parameters": [
+                    {
+                        "description": "Refresh Token to invalidate",
+                        "name": "logout",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.LogoutRequestDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Logout successful"
+                    },
+                    "400": {
+                        "description": "Invalid Input (Missing Refresh Token)",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/refresh": {
+            "post": {
+                "description": "Provides a valid refresh token to get a new pair of access and refresh tokens.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Refresh access token",
+                "operationId": "refresh-token",
+                "parameters": [
+                    {
+                        "description": "Refresh Token",
+                        "name": "refresh",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.RefreshRequestDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Tokens refreshed successfully",
+                        "schema": {
+                            "$ref": "#/definitions/dto.AuthResponseDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid Input (Missing Refresh Token)",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Authentication Failed (Invalid or Expired Refresh Token)",
                         "schema": {
                             "$ref": "#/definitions/httputil.ErrorResponseDTO"
                         }
@@ -799,13 +896,13 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "201": {
-                        "description": "Registration successful, returns JWT\" // Success response: code, type, description",
+                        "description": "Registration successful, returns access and refresh tokens\" // MODIFIED DESCRIPTION",
                         "schema": {
                             "$ref": "#/definitions/dto.AuthResponseDTO"
                         }
                     },
                     "400": {
-                        "description": "Invalid Input\"                // Failure response: code, type, description",
+                        "description": "Invalid Input",
                         "schema": {
                             "$ref": "#/definitions/httputil.ErrorResponseDTO"
                         }
@@ -1522,12 +1619,16 @@ const docTemplate = `{
         "dto.AuthResponseDTO": {
             "type": "object",
             "properties": {
+                "accessToken": {
+                    "description": "The JWT access token",
+                    "type": "string"
+                },
                 "isNewUser": {
                     "description": "Pointer, only included for Google callback if user is new",
                     "type": "boolean"
                 },
-                "token": {
-                    "description": "The JWT access token",
+                "refreshToken": {
+                    "description": "The refresh token value",
                     "type": "string"
                 }
             }
@@ -1847,6 +1948,17 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.LogoutRequestDTO": {
+            "type": "object",
+            "required": [
+                "refreshToken"
+            ],
+            "properties": {
+                "refreshToken": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.PaginatedResponseDTO": {
             "type": "object",
             "properties": {
@@ -1906,6 +2018,17 @@ const docTemplate = `{
                     "minimum": 0
                 },
                 "trackId": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.RefreshRequestDTO": {
+            "type": "object",
+            "required": [
+                "refreshToken"
+            ],
+            "properties": {
+                "refreshToken": {
                     "type": "string"
                 }
             }

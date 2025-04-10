@@ -63,7 +63,8 @@ type SecurityHelper interface {
 	// Returns domain.ErrUnauthenticated or domain.ErrAuthenticationFailed on failure.
 	VerifyJWT(ctx context.Context, tokenString string) (domain.UserID, error)
 
-	// TODO: Add methods for Refresh Token generation/validation if implementing that flow.
+	GenerateRefreshTokenValue() (string, error)     // ADDED
+	HashRefreshTokenValue(tokenValue string) string // ADDED
 }
 
 // REMOVED UserUseCase interface from here

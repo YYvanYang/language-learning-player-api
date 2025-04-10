@@ -94,11 +94,14 @@ definitions:
     type: object
   dto.AuthResponseDTO:
     properties:
+      accessToken:
+        description: The JWT access token
+        type: string
       isNewUser:
         description: Pointer, only included for Google callback if user is new
         type: boolean
-      token:
-        description: The JWT access token
+      refreshToken:
+        description: The refresh token value
         type: string
     type: object
   dto.BatchCompleteUploadInputDTO:
@@ -321,6 +324,13 @@ definitions:
     - email
     - password
     type: object
+  dto.LogoutRequestDTO:
+    properties:
+      refreshToken:
+        type: string
+    required:
+    - refreshToken
+    type: object
   dto.PaginatedResponseDTO:
     properties:
       data:
@@ -364,6 +374,13 @@ definitions:
     required:
     - progressMs
     - trackId
+    type: object
+  dto.RefreshRequestDTO:
+    properties:
+      refreshToken:
+        type: string
+    required:
+    - refreshToken
     type: object
   dto.RegisterRequestDTO:
     properties:
@@ -905,7 +922,8 @@ paths:
       consumes:
       - application/json
       description: Receives the ID token from the frontend after Google sign-in, verifies
-        it, and performs user registration or login, returning a JWT.
+        it, and performs user registration or login, returning access and refresh
+        tokens. // MODIFIED DESCRIPTION
       operationId: google-callback
       parameters:
       - description: Google ID Token
@@ -918,8 +936,8 @@ paths:
       - application/json
       responses:
         "200":
-          description: Authentication successful, returns JWT. isNewUser field indicates
-            if a new account was created.
+          description: Authentication successful, returns access/refresh tokens. isNewUser
+            indicates new account creation." // MODIFIED DESCRIPTION
           schema:
             $ref: '#/definitions/dto.AuthResponseDTO'
         "400":
@@ -945,7 +963,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Authenticates a user with email and password, returns a JWT token.
+      description: Authenticates a user with email and password, returns access and
+        refresh tokens. // MODIFIED DESCRIPTION
       operationId: login-user
       parameters:
       - description: User Login Credentials
@@ -958,7 +977,8 @@ paths:
       - application/json
       responses:
         "200":
-          description: Login successful, returns JWT
+          description: Login successful, returns access and refresh tokens" // MODIFIED
+            DESCRIPTION
           schema:
             $ref: '#/definitions/dto.AuthResponseDTO'
         "400":
@@ -974,6 +994,72 @@ paths:
           schema:
             $ref: '#/definitions/httputil.ErrorResponseDTO'
       summary: Login a user
+      tags:
+      - Authentication
+  /auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: Invalidates the provided refresh token, effectively logging the
+        user out of that session/device.
+      operationId: logout-user
+      parameters:
+      - description: Refresh Token to invalidate
+        in: body
+        name: logout
+        required: true
+        schema:
+          $ref: '#/definitions/dto.LogoutRequestDTO'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Logout successful
+        "400":
+          description: Invalid Input (Missing Refresh Token)
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      summary: Logout user
+      tags:
+      - Authentication
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Provides a valid refresh token to get a new pair of access and
+        refresh tokens.
+      operationId: refresh-token
+      parameters:
+      - description: Refresh Token
+        in: body
+        name: refresh
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RefreshRequestDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Tokens refreshed successfully
+          schema:
+            $ref: '#/definitions/dto.AuthResponseDTO'
+        "400":
+          description: Invalid Input (Missing Refresh Token)
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "401":
+          description: Authentication Failed (Invalid or Expired Refresh Token)
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      summary: Refresh access token
       tags:
       - Authentication
   /auth/register:
@@ -993,13 +1079,12 @@ paths:
       - application/json
       responses:
         "201":
-          description: 'Registration successful, returns JWT" // Success response:
-            code, type, description'
+          description: Registration successful, returns access and refresh tokens"
+            // MODIFIED DESCRIPTION
           schema:
             $ref: '#/definitions/dto.AuthResponseDTO'
         "400":
-          description: 'Invalid Input"                // Failure response: code, type,
-            description'
+          description: Invalid Input
           schema:
             $ref: '#/definitions/httputil.ErrorResponseDTO'
         "409":

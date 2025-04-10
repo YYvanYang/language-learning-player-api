@@ -104,6 +104,7 @@ func main() {
 	collectionRepo := repo.NewAudioCollectionRepository(dbPool, appLogger)
 	progressRepo := repo.NewPlaybackProgressRepository(dbPool, appLogger)
 	bookmarkRepo := repo.NewBookmarkRepository(dbPool, appLogger)
+	refreshTokenRepo := repo.NewRefreshTokenRepository(dbPool, appLogger) // ADDED
 
 	// Services / Helpers
 	secHelper, err := security.NewSecurity(cfg.JWT.SecretKey, appLogger)
@@ -126,19 +127,11 @@ func main() {
 	validator := validation.New()
 
 	// Inject dependencies into Use Cases
-	authUseCase := uc.NewAuthUseCase(cfg.JWT, userRepo, secHelper, googleAuthService, appLogger)
+	authUseCase := uc.NewAuthUseCase(cfg.JWT, userRepo, refreshTokenRepo, secHelper, googleAuthService, appLogger)
 	audioUseCase := uc.NewAudioContentUseCase(
-		cfg,
-		trackRepo,
-		collectionRepo,
-		storageService,
-		txManager, // Pass txManager
-		progressRepo,
-		bookmarkRepo,
-		appLogger,
+		cfg, trackRepo, collectionRepo, storageService, txManager, progressRepo, bookmarkRepo, appLogger,
 	)
 	activityUseCase := uc.NewUserActivityUseCase(progressRepo, bookmarkRepo, trackRepo, appLogger)
-	// Pass txManager to UploadUseCase as well for batch completion
 	uploadUseCase := uc.NewUploadUseCase(cfg.Minio, trackRepo, storageService, txManager, appLogger)
 	userUseCase := uc.NewUserUseCase(userRepo, appLogger)
 
@@ -203,6 +196,8 @@ func main() {
 			r.Post("/auth/register", authHandler.Register)
 			r.Post("/auth/login", authHandler.Login)
 			r.Post("/auth/google/callback", authHandler.GoogleCallback)
+			r.Post("/auth/refresh", authHandler.Refresh) // ADDED Refresh route
+			r.Post("/auth/logout", authHandler.Logout)   // ADDED Logout route
 
 			r.Get("/audio/tracks", audioHandler.ListTracks)
 			r.Get("/audio/tracks/{trackId}", audioHandler.GetTrackDetails)
@@ -211,6 +206,8 @@ func main() {
 
 		// Protected API routes (Apply Authenticator middleware + ApiSecurityHeaders)
 		r.Group(func(r chi.Router) {
+			// IMPORTANT: Authenticator middleware ONLY checks the ACCESS token.
+			// Refresh/Logout routes should NOT be in this group.
 			r.Use(middleware.Authenticator(secHelper))
 
 			// User Profile

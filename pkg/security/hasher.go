@@ -1,7 +1,11 @@
-// pkg/security/hasher.go
+// ============================================
+// FILE: pkg/security/hasher.go (MODIFIED)
+// ============================================
 package security
 
 import (
+	"crypto/sha256" // ADDED
+	"encoding/hex"  // ADDED
 	"errors"
 	"fmt"
 	"log/slog"
@@ -39,13 +43,21 @@ func (h *BcryptHasher) HashPassword(password string) (string, error) {
 func (h *BcryptHasher) CheckPasswordHash(password, hash string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	if err != nil {
-		// Log mismatch errors only at debug level if desired, other errors as warnings/errors
 		if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
-			h.logger.Debug("Password hash mismatch", "error", err) // Optional: Log mismatch at debug level
+			h.logger.Debug("Password hash mismatch", "error", err)
 		} else {
 			h.logger.Warn("Error comparing password hash", "error", err)
 		}
 		return false
 	}
 	return true
+}
+
+// Sha256Hash generates a SHA-256 hash (hex encoded) for non-password secrets like refresh tokens.
+// ADDED FUNCTION
+func Sha256Hash(value string) string {
+	hasher := sha256.New()
+	hasher.Write([]byte(value)) // Hash the string value
+	hashBytes := hasher.Sum(nil)
+	return hex.EncodeToString(hashBytes) // Return hex string representation
 }
