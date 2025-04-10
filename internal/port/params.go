@@ -35,3 +35,74 @@ type ListBookmarksParams struct {
 	TrackIDFilter *domain.TrackID // Optional filter by track
 	Page          pagination.Page
 }
+
+// RequestUploadResult holds the result of requesting an upload URL.
+type RequestUploadResult struct {
+	UploadURL string
+	ObjectKey string
+}
+
+// CompleteUploadRequest holds the data needed to finalize an upload and create a track record.
+type CompleteUploadRequest struct {
+	ObjectKey     string
+	Title         string
+	Description   string
+	LanguageCode  string
+	Level         string
+	DurationMs    int64
+	IsPublic      bool
+	Tags          []string
+	CoverImageURL *string
+}
+
+// --- Batch Request ---
+type BatchRequestUploadItem struct {
+	Filename    string
+	ContentType string
+}
+type BatchRequestUpload struct {
+	Files []BatchRequestUploadItem
+}
+
+// --- Batch URL Response ---
+type BatchURLResultItem struct {
+	OriginalFilename string
+	ObjectKey        string
+	UploadURL        string
+	Error            string // Keep error string for item-level reporting
+}
+
+// --- Batch Complete Request ---
+type BatchCompleteItem struct {
+	ObjectKey     string
+	Title         string
+	Description   string
+	LanguageCode  string
+	Level         string
+	DurationMs    int64
+	IsPublic      bool
+	Tags          []string
+	CoverImageURL *string
+}
+type BatchCompleteRequest struct {
+	Tracks []BatchCompleteItem
+}
+
+// --- Batch Complete Response ---
+type BatchCompleteResultItem struct {
+	ObjectKey string
+	Success   bool
+	TrackID   string // Use string for UUID here as it's just data
+	Error     string
+}
+
+// === Audio Track Details (Used by AudioContentUseCase) ===
+
+// GetAudioTrackDetailsResult holds the combined result for getting track details.
+// MOVED from usecase package to port package.
+type GetAudioTrackDetailsResult struct {
+	Track         *domain.AudioTrack
+	PlayURL       string
+	UserProgress  *domain.PlaybackProgress // Nil if user not logged in or no progress
+	UserBookmarks []*domain.Bookmark       // Empty slice if user not logged in or no bookmarks
+}

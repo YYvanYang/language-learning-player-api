@@ -43,21 +43,15 @@ func NewMinioStorageService(cfg config.MinioConfig, logger *slog.Logger) (*Minio
 	}
 
 	// Optional: Ping MinIO to check connectivity (MinIO server needs to be running)
-	// Using a short context timeout for the check
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	// Check if the default bucket exists. Create if not? (Consider permissions)
 	exists, err := minioClient.BucketExists(ctx, cfg.BucketName)
 	if err != nil {
 		log.Error("Failed to check if MinIO bucket exists", "error", err, "bucket", cfg.BucketName)
-		// Decide if this is fatal or not. Maybe log warning and proceed?
-		// return nil, fmt.Errorf("failed to check minio bucket %s: %w", cfg.BucketName, err)
+		// Decide if this is fatal or not. Log warning and proceed.
 	}
 	if !exists {
 		log.Warn("Default MinIO bucket does not exist. Consider creating it.", "bucket", cfg.BucketName)
-		// Optionally create the bucket here if desired and permissions allow:
-		// err = minioClient.MakeBucket(ctx, cfg.BucketName, minio.MakeBucketOptions{})
-		// if err != nil { ... handle error ... }
 	} else {
 		log.Info("MinIO bucket found", "bucket", cfg.BucketName)
 	}
@@ -78,11 +72,7 @@ func (s *MinioStorageService) GetPresignedGetURL(ctx context.Context, bucket, ob
 	if expiry <= 0 {
 		expiry = s.defaultExpiry
 	}
-
-	// Set request parameters (empty for GET)
 	reqParams := make(url.Values)
-	// Example: Force download with filename
-	// reqParams.Set("response-content-disposition", fmt.Sprintf("attachment; filename=\"%s\"", objectKey))
 
 	presignedURL, err := s.client.PresignedGetObject(ctx, bucket, objectKey, expiry, reqParams)
 	if err != nil {
@@ -99,17 +89,11 @@ func (s *MinioStorageService) DeleteObject(ctx context.Context, bucket, objectKe
 	if bucket == "" {
 		bucket = s.defaultBucket
 	}
-
-	opts := minio.RemoveObjectOptions{
-		// GovernanceBypass: true, // Set to true to bypass object retention locks if configured
-	}
+	opts := minio.RemoveObjectOptions{}
 
 	err := s.client.RemoveObject(ctx, bucket, objectKey, opts)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "Failed to delete object from MinIO", "error", err, "bucket", bucket, "key", objectKey)
-		// Check if the error indicates the object wasn't found - might not be a fatal error depending on use case
-		// errResp := minio.ToErrorResponse(err)
-		// if errResp.Code == "NoSuchKey" { return nil } // Example: treat not found as success
 		return fmt.Errorf("failed to delete object %s/%s: %w", bucket, objectKey, err)
 	}
 
@@ -118,7 +102,7 @@ func (s *MinioStorageService) DeleteObject(ctx context.Context, bucket, objectKe
 }
 
 // GetPresignedPutURL generates a temporary URL for uploading an object.
-func (s *MinioStorageService) GetPresignedPutURL(ctx context.Context, bucket, objectKey string, expiry time.Duration /*, opts port.PutObjectOptions? */) (string, error) {
+func (s *MinioStorageService) GetPresignedPutURL(ctx context.Context, bucket, objectKey string, expiry time.Duration) (string, error) {
 	if bucket == "" {
 		bucket = s.defaultBucket
 	}
@@ -126,26 +110,11 @@ func (s *MinioStorageService) GetPresignedPutURL(ctx context.Context, bucket, ob
 		expiry = s.defaultExpiry
 	}
 
-	// Removed unused putOpts variable
-	// putOpts := minio.PutObjectOptions{}
-	// if opts != nil && opts.ContentType != "" {
-	//     putOpts.ContentType = opts.ContentType
-	// }
+	// policy := minio.NewPostPolicy() // Note: Using PostPolicy for Put? Check SDK if PresignedPutObject directly is better. Let's stick to PresignedPutObject for simplicity.
+	// policy.SetBucket(bucket)
+	// policy.SetKey(objectKey)
+	// policy.SetExpires(time.Now().UTC().Add(expiry))
 
-	// Note: PresignedPutObject might require url.Values for certain headers like content-type constraints
-	// Check minio-go SDK documentation for the exact way to enforce Content-Type if needed.
-	// Example (conceptual, check SDK):
-	policy := minio.NewPostPolicy()
-	policy.SetBucket(bucket)
-	policy.SetKey(objectKey)
-	policy.SetExpires(time.Now().UTC().Add(expiry))
-	// if opts != nil && opts.ContentType != "" {
-	//    policy.SetContentType(opts.ContentType)
-	// }
-	// presignedURL, err := s.client.PresignedPostPolicy(ctx, policy) // For POST uploads
-	// OR use PresignedPutObject directly, potentially setting headers via request parameters
-
-	// Simpler version using PresignedPutObject without strict header enforcement in signature itself:
 	presignedURL, err := s.client.PresignedPutObject(ctx, bucket, objectKey, expiry)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "Failed to generate presigned PUT URL", "error", err, "bucket", bucket, "key", objectKey)
@@ -154,6 +123,30 @@ func (s *MinioStorageService) GetPresignedPutURL(ctx context.Context, bucket, ob
 
 	s.logger.DebugContext(ctx, "Generated presigned PUT URL", "bucket", bucket, "key", objectKey, "expiry", expiry)
 	return presignedURL.String(), nil
+}
+
+// ObjectExists checks if an object exists in the specified bucket using StatObject.
+// ADDED: Implementation for ObjectExists
+func (s *MinioStorageService) ObjectExists(ctx context.Context, bucket, objectKey string) (bool, error) {
+	if bucket == "" {
+		bucket = s.defaultBucket
+	}
+
+	_, err := s.client.StatObject(ctx, bucket, objectKey, minio.StatObjectOptions{})
+	if err != nil {
+		errResponse := minio.ToErrorResponse(err)
+		// Check if the error code indicates that the object was not found.
+		if errResponse.Code == "NoSuchKey" {
+			s.logger.DebugContext(ctx, "Object check: Object not found", "bucket", bucket, "key", objectKey)
+			return false, nil // Object does not exist, but this is not an error in checking
+		}
+		// For any other error (network issue, permissions, etc.), log and return the error.
+		s.logger.ErrorContext(ctx, "Failed to stat object", "error", err, "bucket", bucket, "key", objectKey)
+		return false, fmt.Errorf("failed to check object existence for %s/%s: %w", bucket, objectKey, err)
+	}
+	// If StatObject returns no error, the object exists.
+	s.logger.DebugContext(ctx, "Object check: Object found", "bucket", bucket, "key", objectKey)
+	return true, nil
 }
 
 // Compile-time check to ensure MinioStorageService satisfies the port.FileStorageService interface

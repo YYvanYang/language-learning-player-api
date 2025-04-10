@@ -1,5 +1,5 @@
 // ============================================
-// FILE: cmd/api/main.go
+// FILE: cmd/api/main.go (MODIFIED)
 // ============================================
 package main
 
@@ -22,7 +22,7 @@ import (
 
 	_ "github.com/yvanyang/language-learning-player-api/docs"                                    // Keep this - Import generated docs
 	httpadapter "github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http" // Alias for http handler package
-	"github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http/middleware"  // Adjust import path for our custom middleware
+	"github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http/middleware"  // Adjust import path
 	repo "github.com/yvanyang/language-learning-player-api/internal/adapter/repository/postgres" // Alias for postgres repo package
 	googleauthadapter "github.com/yvanyang/language-learning-player-api/internal/adapter/service/google_auth"
 	minioadapter "github.com/yvanyang/language-learning-player-api/internal/adapter/service/minio"
@@ -120,7 +120,6 @@ func main() {
 	if err != nil {
 		// Optional: Log warning instead of exiting if Google Auth isn't critical for basic functionality
 		appLogger.Warn("Failed to initialize Google Auth service (Google login disabled?)", "error", err)
-		// os.Exit(1) // Only exit if Google Auth is mandatory
 	}
 
 	// Validator
@@ -129,17 +128,18 @@ func main() {
 	// Inject dependencies into Use Cases
 	authUseCase := uc.NewAuthUseCase(cfg.JWT, userRepo, secHelper, googleAuthService, appLogger)
 	audioUseCase := uc.NewAudioContentUseCase(
-		cfg,            // config.Config
-		trackRepo,      // port.AudioTrackRepository
-		collectionRepo, // port.AudioCollectionRepository
-		storageService, // port.FileStorageService
-		txManager,      // port.TransactionManager
-		progressRepo,   // port.PlaybackProgressRepository
-		bookmarkRepo,   // port.BookmarkRepository
-		appLogger,      // *slog.Logger
+		cfg,
+		trackRepo,
+		collectionRepo,
+		storageService,
+		txManager, // Pass txManager
+		progressRepo,
+		bookmarkRepo,
+		appLogger,
 	)
 	activityUseCase := uc.NewUserActivityUseCase(progressRepo, bookmarkRepo, trackRepo, appLogger)
-	uploadUseCase := uc.NewUploadUseCase(cfg.Minio, trackRepo, storageService, appLogger)
+	// Pass txManager to UploadUseCase as well for batch completion
+	uploadUseCase := uc.NewUploadUseCase(cfg.Minio, trackRepo, storageService, txManager, appLogger)
 	userUseCase := uc.NewUserUseCase(userRepo, appLogger)
 
 	// HTTP Handlers
@@ -156,33 +156,29 @@ func main() {
 	router := chi.NewRouter()
 
 	// --- Global Middleware Setup (Applied to ALL routes) ---
-	// Order matters!
-	router.Use(middleware.RequestID)                             // 1. Assign Request ID first
-	router.Use(middleware.RequestLogger)                         // 2. Log incoming request (with ID)
-	router.Use(middleware.Recoverer)                             // 3. Recover from panics (logs with ID)
-	router.Use(chimiddleware.RealIP)                             // 4. Get real IP (needed for rate limiting)
-	ipLimiter := middleware.NewIPRateLimiter(rate.Limit(10), 20) // Example: 10 req/sec, burst 20
-	router.Use(middleware.RateLimit(ipLimiter))                  // 5. Apply rate limiting (consider if Swagger needs limiting)
-	// Note: CORS is applied globally below, before routing groups
-	// router.Use(middleware.SecurityHeaders) // REMOVED global security headers
+	router.Use(middleware.RequestID)
+	router.Use(middleware.RequestLogger)
+	router.Use(middleware.Recoverer)
+	router.Use(chimiddleware.RealIP)
+	ipLimiter := middleware.NewIPRateLimiter(rate.Limit(10), 20) // TODO: Make configurable
+	router.Use(middleware.RateLimit(ipLimiter))
 	router.Use(chimiddleware.StripSlashes)
-	router.Use(chimiddleware.Timeout(60 * time.Second)) // 6. Apply request timeout
+	router.Use(chimiddleware.Timeout(60 * time.Second))
 
 	// --- CORS Middleware (Applied globally before specific route groups) ---
 	router.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   cfg.Cors.AllowedOrigins,
 		AllowedMethods:   cfg.Cors.AllowedMethods,
 		AllowedHeaders:   cfg.Cors.AllowedHeaders,
-		ExposedHeaders:   []string{"Link", "X-Request-ID"}, // Expose Request ID if needed by client
+		ExposedHeaders:   []string{"Link", "X-Request-ID"},
 		AllowCredentials: cfg.Cors.AllowCredentials,
 		MaxAge:           cfg.Cors.MaxAge,
 	}))
 
 	// --- Routes ---
 
-	// Health Check (Outside specific security groups, likely doesn't need CSP etc.)
+	// Health Check (Outside specific security groups)
 	router.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Add deeper health checks (e.g., DB ping) if needed
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, "OK")
@@ -190,8 +186,7 @@ func main() {
 
 	// Swagger Docs Group - Apply relaxed security headers
 	router.Group(func(r chi.Router) {
-		r.Use(middleware.SwaggerSecurityHeaders) // Apply Swagger-specific headers
-
+		r.Use(middleware.SwaggerSecurityHeaders)
 		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/swagger/index.html", http.StatusFound)
 		})
@@ -209,28 +204,25 @@ func main() {
 			r.Post("/auth/login", authHandler.Login)
 			r.Post("/auth/google/callback", authHandler.GoogleCallback)
 
-			// Public Audio Routes
 			r.Get("/audio/tracks", audioHandler.ListTracks)
 			r.Get("/audio/tracks/{trackId}", audioHandler.GetTrackDetails)
-			r.Get("/audio/collections/{collectionId}", audioHandler.GetCollectionDetails) // Needs auth check inside if private
+			r.Get("/audio/collections/{collectionId}", audioHandler.GetCollectionDetails)
 		})
 
 		// Protected API routes (Apply Authenticator middleware + ApiSecurityHeaders)
 		r.Group(func(r chi.Router) {
-			// Apply authentication middleware ONLY to this group
 			r.Use(middleware.Authenticator(secHelper))
 
 			// User Profile
 			r.Get("/users/me", userHandler.GetMyProfile)
-			// r.Put("/users/me", userHandler.UpdateMyProfile) // TODO
 
-			// Authenticated Collection Actions
+			// Audio Collections
 			r.Post("/audio/collections", audioHandler.CreateCollection)
 			r.Put("/audio/collections/{collectionId}", audioHandler.UpdateCollectionMetadata)
 			r.Delete("/audio/collections/{collectionId}", audioHandler.DeleteCollection)
 			r.Put("/audio/collections/{collectionId}/tracks", audioHandler.UpdateCollectionTracks)
 
-			// User Activity Routes
+			// User Activity
 			r.Post("/users/me/progress", activityHandler.RecordProgress)
 			r.Get("/users/me/progress", activityHandler.ListProgress)
 			r.Get("/users/me/progress/{trackId}", activityHandler.GetProgress)
@@ -239,8 +231,12 @@ func main() {
 			r.Delete("/bookmarks/{bookmarkId}", activityHandler.DeleteBookmark)
 
 			// Upload Routes (Require Auth)
+			// Single File
 			r.Post("/uploads/audio/request", uploadHandler.RequestUpload)
-			r.Post("/audio/tracks", uploadHandler.CompleteUploadAndCreateTrack) // Create track metadata after upload
+			r.Post("/audio/tracks", uploadHandler.CompleteUploadAndCreateTrack)
+			// Batch Files
+			r.Post("/uploads/audio/batch/request", uploadHandler.RequestBatchUpload)                 // ADDED
+			r.Post("/audio/tracks/batch/complete", uploadHandler.CompleteBatchUploadAndCreateTracks) // ADDED
 		})
 	})
 
@@ -253,7 +249,7 @@ func main() {
 		ReadTimeout:  cfg.Server.ReadTimeout,
 		WriteTimeout: cfg.Server.WriteTimeout,
 		IdleTimeout:  cfg.Server.IdleTimeout,
-		ErrorLog:     slog.NewLogLogger(appLogger.Handler(), slog.LevelError), // Route server errors to slog
+		ErrorLog:     slog.NewLogLogger(appLogger.Handler(), slog.LevelError),
 	}
 
 	// --- Start Server & Graceful Shutdown ---
@@ -261,28 +257,21 @@ func main() {
 		appLogger.Info("Starting server", "address", srv.Addr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			appLogger.Error("Server failed to start", "error", err)
-			os.Exit(1) // Exit if server cannot start
+			os.Exit(1)
 		}
 	}()
 
-	// Wait for interrupt signal
 	<-ctx.Done()
-
-	// Restore default behavior on the interrupt signal and notify user of shutdown.
 	stop()
 	appLogger.Info("Shutting down server gracefully, press Ctrl+C again to force")
 
-	// The context is used to inform the server it has 10 seconds to finish
-	// the requests it is currently handling
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Close database pool first
 	appLogger.Info("Closing database connection pool...")
 	dbPool.Close()
 	appLogger.Info("Database connection pool closed.")
 
-	// Attempt graceful server shutdown
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		appLogger.Error("Server forced to shutdown", "error", err)
 	}

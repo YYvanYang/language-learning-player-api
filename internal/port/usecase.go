@@ -31,15 +31,6 @@ type ListTracksInput struct {
 	Page          pagination.Page    // Embed pagination parameters
 }
 
-// GetAudioTrackDetailsResult holds the combined result for getting track details.
-// ADDED: Struct to cleanly return multiple values from usecase.
-type GetAudioTrackDetailsResult struct {
-	Track         *domain.AudioTrack
-	PlayURL       string
-	UserProgress  *domain.PlaybackProgress // Nil if user not logged in or no progress
-	UserBookmarks []*domain.Bookmark       // Empty slice if user not logged in or no bookmarks
-}
-
 // AudioContentUseCase defines the methods for the Audio Content use case layer.
 type AudioContentUseCase interface {
 	// CHANGED: GetAudioTrackDetails now returns a result struct
@@ -67,4 +58,16 @@ type UserActivityUseCase interface {
 // UserUseCase defines the interface for user-related operations (e.g., profile)
 type UserUseCase interface {
 	GetUserProfile(ctx context.Context, userID domain.UserID) (*domain.User, error)
+}
+
+// UploadUseCase defines the methods for the Upload use case layer.
+// Note: Method signatures use DTOs from the adapter layer for request/response clarity.
+// This is a slight deviation from strict clean architecture but practical for batch operations.
+// Alternatively, define intermediate structs in the usecase layer.
+type UploadUseCase interface {
+	RequestUpload(ctx context.Context, userID domain.UserID, filename string, contentType string) (*RequestUploadResult, error)
+	CompleteUpload(ctx context.Context, userID domain.UserID, req CompleteUploadRequest) (*domain.AudioTrack, error)
+	// Use port-defined batch structs
+	RequestBatchUpload(ctx context.Context, userID domain.UserID, req BatchRequestUpload) ([]BatchURLResultItem, error)
+	CompleteBatchUpload(ctx context.Context, userID domain.UserID, req BatchCompleteRequest) ([]BatchCompleteResultItem, error)
 }

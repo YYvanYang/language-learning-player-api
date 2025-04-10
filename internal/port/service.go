@@ -23,7 +23,11 @@ type FileStorageService interface {
 	// DeleteObject removes an object from storage.
 	DeleteObject(ctx context.Context, bucket, objectKey string) error
 
-	// TODO: Consider adding methods for checking object existence, getting metadata, etc. if needed.
+	// ObjectExists checks if an object exists in the specified bucket.
+	// ADDED: ObjectExists method
+	ObjectExists(ctx context.Context, bucket, objectKey string) (bool, error)
+
+	// TODO: Consider adding methods for getting metadata, etc. if needed.
 }
 
 // ExternalUserInfo contains standardized user info retrieved from an external identity provider.
