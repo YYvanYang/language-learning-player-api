@@ -101,6 +101,120 @@ definitions:
         description: The JWT access token
         type: string
     type: object
+  dto.BatchCompleteUploadInputDTO:
+    properties:
+      tracks:
+        description: Ensure at least one track, validate each item
+        items:
+          $ref: '#/definitions/dto.BatchCompleteUploadItemDTO'
+        minItems: 1
+        type: array
+    required:
+    - tracks
+    type: object
+  dto.BatchCompleteUploadItemDTO:
+    properties:
+      coverImageUrl:
+        type: string
+      description:
+        type: string
+      durationMs:
+        type: integer
+      isPublic:
+        type: boolean
+      languageCode:
+        type: string
+      level:
+        enum:
+        - A1
+        - A2
+        - B1
+        - B2
+        - C1
+        - C2
+        - NATIVE
+        type: string
+      objectKey:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      title:
+        maxLength: 255
+        type: string
+    required:
+    - durationMs
+    - languageCode
+    - objectKey
+    - title
+    type: object
+  dto.BatchCompleteUploadResponseDTO:
+    properties:
+      results:
+        items:
+          $ref: '#/definitions/dto.BatchCompleteUploadResponseItemDTO'
+        type: array
+    type: object
+  dto.BatchCompleteUploadResponseItemDTO:
+    properties:
+      error:
+        description: Error message if processing failed for this item
+        type: string
+      objectKey:
+        description: Identifies the item
+        type: string
+      success:
+        description: Whether processing this item succeeded
+        type: boolean
+      trackId:
+        description: The ID of the created track if successful
+        type: string
+    type: object
+  dto.BatchRequestUploadInputItemDTO:
+    properties:
+      contentType:
+        description: e.g., "audio/mpeg"
+        type: string
+      filename:
+        type: string
+    required:
+    - contentType
+    - filename
+    type: object
+  dto.BatchRequestUploadInputRequestDTO:
+    properties:
+      files:
+        description: Ensure at least one file, validate each item
+        items:
+          $ref: '#/definitions/dto.BatchRequestUploadInputItemDTO'
+        minItems: 1
+        type: array
+    required:
+    - files
+    type: object
+  dto.BatchRequestUploadInputResponseDTO:
+    properties:
+      results:
+        items:
+          $ref: '#/definitions/dto.BatchRequestUploadInputResponseItemDTO'
+        type: array
+    type: object
+  dto.BatchRequestUploadInputResponseItemDTO:
+    properties:
+      error:
+        description: Error message if URL generation failed for this item
+        type: string
+      objectKey:
+        description: The generated object key for this file
+        type: string
+      originalFilename:
+        description: Helps client match response to request
+        type: string
+      uploadUrl:
+        description: The presigned PUT URL for this file
+        type: string
+    type: object
   dto.BookmarkDTO:
     properties:
       createdAt:
@@ -668,7 +782,7 @@ paths:
       - application/json
       description: After the client successfully uploads a file using the presigned
         URL, this endpoint is called to create the corresponding audio track metadata
-        record in the database.
+        record in the database. Use `/audio/tracks/batch/complete` for batch uploads.
       operationId: complete-audio-upload
       parameters:
       - description: Track metadata and object key
@@ -685,16 +799,20 @@ paths:
           schema:
             $ref: '#/definitions/dto.AudioTrackResponseDTO'
         "400":
-          description: Invalid Input (e.g., validation errors, object key not found)
+          description: Invalid Input (e.g., validation errors, object key not found,
+            file not in storage)
           schema:
             $ref: '#/definitions/httputil.ErrorResponseDTO'
         "401":
           description: Unauthorized
           schema:
             $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "403":
+          description: Forbidden (Object key mismatch)
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
         "409":
-          description: Conflict (e.g., object key already used)" // Depending on use
-            case logic
+          description: Conflict (e.g., object key already used in DB)
           schema:
             $ref: '#/definitions/httputil.ErrorResponseDTO'
         "500":
@@ -703,7 +821,7 @@ paths:
             $ref: '#/definitions/httputil.ErrorResponseDTO'
       security:
       - BearerAuth: []
-      summary: Complete audio upload and create track metadata
+      summary: Complete audio upload and create track metadata (Single File)
       tags:
       - Uploads
   /audio/tracks/{trackId}:
@@ -746,6 +864,55 @@ paths:
       summary: Get audio track details
       tags:
       - Audio Tracks
+  /audio/tracks/batch/complete:
+    post:
+      consumes:
+      - application/json
+      description: After clients successfully upload multiple files using presigned
+        URLs, this endpoint is called to create the corresponding audio track metadata
+        records in the database within a single transaction.
+      operationId: complete-batch-audio-upload
+      parameters:
+      - description: List of track metadata and object keys for uploaded files
+        in: body
+        name: batchCompleteUpload
+        required: true
+        schema:
+          $ref: '#/definitions/dto.BatchCompleteUploadInputDTO'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Batch processing attempted. Results indicate success/failure
+            per item. If overall transaction succeeded, status is 201.
+          schema:
+            $ref: '#/definitions/dto.BatchCompleteUploadResponseDTO'
+        "400":
+          description: Invalid Input (e.g., validation errors in items, files not
+            in storage)
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "403":
+          description: Forbidden (Object key mismatch)
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "409":
+          description: Conflict (e.g., duplicate object key during processing)
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error (e.g., transaction failure)
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      security:
+      - BearerAuth: []
+      summary: Complete batch audio upload and create track metadata
+      tags:
+      - Uploads
   /auth/google/callback:
     post:
       consumes:
@@ -992,6 +1159,45 @@ paths:
       summary: Delete a bookmark
       tags:
       - User Activity
+  /uploads/audio/batch/request:
+    post:
+      consumes:
+      - application/json
+      description: Requests multiple presigned URLs for uploading several audio files
+        in parallel.
+      operationId: request-batch-audio-upload
+      parameters:
+      - description: List of files to request URLs for
+        in: body
+        name: batchUploadRequest
+        required: true
+        schema:
+          $ref: '#/definitions/dto.BatchRequestUploadInputRequestDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of generated presigned URLs and object keys, including
+            potential errors per item.
+          schema:
+            $ref: '#/definitions/dto.BatchRequestUploadInputResponseDTO'
+        "400":
+          description: Invalid Input (e.g., empty file list)
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      security:
+      - BearerAuth: []
+      summary: Request presigned URLs for batch audio upload
+      tags:
+      - Uploads
   /uploads/audio/request:
     post:
       consumes:

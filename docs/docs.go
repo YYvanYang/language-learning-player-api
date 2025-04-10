@@ -467,7 +467,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "After the client successfully uploads a file using the presigned URL, this endpoint is called to create the corresponding audio track metadata record in the database.",
+                "description": "After the client successfully uploads a file using the presigned URL, this endpoint is called to create the corresponding audio track metadata record in the database. Use ` + "`" + `/audio/tracks/batch/complete` + "`" + ` for batch uploads.",
                 "consumes": [
                     "application/json"
                 ],
@@ -477,7 +477,7 @@ const docTemplate = `{
                 "tags": [
                     "Uploads"
                 ],
-                "summary": "Complete audio upload and create track metadata",
+                "summary": "Complete audio upload and create track metadata (Single File)",
                 "operationId": "complete-audio-upload",
                 "parameters": [
                     {
@@ -498,7 +498,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Invalid Input (e.g., validation errors, object key not found)",
+                        "description": "Invalid Input (e.g., validation errors, object key not found, file not in storage)",
                         "schema": {
                             "$ref": "#/definitions/httputil.ErrorResponseDTO"
                         }
@@ -509,14 +509,90 @@ const docTemplate = `{
                             "$ref": "#/definitions/httputil.ErrorResponseDTO"
                         }
                     },
+                    "403": {
+                        "description": "Forbidden (Object key mismatch)",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
                     "409": {
-                        "description": "Conflict (e.g., object key already used)\" // Depending on use case logic",
+                        "description": "Conflict (e.g., object key already used in DB)",
                         "schema": {
                             "$ref": "#/definitions/httputil.ErrorResponseDTO"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/audio/tracks/batch/complete": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "After clients successfully upload multiple files using presigned URLs, this endpoint is called to create the corresponding audio track metadata records in the database within a single transaction.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Uploads"
+                ],
+                "summary": "Complete batch audio upload and create track metadata",
+                "operationId": "complete-batch-audio-upload",
+                "parameters": [
+                    {
+                        "description": "List of track metadata and object keys for uploaded files",
+                        "name": "batchCompleteUpload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.BatchCompleteUploadInputDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Batch processing attempted. Results indicate success/failure per item. If overall transaction succeeded, status is 201.",
+                        "schema": {
+                            "$ref": "#/definitions/dto.BatchCompleteUploadResponseDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid Input (e.g., validation errors in items, files not in storage)",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden (Object key mismatch)",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict (e.g., duplicate object key during processing)",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error (e.g., transaction failure)",
                         "schema": {
                             "$ref": "#/definitions/httputil.ErrorResponseDTO"
                         }
@@ -940,6 +1016,64 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Bookmark Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/uploads/audio/batch/request": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Requests multiple presigned URLs for uploading several audio files in parallel.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Uploads"
+                ],
+                "summary": "Request presigned URLs for batch audio upload",
+                "operationId": "request-batch-audio-upload",
+                "parameters": [
+                    {
+                        "description": "List of files to request URLs for",
+                        "name": "batchUploadRequest",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.BatchRequestUploadInputRequestDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of generated presigned URLs and object keys, including potential errors per item.",
+                        "schema": {
+                            "$ref": "#/definitions/dto.BatchRequestUploadInputResponseDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid Input (e.g., empty file list)",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/httputil.ErrorResponseDTO"
                         }
@@ -1394,6 +1528,169 @@ const docTemplate = `{
                 },
                 "token": {
                     "description": "The JWT access token",
+                    "type": "string"
+                }
+            }
+        },
+        "dto.BatchCompleteUploadInputDTO": {
+            "type": "object",
+            "required": [
+                "tracks"
+            ],
+            "properties": {
+                "tracks": {
+                    "description": "Ensure at least one track, validate each item",
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/dto.BatchCompleteUploadItemDTO"
+                    }
+                }
+            }
+        },
+        "dto.BatchCompleteUploadItemDTO": {
+            "type": "object",
+            "required": [
+                "durationMs",
+                "languageCode",
+                "objectKey",
+                "title"
+            ],
+            "properties": {
+                "coverImageUrl": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "durationMs": {
+                    "type": "integer"
+                },
+                "isPublic": {
+                    "type": "boolean"
+                },
+                "languageCode": {
+                    "type": "string"
+                },
+                "level": {
+                    "type": "string",
+                    "enum": [
+                        "A1",
+                        "A2",
+                        "B1",
+                        "B2",
+                        "C1",
+                        "C2",
+                        "NATIVE"
+                    ]
+                },
+                "objectKey": {
+                    "type": "string"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 255
+                }
+            }
+        },
+        "dto.BatchCompleteUploadResponseDTO": {
+            "type": "object",
+            "properties": {
+                "results": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.BatchCompleteUploadResponseItemDTO"
+                    }
+                }
+            }
+        },
+        "dto.BatchCompleteUploadResponseItemDTO": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "description": "Error message if processing failed for this item",
+                    "type": "string"
+                },
+                "objectKey": {
+                    "description": "Identifies the item",
+                    "type": "string"
+                },
+                "success": {
+                    "description": "Whether processing this item succeeded",
+                    "type": "boolean"
+                },
+                "trackId": {
+                    "description": "The ID of the created track if successful",
+                    "type": "string"
+                }
+            }
+        },
+        "dto.BatchRequestUploadInputItemDTO": {
+            "type": "object",
+            "required": [
+                "contentType",
+                "filename"
+            ],
+            "properties": {
+                "contentType": {
+                    "description": "e.g., \"audio/mpeg\"",
+                    "type": "string"
+                },
+                "filename": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.BatchRequestUploadInputRequestDTO": {
+            "type": "object",
+            "required": [
+                "files"
+            ],
+            "properties": {
+                "files": {
+                    "description": "Ensure at least one file, validate each item",
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/dto.BatchRequestUploadInputItemDTO"
+                    }
+                }
+            }
+        },
+        "dto.BatchRequestUploadInputResponseDTO": {
+            "type": "object",
+            "properties": {
+                "results": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.BatchRequestUploadInputResponseItemDTO"
+                    }
+                }
+            }
+        },
+        "dto.BatchRequestUploadInputResponseItemDTO": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "description": "Error message if URL generation failed for this item",
+                    "type": "string"
+                },
+                "objectKey": {
+                    "description": "The generated object key for this file",
+                    "type": "string"
+                },
+                "originalFilename": {
+                    "description": "Helps client match response to request",
+                    "type": "string"
+                },
+                "uploadUrl": {
+                    "description": "The presigned PUT URL for this file",
                     "type": "string"
                 }
             }

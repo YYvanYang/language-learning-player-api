@@ -198,10 +198,7 @@ func (h *UploadHandler) RequestBatchUpload(w http.ResponseWriter, r *http.Reques
 			Error:            res.Error,
 		}
 	}
-	// Need BatchRequestUploadInputResponseDTO in dto package
-	resp := struct { // Define anonymous struct for response for now
-		Results []dto.BatchRequestUploadInputResponseItemDTO `json:"results"`
-	}{Results: respItems}
+	resp := dto.BatchRequestUploadInputResponseDTO{Results: respItems}
 	httputil.RespondJSON(w, r, http.StatusOK, resp)
 }
 

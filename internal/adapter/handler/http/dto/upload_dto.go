@@ -50,6 +50,11 @@ type BatchRequestUploadInputResponseItemDTO struct {
 	Error            string `json:"error,omitempty"`  // Error message if URL generation failed for this item
 }
 
+// BatchRequestUploadInputResponseDTO is the response body containing results for multiple URL requests.
+type BatchRequestUploadInputResponseDTO struct {
+	Results []BatchRequestUploadInputResponseItemDTO `json:"results"`
+}
+
 // BatchCompleteUploadItemDTO represents metadata for one successfully uploaded file in the batch completion request.
 type BatchCompleteUploadItemDTO struct {
 	ObjectKey     string   `json:"objectKey" validate:"required"`
