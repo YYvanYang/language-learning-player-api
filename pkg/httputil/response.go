@@ -58,6 +58,10 @@ func RespondJSON(w http.ResponseWriter, r *http.Request, status int, payload int
 // MapDomainErrorToHTTP maps domain errors to HTTP status codes and error codes.
 // This is a central place to define the mapping.
 func MapDomainErrorToHTTP(err error) (status int, code string, message string) {
+	if err == nil {
+		return http.StatusOK, "", "" // No error, return OK status
+	}
+
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
 		// Use constant from apierrors package

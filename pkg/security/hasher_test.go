@@ -5,8 +5,8 @@
 package security
 
 import (
-	"crypto/sha256" // 确保导入 crypto/sha256
-	"encoding/hex"  // 确保导入 encoding/hex
+	"crypto/sha256"
+	"encoding/hex"
 	"testing"
 
 	"log/slog"
