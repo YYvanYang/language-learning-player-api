@@ -49,9 +49,9 @@
     COPY migrations /app/migrations
     
     # Set permissions (Optional, good practice if not running as root)
-    # RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-    # RUN chown -R appuser:appgroup /app
-    # USER appuser
+    RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+    RUN chown -R appuser:appgroup /app
+    USER appuser
     
     # Expose the port the application listens on (from config, default 8080)
     EXPOSE 8080

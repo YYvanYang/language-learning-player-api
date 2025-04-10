@@ -1054,6 +1054,7 @@ func main() {
 	collectionRepo := repo.NewAudioCollectionRepository(dbPool, appLogger)
 	progressRepo := repo.NewPlaybackProgressRepository(dbPool, appLogger)
 	bookmarkRepo := repo.NewBookmarkRepository(dbPool, appLogger)
+	refreshTokenRepo := repo.NewRefreshTokenRepository(dbPool, appLogger) // ADDED
 
 	// Services / Helpers
 	secHelper, err := security.NewSecurity(cfg.JWT.SecretKey, appLogger)
@@ -1076,19 +1077,11 @@ func main() {
 	validator := validation.New()
 
 	// Inject dependencies into Use Cases
-	authUseCase := uc.NewAuthUseCase(cfg.JWT, userRepo, secHelper, googleAuthService, appLogger)
+	authUseCase := uc.NewAuthUseCase(cfg.JWT, userRepo, refreshTokenRepo, secHelper, googleAuthService, appLogger)
 	audioUseCase := uc.NewAudioContentUseCase(
-		cfg,
-		trackRepo,
-		collectionRepo,
-		storageService,
-		txManager, // Pass txManager
-		progressRepo,
-		bookmarkRepo,
-		appLogger,
+		cfg, trackRepo, collectionRepo, storageService, txManager, progressRepo, bookmarkRepo, appLogger,
 	)
 	activityUseCase := uc.NewUserActivityUseCase(progressRepo, bookmarkRepo, trackRepo, appLogger)
-	// Pass txManager to UploadUseCase as well for batch completion
 	uploadUseCase := uc.NewUploadUseCase(cfg.Minio, trackRepo, storageService, txManager, appLogger)
 	userUseCase := uc.NewUserUseCase(userRepo, appLogger)
 
@@ -1153,6 +1146,8 @@ func main() {
 			r.Post("/auth/register", authHandler.Register)
 			r.Post("/auth/login", authHandler.Login)
 			r.Post("/auth/google/callback", authHandler.GoogleCallback)
+			r.Post("/auth/refresh", authHandler.Refresh) // ADDED Refresh route
+			r.Post("/auth/logout", authHandler.Logout)   // ADDED Logout route
 
 			r.Get("/audio/tracks", audioHandler.ListTracks)
 			r.Get("/audio/tracks/{trackId}", audioHandler.GetTrackDetails)
@@ -1161,6 +1156,8 @@ func main() {
 
 		// Protected API routes (Apply Authenticator middleware + ApiSecurityHeaders)
 		r.Group(func(r chi.Router) {
+			// IMPORTANT: Authenticator middleware ONLY checks the ACCESS token.
+			// Refresh/Logout routes should NOT be in this group.
 			r.Use(middleware.Authenticator(secHelper))
 
 			// User Profile
@@ -1228,6 +1225,14 @@ func main() {
 
 	appLogger.Info("Server shutdown complete.")
 }
+```
+
+## `migrations/000004_create_refresh_tokens.down.sql`
+
+```sql
+-- migrations/000004_create_refresh_tokens.down.sql
+
+DROP TABLE IF EXISTS refresh_tokens;
 ```
 
 ## `migrations/000003_create_activity_tables.down.sql`
@@ -1380,6 +1385,29 @@ FOR EACH ROW
 EXECUTE FUNCTION update_updated_at_column();
 ```
 
+## `migrations/000004_create_refresh_tokens.up.sql`
+
+```sql
+-- migrations/000004_create_refresh_tokens.up.sql
+
+CREATE TABLE refresh_tokens (
+    -- id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- Use hash as PK? No, better to have separate ID
+    -- Store the SHA-256 hash of the refresh token value
+    -- Use TEXT as hash length is fixed (64 hex chars) but TEXT is simpler. Or VARCHAR(64).
+    token_hash TEXT PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    -- revoked_at TIMESTAMPTZ NULL -- Optional: Add if explicit revocation tracking is needed besides deletion
+);
+
+-- Index for faster lookup by user_id (e.g., for deleting all tokens for a user)
+CREATE INDEX idx_refreshtokens_user_id ON refresh_tokens(user_id);
+
+-- Index on expires_at for potential cleanup jobs
+CREATE INDEX idx_refreshtokens_expires_at ON refresh_tokens(expires_at);
+```
+
 ## `migrations/000001_create_users_table.up.sql`
 
 ```sql
@@ -1448,7 +1476,7 @@ type Config struct {
 	Google   GoogleConfig   `mapstructure:"google"`
 	Log      LogConfig      `mapstructure:"log"`
 	Cors     CorsConfig     `mapstructure:"cors"`
-	CDN      CDNConfig      `mapstructure:"cdn"` // Uncommented CDN config
+	CDN      CDNConfig      `mapstructure:"cdn"`
 }
 
 // ServerConfig holds server specific configuration.
@@ -1461,7 +1489,7 @@ type ServerConfig struct {
 
 // DatabaseConfig holds database connection configuration.
 type DatabaseConfig struct {
-	DSN             string        `mapstructure:"dsn"` // Data Source Name (e.g., postgresql://user:password@host:port/dbname?sslmode=disable)
+	DSN             string        `mapstructure:"dsn"`
 	MaxOpenConns    int           `mapstructure:"maxOpenConns"`
 	MaxIdleConns    int           `mapstructure:"maxIdleConns"`
 	ConnMaxLifetime time.Duration `mapstructure:"connMaxLifetime"`
@@ -1470,9 +1498,9 @@ type DatabaseConfig struct {
 
 // JWTConfig holds JWT related configuration.
 type JWTConfig struct {
-	SecretKey         string        `mapstructure:"secretKey"`
-	AccessTokenExpiry time.Duration `mapstructure:"accessTokenExpiry"`
-	// RefreshTokenExpiry time.Duration `mapstructure:"refreshTokenExpiry"` // Add if implementing refresh tokens
+	SecretKey          string        `mapstructure:"secretKey"`
+	AccessTokenExpiry  time.Duration `mapstructure:"accessTokenExpiry"`
+	RefreshTokenExpiry time.Duration `mapstructure:"refreshTokenExpiry"` // ADDED
 }
 
 // MinioConfig holds MinIO connection configuration.
@@ -1482,20 +1510,19 @@ type MinioConfig struct {
 	SecretAccessKey string        `mapstructure:"secretAccessKey"`
 	UseSSL          bool          `mapstructure:"useSsl"`
 	BucketName      string        `mapstructure:"bucketName"`
-	PresignExpiry   time.Duration `mapstructure:"presignExpiry"` // Default expiry for presigned URLs
+	PresignExpiry   time.Duration `mapstructure:"presignExpiry"`
 }
 
 // GoogleConfig holds Google OAuth configuration.
 type GoogleConfig struct {
 	ClientID     string `mapstructure:"clientId"`
 	ClientSecret string `mapstructure:"clientSecret"`
-	// RedirectURL string `mapstructure:"redirectUrl"` // Usually handled by frontend, but maybe needed later
 }
 
 // LogConfig holds logging configuration.
 type LogConfig struct {
-	Level string `mapstructure:"level"` // e.g., "debug", "info", "warn", "error"
-	JSON  bool   `mapstructure:"json"`  // Output logs in JSON format
+	Level string `mapstructure:"level"`
+	JSON  bool   `mapstructure:"json"`
 }
 
 // CorsConfig holds CORS configuration.
@@ -1507,85 +1534,79 @@ type CorsConfig struct {
 	MaxAge           int      `mapstructure:"maxAge"`
 }
 
-// CDNConfig holds optional CDN configuration. (Uncommented)
+// CDNConfig holds optional CDN configuration.
 type CDNConfig struct {
-	BaseURL string `mapstructure:"baseUrl"` // e.g., "https://cdn.mydomain.com"
+	BaseURL string `mapstructure:"baseUrl"`
 }
 
 // LoadConfig reads configuration from file or environment variables.
-// It looks for config files in the specified path (e.g., "." for current directory).
 func LoadConfig(path string) (config Config, err error) {
 	v := viper.New()
+	setDefaultValues(v) // Set defaults first
 
-	// Set default values first
-	setDefaultValues(v)
-
-	// Configure Viper
-	v.AddConfigPath(path) // Path to look for the config file in
+	v.AddConfigPath(path)
 	v.SetConfigType("yaml")
-	v.AutomaticEnv()                                   // Read in environment variables that match
-	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_")) // Replace dots with underscores for env var names (e.g., server.port -> SERVER_PORT)
+	v.AutomaticEnv()
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
-	// 1. Load base configuration (config.yaml)
 	v.SetConfigName("config")
 	if errReadBase := v.ReadInConfig(); errReadBase != nil {
 		if _, ok := errReadBase.(viper.ConfigFileNotFoundError); !ok {
-			// Only return error if it's not a 'file not found' error for the base file
 			return config, fmt.Errorf("error reading base config file 'config.yaml': %w", errReadBase)
 		}
-		// Base file not found is okay, we can proceed without it.
 		fmt.Fprintln(os.Stderr, "Info: Base config file 'config.yaml' not found. Skipping.")
 	}
 
-	// 2. Load and merge environment-specific configuration (e.g., config.development.yaml)
 	env := os.Getenv("APP_ENV")
 	if env == "" {
-		env = "development" // Default environment
+		env = "development"
 	}
 	v.SetConfigName(fmt.Sprintf("config.%s", env))
 	if errReadEnv := v.MergeInConfig(); errReadEnv != nil {
 		if _, ok := errReadEnv.(viper.ConfigFileNotFoundError); ok {
-			// Env specific file not found, rely on base/env vars/defaults
 			fmt.Fprintf(os.Stderr, "Info: Environment config file 'config.%s.yaml' not found. Relying on base/defaults/env.\n", env)
 		} else {
-			// Other error reading env config file
 			return config, fmt.Errorf("error merging config file 'config.%s.yaml': %w", env, errReadEnv)
 		}
 	}
 
-	// Unmarshal the final merged configuration
 	err = v.Unmarshal(&config)
 	if err != nil {
 		return config, fmt.Errorf("failed to unmarshal configuration: %w", err)
 	}
 
-	// Optional: Add validation logic here if needed
-	// For example, check if required fields like database DSN are set:
 	if config.Database.DSN == "" {
-		// Attempt to get from DATABASE_URL env var as a fallback
 		envDSN := os.Getenv("DATABASE_URL")
 		if envDSN != "" {
 			fmt.Fprintln(os.Stderr, "Info: Database DSN not found in config, using DATABASE_URL environment variable.")
 			config.Database.DSN = envDSN
 		} else {
-			// If still empty after checking env var, return error
 			return config, fmt.Errorf("database DSN is required but not found in config or DATABASE_URL environment variable")
 		}
 	}
 
-	// Validate CDN BaseURL if provided
 	if config.CDN.BaseURL != "" {
 		_, parseErr := url.ParseRequestURI(config.CDN.BaseURL)
 		if parseErr != nil {
 			fmt.Fprintf(os.Stderr, "Warning: Invalid CDN BaseURL configured ('%s'): %v. CDN rewriting will be disabled.\n", config.CDN.BaseURL, parseErr)
-			config.CDN.BaseURL = "" // Disable CDN rewriting if URL is invalid
+			config.CDN.BaseURL = ""
 		}
+	}
+
+	// Validate token expirations
+	if config.JWT.AccessTokenExpiry <= 0 {
+		return config, fmt.Errorf("jwt.accessTokenExpiry must be a positive duration")
+	}
+	if config.JWT.RefreshTokenExpiry <= 0 {
+		return config, fmt.Errorf("jwt.refreshTokenExpiry must be a positive duration")
+	}
+	if config.JWT.RefreshTokenExpiry <= config.JWT.AccessTokenExpiry {
+		return config, fmt.Errorf("jwt.refreshTokenExpiry must be longer than jwt.accessTokenExpiry")
 	}
 
 	return config, nil
 }
 
-// Use a dedicated viper instance for defaults to avoid conflicts
 func setDefaultValues(v *viper.Viper) {
 	// Server Defaults
 	v.SetDefault("server.port", "8080")
@@ -1593,23 +1614,24 @@ func setDefaultValues(v *viper.Viper) {
 	v.SetDefault("server.writeTimeout", "10s")
 	v.SetDefault("server.idleTimeout", "120s")
 
-	// Database Defaults (Note: DSN has no sensible default)
+	// Database Defaults
 	v.SetDefault("database.maxOpenConns", 25)
 	v.SetDefault("database.maxIdleConns", 25)
 	v.SetDefault("database.connMaxLifetime", "5m")
-	v.SetDefault("database.connMaxIdleTime", "5m") // Usually same as lifetime
+	v.SetDefault("database.connMaxIdleTime", "5m")
 
 	// JWT Defaults
-	v.SetDefault("jwt.secretKey", "default-insecure-secret-key-please-override") // Provide a default but stress it's insecure
+	v.SetDefault("jwt.secretKey", "default-insecure-secret-key-please-override")
 	v.SetDefault("jwt.accessTokenExpiry", "1h")
+	v.SetDefault("jwt.refreshTokenExpiry", "720h") // Default: 30 days (ADDED)
 
 	// MinIO Defaults
 	v.SetDefault("minio.endpoint", "localhost:9000")
 	v.SetDefault("minio.accessKeyId", "minioadmin")
 	v.SetDefault("minio.secretAccessKey", "minioadmin")
 	v.SetDefault("minio.useSsl", false)
-	v.SetDefault("minio.bucketName", "language-audio") // Ensure bucket name is set
-	v.SetDefault("minio.presignExpiry", "1h")          // Default URL expiry
+	v.SetDefault("minio.bucketName", "language-audio")
+	v.SetDefault("minio.presignExpiry", "1h")
 
 	// Google Defaults
 	v.SetDefault("google.clientId", "")
@@ -1617,21 +1639,19 @@ func setDefaultValues(v *viper.Viper) {
 
 	// Log Defaults
 	v.SetDefault("log.level", "info")
-	v.SetDefault("log.json", false) // Easier to read logs for dev default
+	v.SetDefault("log.json", false)
 
-	// CORS Defaults (Example: Allow local dev server)
+	// CORS Defaults
 	v.SetDefault("cors.allowedOrigins", []string{"http://localhost:3000", "http://127.0.0.1:3000"})
 	v.SetDefault("cors.allowedMethods", []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"})
 	v.SetDefault("cors.allowedHeaders", []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"})
 	v.SetDefault("cors.allowCredentials", true)
-	v.SetDefault("cors.maxAge", 300) // 5 minutes
+	v.SetDefault("cors.maxAge", 300)
 
-	// CDN Default (Uncommented)
-	v.SetDefault("cdn.baseUrl", "") // Default is empty, meaning CDN rewriting is disabled
+	// CDN Default
+	v.SetDefault("cdn.baseUrl", "")
 }
 
-// GetConfig is a helper function to load config, often called from main.
-// Assumes config files are in the current working directory (".")
 func GetConfig() (Config, error) {
 	return LoadConfig(".")
 }
@@ -1999,7 +2019,9 @@ func (h *UserActivityHandler) DeleteBookmark(w http.ResponseWriter, r *http.Requ
 ## `internal/adapter/handler/http/auth_handler.go`
 
 ```go
-// internal/adapter/handler/http/auth_handler.go
+// ==========================================================
+// FILE: internal/adapter/handler/http/auth_handler.go (MODIFIED)
+// ==========================================================
 package http
 
 import (
@@ -2016,7 +2038,7 @@ import (
 
 // AuthHandler handles HTTP requests related to authentication.
 type AuthHandler struct {
-	authUseCase port.AuthUseCase // Use interface defined in port package
+	authUseCase port.AuthUseCase
 	validator   *validation.Validator
 }
 
@@ -2028,6 +2050,19 @@ func NewAuthHandler(uc port.AuthUseCase, v *validation.Validator) *AuthHandler {
 	}
 }
 
+// mapAuthResultToDTO maps the use case AuthResult to the response DTO.
+func mapAuthResultToDTO(result port.AuthResult) dto.AuthResponseDTO {
+	resp := dto.AuthResponseDTO{
+		AccessToken:  result.AccessToken,
+		RefreshToken: result.RefreshToken,
+	}
+	if result.IsNewUser { // Only include if true
+		isNewPtr := true
+		resp.IsNewUser = &isNewPtr
+	}
+	return resp
+}
+
 // Register handles user registration requests.
 // @Summary Register a new user
 // @Description Registers a new user account using email and password.
@@ -2035,12 +2070,12 @@ func NewAuthHandler(uc port.AuthUseCase, v *validation.Validator) *AuthHandler {
 // @Tags Authentication
 // @Accept json
 // @Produce json
-// @Param register body dto.RegisterRequestDTO true "User Registration Info" // Input parameter: name, in, type, required, description
-// @Success 201 {object} dto.AuthResponseDTO "Registration successful, returns JWT" // Success response: code, type, description
-// @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Input"                // Failure response: code, type, description
+// @Param register body dto.RegisterRequestDTO true "User Registration Info"
+// @Success 201 {object} dto.AuthResponseDTO "Registration successful, returns access and refresh tokens" // MODIFIED DESCRIPTION
+// @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Input"
 // @Failure 409 {object} httputil.ErrorResponseDTO "Conflict - Email Exists"
 // @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
-// @Router /auth/register [post]  // Route path and method
+// @Router /auth/register [post]
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req dto.RegisterRequestDTO
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -2049,34 +2084,32 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	// Validate input DTO
 	if err := h.validator.ValidateStruct(req); err != nil {
 		httputil.RespondError(w, r, fmt.Errorf("%w: %v", domain.ErrInvalidArgument, err))
 		return
 	}
 
-	// Call use case
-	_, token, err := h.authUseCase.RegisterWithPassword(r.Context(), req.Email, req.Password, req.Name)
+	// MODIFIED: Use case returns AuthResult
+	_, authResult, err := h.authUseCase.RegisterWithPassword(r.Context(), req.Email, req.Password, req.Name)
 	if err != nil {
-		// UseCase should return domain errors, let RespondError map them
 		httputil.RespondError(w, r, err)
 		return
 	}
 
-	// Return JWT token
-	resp := dto.AuthResponseDTO{Token: token}
-	httputil.RespondJSON(w, r, http.StatusCreated, resp) // 201 Created for successful registration
+	// MODIFIED: Map AuthResult to DTO
+	resp := mapAuthResultToDTO(authResult)
+	httputil.RespondJSON(w, r, http.StatusCreated, resp)
 }
 
 // Login handles user login requests.
 // @Summary Login a user
-// @Description Authenticates a user with email and password, returns a JWT token.
+// @Description Authenticates a user with email and password, returns access and refresh tokens. // MODIFIED DESCRIPTION
 // @ID login-user
 // @Tags Authentication
 // @Accept json
 // @Produce json
 // @Param login body dto.LoginRequestDTO true "User Login Credentials"
-// @Success 200 {object} dto.AuthResponseDTO "Login successful, returns JWT"
+// @Success 200 {object} dto.AuthResponseDTO "Login successful, returns access and refresh tokens" // MODIFIED DESCRIPTION
 // @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Input"
 // @Failure 401 {object} httputil.ErrorResponseDTO "Authentication Failed"
 // @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
@@ -2089,34 +2122,32 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	// Validate input DTO
 	if err := h.validator.ValidateStruct(req); err != nil {
 		httputil.RespondError(w, r, fmt.Errorf("%w: %v", domain.ErrInvalidArgument, err))
 		return
 	}
 
-	// Call use case
-	token, err := h.authUseCase.LoginWithPassword(r.Context(), req.Email, req.Password)
+	// MODIFIED: Use case returns AuthResult
+	authResult, err := h.authUseCase.LoginWithPassword(r.Context(), req.Email, req.Password)
 	if err != nil {
-		// Handles domain.ErrAuthenticationFailed, domain.ErrNotFound (mapped to auth failed), etc.
 		httputil.RespondError(w, r, err)
 		return
 	}
 
-	// Return JWT token
-	resp := dto.AuthResponseDTO{Token: token}
+	// MODIFIED: Map AuthResult to DTO
+	resp := mapAuthResultToDTO(authResult)
 	httputil.RespondJSON(w, r, http.StatusOK, resp)
 }
 
 // GoogleCallback handles the callback from Google OAuth flow.
 // @Summary Handle Google OAuth callback
-// @Description Receives the ID token from the frontend after Google sign-in, verifies it, and performs user registration or login, returning a JWT.
+// @Description Receives the ID token from the frontend after Google sign-in, verifies it, and performs user registration or login, returning access and refresh tokens. // MODIFIED DESCRIPTION
 // @ID google-callback
 // @Tags Authentication
 // @Accept json
 // @Produce json
 // @Param googleCallback body dto.GoogleCallbackRequestDTO true "Google ID Token"
-// @Success 200 {object} dto.AuthResponseDTO "Authentication successful, returns JWT. isNewUser field indicates if a new account was created."
+// @Success 200 {object} dto.AuthResponseDTO "Authentication successful, returns access/refresh tokens. isNewUser indicates new account creation." // MODIFIED DESCRIPTION
 // @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Input (Missing or Invalid ID Token)"
 // @Failure 401 {object} httputil.ErrorResponseDTO "Authentication Failed (Invalid Google Token)"
 // @Failure 409 {object} httputil.ErrorResponseDTO "Conflict - Email already exists with a different login method"
@@ -2135,21 +2166,91 @@ func (h *AuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, isNew, err := h.authUseCase.AuthenticateWithGoogle(r.Context(), req.IDToken)
+	// MODIFIED: Use case returns AuthResult
+	authResult, err := h.authUseCase.AuthenticateWithGoogle(r.Context(), req.IDToken)
 	if err != nil {
-		// Handles domain.ErrAuthenticationFailed, domain.ErrConflict, etc.
 		httputil.RespondError(w, r, err)
 		return
 	}
 
-	resp := dto.AuthResponseDTO{Token: token}
-	// Only include isNewUser field if it's true, otherwise omit it
-	if isNew {
-		isNewPtr := true
-		resp.IsNewUser = &isNewPtr
+	// MODIFIED: Map AuthResult to DTO
+	resp := mapAuthResultToDTO(authResult)
+	httputil.RespondJSON(w, r, http.StatusOK, resp)
+}
+
+// Refresh handles token refresh requests.
+// @Summary Refresh access token
+// @Description Provides a valid refresh token to get a new pair of access and refresh tokens.
+// @ID refresh-token
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param refresh body dto.RefreshRequestDTO true "Refresh Token"
+// @Success 200 {object} dto.AuthResponseDTO "Tokens refreshed successfully"
+// @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Input (Missing Refresh Token)"
+// @Failure 401 {object} httputil.ErrorResponseDTO "Authentication Failed (Invalid or Expired Refresh Token)"
+// @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
+// @Router /auth/refresh [post]
+// ADDED METHOD
+func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
+	var req dto.RefreshRequestDTO
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httputil.RespondError(w, r, fmt.Errorf("%w: %v", domain.ErrInvalidArgument, "invalid request body"))
+		return
+	}
+	defer r.Body.Close()
+
+	if err := h.validator.ValidateStruct(req); err != nil {
+		httputil.RespondError(w, r, fmt.Errorf("%w: %v", domain.ErrInvalidArgument, err))
+		return
 	}
 
+	authResult, err := h.authUseCase.RefreshAccessToken(r.Context(), req.RefreshToken)
+	if err != nil {
+		// Use case should return domain.ErrAuthenticationFailed for invalid/expired tokens
+		httputil.RespondError(w, r, err)
+		return
+	}
+
+	resp := mapAuthResultToDTO(authResult) // Reuse mapping
 	httputil.RespondJSON(w, r, http.StatusOK, resp)
+}
+
+// Logout handles user logout requests by invalidating the refresh token.
+// @Summary Logout user
+// @Description Invalidates the provided refresh token, effectively logging the user out of that session/device.
+// @ID logout-user
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param logout body dto.LogoutRequestDTO true "Refresh Token to invalidate"
+// @Success 204 "Logout successful"
+// @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Input (Missing Refresh Token)"
+// @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
+// @Router /auth/logout [post]
+// ADDED METHOD
+func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	var req dto.LogoutRequestDTO
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httputil.RespondError(w, r, fmt.Errorf("%w: %v", domain.ErrInvalidArgument, "invalid request body"))
+		return
+	}
+	defer r.Body.Close()
+
+	if err := h.validator.ValidateStruct(req); err != nil {
+		httputil.RespondError(w, r, fmt.Errorf("%w: %v", domain.ErrInvalidArgument, err))
+		return
+	}
+
+	err := h.authUseCase.Logout(r.Context(), req.RefreshToken)
+	if err != nil {
+		// Logout use case should generally not return client errors unless input is bad,
+		// but handle potential internal errors.
+		httputil.RespondError(w, r, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent) // 204 No Content for successful logout
 }
 ```
 
@@ -3216,9 +3317,9 @@ package dto
 
 // RegisterRequestDTO defines the expected JSON body for user registration.
 type RegisterRequestDTO struct {
-    Email    string `json:"email" validate:"required,email" example:"user@example.com"` // Add example tag
-    Password string `json:"password" validate:"required,min=8" format:"password" example:"Str0ngP@ssw0rd"` // Add format tag
-    Name     string `json:"name" validate:"required,max=100" example:"John Doe"`
+	Email    string `json:"email" validate:"required,email" example:"user@example.com"`                    // Add example tag
+	Password string `json:"password" validate:"required,min=8" format:"password" example:"Str0ngP@ssw0rd"` // Add format tag
+	Name     string `json:"name" validate:"required,max=100" example:"John Doe"`
 }
 
 // LoginRequestDTO defines the expected JSON body for user login.
@@ -3232,16 +3333,27 @@ type GoogleCallbackRequestDTO struct {
 	IDToken string `json:"idToken" validate:"required"`
 }
 
+// RefreshRequestDTO defines the expected JSON body for token refresh.
+// ADDED
+type RefreshRequestDTO struct {
+	RefreshToken string `json:"refreshToken" validate:"required"`
+}
+
+// LogoutRequestDTO defines the expected JSON body for logout.
+// ADDED (Optional, can also just take token from body or header)
+type LogoutRequestDTO struct {
+	RefreshToken string `json:"refreshToken" validate:"required"`
+}
 
 // --- Response DTOs ---
 
-// AuthResponseDTO defines the JSON response body for successful authentication.
+// AuthResponseDTO defines the JSON response body for successful authentication/refresh.
+// MODIFIED: Added refreshToken
 type AuthResponseDTO struct {
-	Token     string `json:"token"`                // The JWT access token
-	IsNewUser *bool  `json:"isNewUser,omitempty"` // Pointer, only included for Google callback if user is new
+	AccessToken  string `json:"accessToken"`         // The JWT access token
+	RefreshToken string `json:"refreshToken"`        // The refresh token value
+	IsNewUser    *bool  `json:"isNewUser,omitempty"` // Pointer, only included for Google callback if user is new
 }
-
-// REMOVED UserResponseDTO from here. It now resides in user_dto.go
 ```
 
 ## `internal/adapter/handler/http/dto/upload_dto.go`
@@ -4889,6 +5001,139 @@ func (r *AudioCollectionRepository) scanCollection(ctx context.Context, row RowS
 var _ port.AudioCollectionRepository = (*AudioCollectionRepository)(nil)
 ```
 
+## `internal/adapter/repository/postgres/refreshtoken_repo.go`
+
+```go
+// ==========================================================
+// FILE: internal/adapter/repository/postgres/refreshtoken_repo.go (NEW FILE)
+// ==========================================================
+package postgres
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/internal/port"
+)
+
+type RefreshTokenRepository struct {
+	db         *pgxpool.Pool
+	logger     *slog.Logger
+	getQuerier func(ctx context.Context) Querier
+}
+
+func NewRefreshTokenRepository(db *pgxpool.Pool, logger *slog.Logger) *RefreshTokenRepository {
+	repo := &RefreshTokenRepository{
+		db:     db,
+		logger: logger.With("repository", "RefreshTokenRepository"),
+	}
+	repo.getQuerier = func(ctx context.Context) Querier {
+		return getQuerier(ctx, repo.db)
+	}
+	return repo
+}
+
+func (r *RefreshTokenRepository) Save(ctx context.Context, tokenData *port.RefreshTokenData) error {
+	q := r.getQuerier(ctx)
+	query := `
+        INSERT INTO refresh_tokens (token_hash, user_id, expires_at, created_at)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (token_hash) DO UPDATE SET -- Should not happen if hashes are unique
+            expires_at = EXCLUDED.expires_at,
+            user_id = EXCLUDED.user_id -- Update user_id just in case (though unlikely to change)
+    `
+	if tokenData.CreatedAt.IsZero() {
+		tokenData.CreatedAt = time.Now() // Ensure created_at is set
+	}
+
+	_, err := q.Exec(ctx, query,
+		tokenData.TokenHash,
+		tokenData.UserID,
+		tokenData.ExpiresAt,
+		tokenData.CreatedAt,
+	)
+	if err != nil {
+		r.logger.ErrorContext(ctx, "Error saving refresh token", "error", err, "userID", tokenData.UserID)
+		// Consider checking for FK violation on user_id -> domain.ErrInvalidArgument ?
+		return fmt.Errorf("saving refresh token: %w", err)
+	}
+	r.logger.DebugContext(ctx, "Refresh token saved", "userID", tokenData.UserID, "expiresAt", tokenData.ExpiresAt)
+	return nil
+}
+
+func (r *RefreshTokenRepository) FindByTokenHash(ctx context.Context, tokenHash string) (*port.RefreshTokenData, error) {
+	q := r.getQuerier(ctx)
+	query := `
+        SELECT token_hash, user_id, expires_at, created_at
+        FROM refresh_tokens
+        WHERE token_hash = $1
+    `
+	row := q.QueryRow(ctx, query, tokenHash)
+	tokenData, err := r.scanTokenData(ctx, row)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound // Map DB error to domain error
+		}
+		r.logger.ErrorContext(ctx, "Error finding refresh token by hash", "error", err)
+		return nil, fmt.Errorf("finding refresh token by hash: %w", err)
+	}
+	return tokenData, nil
+}
+
+func (r *RefreshTokenRepository) DeleteByTokenHash(ctx context.Context, tokenHash string) error {
+	q := r.getQuerier(ctx)
+	query := `DELETE FROM refresh_tokens WHERE token_hash = $1`
+	cmdTag, err := q.Exec(ctx, query, tokenHash)
+	if err != nil {
+		r.logger.ErrorContext(ctx, "Error deleting refresh token by hash", "error", err)
+		return fmt.Errorf("deleting refresh token by hash: %w", err)
+	}
+	if cmdTag.RowsAffected() == 0 {
+		// Not finding the token to delete is not necessarily an error in a logout/refresh flow
+		r.logger.DebugContext(ctx, "Refresh token hash not found for deletion", "tokenHash", tokenHash) // Log hash prefix? No.
+		return domain.ErrNotFound                                                                       // Or return nil? ErrNotFound seems slightly more informative.
+	}
+	r.logger.DebugContext(ctx, "Refresh token deleted by hash")
+	return nil
+}
+
+func (r *RefreshTokenRepository) DeleteByUser(ctx context.Context, userID domain.UserID) (int64, error) {
+	q := r.getQuerier(ctx)
+	query := `DELETE FROM refresh_tokens WHERE user_id = $1`
+	cmdTag, err := q.Exec(ctx, query, userID)
+	if err != nil {
+		r.logger.ErrorContext(ctx, "Error deleting refresh tokens by user ID", "error", err, "userID", userID)
+		return 0, fmt.Errorf("deleting refresh tokens by user ID: %w", err)
+	}
+	deletedCount := cmdTag.RowsAffected()
+	r.logger.InfoContext(ctx, "Refresh tokens deleted by user ID", "userID", userID, "count", deletedCount)
+	return deletedCount, nil
+}
+
+func (r *RefreshTokenRepository) scanTokenData(ctx context.Context, row RowScanner) (*port.RefreshTokenData, error) {
+	var data port.RefreshTokenData
+	err := row.Scan(
+		&data.TokenHash,
+		&data.UserID,
+		&data.ExpiresAt,
+		&data.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &data, nil
+}
+
+var _ port.RefreshTokenRepository = (*RefreshTokenRepository)(nil)
+```
+
 ## `internal/adapter/repository/postgres/user_repo.go`
 
 ```go
@@ -5739,7 +5984,8 @@ type SecurityHelper interface {
 	// Returns domain.ErrUnauthenticated or domain.ErrAuthenticationFailed on failure.
 	VerifyJWT(ctx context.Context, tokenString string) (domain.UserID, error)
 
-	// TODO: Add methods for Refresh Token generation/validation if implementing that flow.
+	GenerateRefreshTokenValue() (string, error)     // ADDED
+	HashRefreshTokenValue(tokenValue string) string // ADDED
 }
 
 // REMOVED UserUseCase interface from here
@@ -5753,12 +5999,29 @@ package port
 
 import (
 	"context"
+	"time"
 
 	"github.com/yvanyang/language-learning-player-api/internal/domain"
 	"github.com/yvanyang/language-learning-player-api/pkg/pagination"
 )
 
 // --- Repository Interfaces ---
+
+// RefreshTokenData holds the details of a stored refresh token.
+type RefreshTokenData struct {
+	TokenHash string // SHA-256 hash
+	UserID    domain.UserID
+	ExpiresAt time.Time
+	CreatedAt time.Time
+}
+
+// RefreshTokenRepository defines persistence operations for refresh tokens.
+type RefreshTokenRepository interface {
+	Save(ctx context.Context, tokenData *RefreshTokenData) error
+	FindByTokenHash(ctx context.Context, tokenHash string) (*RefreshTokenData, error)
+	DeleteByTokenHash(ctx context.Context, tokenHash string) error
+	DeleteByUser(ctx context.Context, userID domain.UserID) (int64, error) // Returns number of tokens deleted
+}
 
 // UserRepository defines the persistence operations for User entities.
 type UserRepository interface {
@@ -5839,7 +6102,9 @@ type TransactionManager interface {
 ## `internal/port/usecase.go`
 
 ```go
-// internal/port/usecase.go
+// ============================================
+// FILE: internal/port/usecase.go (MODIFIED)
+// ============================================
 package port
 
 import (
@@ -5850,11 +6115,33 @@ import (
 	"github.com/yvanyang/language-learning-player-api/pkg/pagination"
 )
 
+// AuthResult holds both access and refresh tokens, and registration status.
+type AuthResult struct {
+	AccessToken  string
+	RefreshToken string
+	IsNewUser    bool // Only relevant for external auth methods like Google sign-in
+}
+
 // AuthUseCase defines the methods for the Auth use case layer.
 type AuthUseCase interface {
-	RegisterWithPassword(ctx context.Context, emailStr, password, name string) (*domain.User, string, error)
-	LoginWithPassword(ctx context.Context, emailStr, password string) (string, error)
-	AuthenticateWithGoogle(ctx context.Context, googleIdToken string) (authToken string, isNewUser bool, err error)
+	// RegisterWithPassword registers a new user with email/password.
+	// Returns the created user, auth tokens, and error.
+	RegisterWithPassword(ctx context.Context, emailStr, password, name string) (*domain.User, AuthResult, error)
+
+	// LoginWithPassword authenticates a user with email/password.
+	// Returns auth tokens and error.
+	LoginWithPassword(ctx context.Context, emailStr, password string) (AuthResult, error)
+
+	// AuthenticateWithGoogle handles login or registration via Google ID Token.
+	// Returns auth tokens and error. The IsNewUser field in AuthResult indicates
+	// if a new account was created during this process.
+	AuthenticateWithGoogle(ctx context.Context, googleIdToken string) (AuthResult, error)
+
+	// RefreshAccessToken validates a refresh token and issues a new pair of access/refresh tokens.
+	RefreshAccessToken(ctx context.Context, refreshTokenValue string) (AuthResult, error)
+
+	// Logout invalidates the provided refresh token.
+	Logout(ctx context.Context, refreshTokenValue string) error
 }
 
 // AudioContentUseCase defines the methods for the Audio Content use case layer.
@@ -6296,7 +6583,9 @@ func (uc *userUseCase) GetUserProfile(ctx context.Context, userID domain.UserID)
 ## `internal/usecase/auth_uc.go`
 
 ```go
-// internal/usecase/auth_uc.go
+// ============================================
+// FILE: internal/usecase/auth_uc.go (MODIFIED)
+// ============================================
 package usecase
 
 import (
@@ -6312,16 +6601,19 @@ import (
 )
 
 type AuthUseCase struct {
-	userRepo       port.UserRepository
-	secHelper      port.SecurityHelper
-	extAuthService port.ExternalAuthService
-	jwtExpiry      time.Duration
-	logger         *slog.Logger
+	userRepo         port.UserRepository
+	refreshTokenRepo port.RefreshTokenRepository // Dependency for refresh token storage
+	secHelper        port.SecurityHelper
+	extAuthService   port.ExternalAuthService
+	cfg              config.JWTConfig // Store the whole JWT config for expiries
+	logger           *slog.Logger
 }
 
+// NewAuthUseCase creates a new AuthUseCase.
 func NewAuthUseCase(
-	cfg config.JWTConfig,
+	cfg config.JWTConfig, // Pass whole JWTConfig
 	ur port.UserRepository,
+	rtr port.RefreshTokenRepository, // Inject RefreshTokenRepository
 	sh port.SecurityHelper,
 	eas port.ExternalAuthService,
 	log *slog.Logger,
@@ -6329,186 +6621,306 @@ func NewAuthUseCase(
 	if eas == nil {
 		log.Warn("AuthUseCase created without ExternalAuthService implementation.")
 	}
+	// Add check for RefreshTokenRepository
+	if rtr == nil {
+		// Log as error because refresh token functionality will be broken
+		log.Error("AuthUseCase created without RefreshTokenRepository implementation. Refresh tokens cannot be stored or validated.")
+	}
 	return &AuthUseCase{
-		userRepo:       ur,
-		secHelper:      sh,
-		extAuthService: eas,
-		jwtExpiry:      cfg.AccessTokenExpiry,
-		logger:         log.With("usecase", "AuthUseCase"),
+		userRepo:         ur,
+		refreshTokenRepo: rtr, // Assign injected repo
+		secHelper:        sh,
+		extAuthService:   eas,
+		cfg:              cfg, // Store config
+		logger:           log.With("usecase", "AuthUseCase"),
 	}
 }
 
+// generateAndStoreTokens is a helper to create access/refresh tokens and store the refresh token hash.
+func (uc *AuthUseCase) generateAndStoreTokens(ctx context.Context, userID domain.UserID) (accessToken, refreshTokenValue string, err error) {
+	// Ensure repo dependency is available before proceeding
+	if uc.refreshTokenRepo == nil {
+		uc.logger.ErrorContext(ctx, "RefreshTokenRepository is nil, cannot generate/store tokens", "userID", userID)
+		return "", "", fmt.Errorf("internal server error: authentication system misconfigured")
+	}
+
+	accessToken, err = uc.secHelper.GenerateJWT(ctx, userID, uc.cfg.AccessTokenExpiry)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to generate access token: %w", err)
+	}
+
+	refreshTokenValue, err = uc.secHelper.GenerateRefreshTokenValue()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to generate refresh token value: %w", err)
+	}
+
+	refreshTokenHash := uc.secHelper.HashRefreshTokenValue(refreshTokenValue)
+	expiresAt := time.Now().Add(uc.cfg.RefreshTokenExpiry)
+
+	tokenData := &port.RefreshTokenData{
+		TokenHash: refreshTokenHash,
+		UserID:    userID,
+		ExpiresAt: expiresAt,
+		CreatedAt: time.Now(), // Set creation time here
+	}
+
+	// Save the refresh token data to the repository
+	if err = uc.refreshTokenRepo.Save(ctx, tokenData); err != nil {
+		return "", "", fmt.Errorf("failed to store refresh token: %w", err)
+	}
+
+	return accessToken, refreshTokenValue, nil
+}
+
 // RegisterWithPassword handles user registration with email and password.
-func (uc *AuthUseCase) RegisterWithPassword(ctx context.Context, emailStr, password, name string) (*domain.User, string, error) {
+func (uc *AuthUseCase) RegisterWithPassword(ctx context.Context, emailStr, password, name string) (*domain.User, port.AuthResult, error) {
 	emailVO, err := domain.NewEmail(emailStr)
 	if err != nil {
 		uc.logger.WarnContext(ctx, "Invalid email provided during registration", "email", emailStr, "error", err)
-		return nil, "", fmt.Errorf("%w: %v", domain.ErrInvalidArgument, err)
+		return nil, port.AuthResult{}, fmt.Errorf("%w: %v", domain.ErrInvalidArgument, err)
 	}
 
-	// Use EmailExists for a more efficient check
 	exists, err := uc.userRepo.EmailExists(ctx, emailVO)
 	if err != nil {
 		uc.logger.ErrorContext(ctx, "Error checking email existence", "error", err, "email", emailStr)
-		return nil, "", fmt.Errorf("failed to check email existence: %w", err)
+		return nil, port.AuthResult{}, fmt.Errorf("failed to check email existence: %w", err)
 	}
 	if exists {
 		uc.logger.WarnContext(ctx, "Registration attempt with existing email", "email", emailStr)
-		return nil, "", fmt.Errorf("%w: email already registered", domain.ErrConflict)
+		return nil, port.AuthResult{}, fmt.Errorf("%w: email already registered", domain.ErrConflict)
 	}
 
 	if len(password) < 8 {
-		return nil, "", fmt.Errorf("%w: password must be at least 8 characters long", domain.ErrInvalidArgument)
+		return nil, port.AuthResult{}, fmt.Errorf("%w: password must be at least 8 characters long", domain.ErrInvalidArgument)
 	}
 
 	hashedPassword, err := uc.secHelper.HashPassword(ctx, password)
 	if err != nil {
 		uc.logger.ErrorContext(ctx, "Failed to hash password during registration", "error", err)
-		return nil, "", fmt.Errorf("failed to process password: %w", err)
+		return nil, port.AuthResult{}, fmt.Errorf("failed to process password: %w", err)
 	}
 
 	user, err := domain.NewLocalUser(emailStr, name, hashedPassword)
 	if err != nil {
 		uc.logger.ErrorContext(ctx, "Failed to create domain user object", "error", err)
-		return nil, "", fmt.Errorf("failed to create user data: %w", err)
+		return nil, port.AuthResult{}, fmt.Errorf("failed to create user data: %w", err)
 	}
 
 	if err := uc.userRepo.Create(ctx, user); err != nil {
 		uc.logger.ErrorContext(ctx, "Failed to save new user to repository", "error", err, "userID", user.ID)
-		// The Create method already maps unique constraint errors to ErrConflict
-		return nil, "", fmt.Errorf("failed to register user: %w", err)
+		// Create should map unique constraints to ErrConflict
+		return nil, port.AuthResult{}, fmt.Errorf("failed to register user: %w", err)
 	}
 
-	token, err := uc.secHelper.GenerateJWT(ctx, user.ID, uc.jwtExpiry)
-	if err != nil {
-		uc.logger.ErrorContext(ctx, "Failed to generate JWT after registration", "error", err, "userID", user.ID)
-		return nil, "", fmt.Errorf("failed to finalize registration: %w", err)
+	// Generate and store tokens
+	accessToken, refreshToken, tokenErr := uc.generateAndStoreTokens(ctx, user.ID)
+	if tokenErr != nil {
+		uc.logger.ErrorContext(ctx, "Failed to generate/store tokens after registration", "error", tokenErr, "userID", user.ID)
+		return nil, port.AuthResult{}, fmt.Errorf("failed to finalize registration session: %w", tokenErr)
 	}
 
 	uc.logger.InfoContext(ctx, "User registered successfully via password", "userID", user.ID, "email", emailStr)
-	return user, token, nil
+	return user, port.AuthResult{AccessToken: accessToken, RefreshToken: refreshToken}, nil
 }
 
 // LoginWithPassword handles user login with email and password.
-func (uc *AuthUseCase) LoginWithPassword(ctx context.Context, emailStr, password string) (string, error) {
+func (uc *AuthUseCase) LoginWithPassword(ctx context.Context, emailStr, password string) (port.AuthResult, error) {
 	emailVO, err := domain.NewEmail(emailStr)
 	if err != nil {
-		// Log invalid email format attempt? Or just fail silently. Let's fail silently.
-		return "", domain.ErrAuthenticationFailed
+		return port.AuthResult{}, domain.ErrAuthenticationFailed
 	}
 	user, err := uc.userRepo.FindByEmail(ctx, emailVO)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			uc.logger.WarnContext(ctx, "Login attempt for non-existent email", "email", emailStr)
-			return "", domain.ErrAuthenticationFailed
+			return port.AuthResult{}, domain.ErrAuthenticationFailed
 		}
 		uc.logger.ErrorContext(ctx, "Error finding user by email during login", "error", err, "email", emailStr)
-		return "", fmt.Errorf("failed during login process: %w", err)
+		return port.AuthResult{}, fmt.Errorf("failed during login process: %w", err)
 	}
 	if user.AuthProvider != domain.AuthProviderLocal || user.HashedPassword == nil {
 		uc.logger.WarnContext(ctx, "Login attempt for user with non-local provider or no password", "email", emailStr, "userID", user.ID, "provider", user.AuthProvider)
-		return "", domain.ErrAuthenticationFailed
+		return port.AuthResult{}, domain.ErrAuthenticationFailed
 	}
 	if !uc.secHelper.CheckPasswordHash(ctx, password, *user.HashedPassword) {
 		uc.logger.WarnContext(ctx, "Incorrect password provided for user", "email", emailStr, "userID", user.ID)
-		return "", domain.ErrAuthenticationFailed
+		return port.AuthResult{}, domain.ErrAuthenticationFailed
 	}
-	token, err := uc.secHelper.GenerateJWT(ctx, user.ID, uc.jwtExpiry)
-	if err != nil {
-		uc.logger.ErrorContext(ctx, "Failed to generate JWT during login", "error", err, "userID", user.ID)
-		return "", fmt.Errorf("failed to finalize login: %w", err)
+
+	// Generate and store tokens
+	accessToken, refreshToken, tokenErr := uc.generateAndStoreTokens(ctx, user.ID)
+	if tokenErr != nil {
+		uc.logger.ErrorContext(ctx, "Failed to generate/store tokens during login", "error", tokenErr, "userID", user.ID)
+		return port.AuthResult{}, fmt.Errorf("failed to finalize login session: %w", tokenErr)
 	}
+
 	uc.logger.InfoContext(ctx, "User logged in successfully via password", "userID", user.ID)
-	return token, nil
+	return port.AuthResult{AccessToken: accessToken, RefreshToken: refreshToken}, nil
 }
 
 // AuthenticateWithGoogle handles login or registration via Google ID Token.
-// Implements Strategy C: Conflict if email exists with a different provider/link.
-func (uc *AuthUseCase) AuthenticateWithGoogle(ctx context.Context, googleIdToken string) (authToken string, isNewUser bool, err error) {
+func (uc *AuthUseCase) AuthenticateWithGoogle(ctx context.Context, googleIdToken string) (port.AuthResult, error) {
 	if uc.extAuthService == nil {
 		uc.logger.ErrorContext(ctx, "ExternalAuthService not configured for Google authentication")
-		return "", false, fmt.Errorf("google authentication is not enabled")
+		return port.AuthResult{}, fmt.Errorf("google authentication is not enabled")
 	}
 
 	extInfo, err := uc.extAuthService.VerifyGoogleToken(ctx, googleIdToken)
 	if err != nil {
-		return "", false, err
-	} // Propagate verification error
+		return port.AuthResult{}, err // Propagate verification error
+	}
+
+	var targetUser *domain.User
+	var isNewUser bool
 
 	// Check if user exists by Provider ID first
 	user, err := uc.userRepo.FindByProviderID(ctx, extInfo.Provider, extInfo.ProviderUserID)
 	if err == nil {
 		// Case 1: User found by Google ID -> Login success
 		uc.logger.InfoContext(ctx, "User authenticated via existing Google ID", "userID", user.ID, "googleID", extInfo.ProviderUserID)
-		token, tokenErr := uc.secHelper.GenerateJWT(ctx, user.ID, uc.jwtExpiry)
-		if tokenErr != nil {
-			uc.logger.ErrorContext(ctx, "Failed to generate JWT for existing Google user", "error", tokenErr, "userID", user.ID)
-			return "", false, fmt.Errorf("failed to finalize login: %w", tokenErr)
+		targetUser = user
+		isNewUser = false
+	} else if errors.Is(err, domain.ErrNotFound) {
+		// User not found by Google ID, proceed to check by email (if available)
+		if extInfo.Email != "" {
+			emailVO, emailErr := domain.NewEmail(extInfo.Email)
+			if emailErr != nil {
+				uc.logger.WarnContext(ctx, "Invalid email format received from Google token", "error", emailErr, "email", extInfo.Email, "googleID", extInfo.ProviderUserID)
+				return port.AuthResult{}, fmt.Errorf("%w: invalid email format from provider", domain.ErrAuthenticationFailed)
+			}
+
+			userByEmail, errEmail := uc.userRepo.FindByEmail(ctx, emailVO)
+			if errEmail == nil {
+				// Case 2: User found by email -> Conflict (Strategy C)
+				uc.logger.WarnContext(ctx, "Google auth conflict: Email exists but Google ID did not match or was not linked", "email", extInfo.Email, "existingUserID", userByEmail.ID, "existingProvider", userByEmail.AuthProvider)
+				return port.AuthResult{}, fmt.Errorf("%w: email is already associated with a different account", domain.ErrConflict)
+			} else if !errors.Is(errEmail, domain.ErrNotFound) {
+				uc.logger.ErrorContext(ctx, "Error finding user by email", "error", errEmail, "email", extInfo.Email)
+				return port.AuthResult{}, fmt.Errorf("database error during authentication: %w", errEmail)
+			}
+			uc.logger.DebugContext(ctx, "Email not found, proceeding to create new Google user", "email", extInfo.Email)
+		} else {
+			uc.logger.InfoContext(ctx, "Google token verified, but no email provided. Proceeding to create new user based on Google ID only.", "googleID", extInfo.ProviderUserID)
 		}
-		return token, false, nil // Not a new user
-	}
-	if !errors.Is(err, domain.ErrNotFound) {
+
+		// Case 3: Create new user
+		uc.logger.InfoContext(ctx, "Creating new user via Google authentication", "googleID", extInfo.ProviderUserID, "email", extInfo.Email)
+		newUser, errCreate := domain.NewGoogleUser(extInfo.Email, extInfo.Name, extInfo.ProviderUserID, extInfo.PictureURL)
+		if errCreate != nil {
+			uc.logger.ErrorContext(ctx, "Failed to create new Google user domain object", "error", errCreate, "extInfo", extInfo)
+			return port.AuthResult{}, fmt.Errorf("failed to process user data from Google: %w", errCreate)
+		}
+		if errDb := uc.userRepo.Create(ctx, newUser); errDb != nil {
+			uc.logger.ErrorContext(ctx, "Failed to save new Google user to repository", "error", errDb, "googleID", newUser.GoogleID, "email", newUser.Email.String())
+			// Create maps unique constraints to ErrConflict
+			return port.AuthResult{}, fmt.Errorf("failed to create new user account: %w", errDb)
+		}
+		uc.logger.InfoContext(ctx, "New user created successfully via Google", "userID", newUser.ID, "email", newUser.Email.String())
+		targetUser = newUser
+		isNewUser = true
+
+	} else {
 		// Handle unexpected database errors during provider ID lookup
 		uc.logger.ErrorContext(ctx, "Error finding user by provider ID", "error", err, "provider", extInfo.Provider, "providerUserID", extInfo.ProviderUserID)
-		return "", false, fmt.Errorf("database error during authentication: %w", err)
+		return port.AuthResult{}, fmt.Errorf("database error during authentication: %w", err)
 	}
 
-	// User not found by Google ID, proceed to check by email (if available)
-	if extInfo.Email != "" {
-		emailVO, emailErr := domain.NewEmail(extInfo.Email)
-		if emailErr != nil {
-			// If Google gives an invalid email format, treat as auth failure
-			uc.logger.WarnContext(ctx, "Invalid email format received from Google token", "error", emailErr, "email", extInfo.Email, "googleID", extInfo.ProviderUserID)
-			return "", false, fmt.Errorf("%w: invalid email format from provider", domain.ErrAuthenticationFailed)
-		}
-
-		userByEmail, errEmail := uc.userRepo.FindByEmail(ctx, emailVO)
-		if errEmail == nil {
-			// Case 2: User found by email -> Conflict (Strategy C)
-			// Email exists, but Google ID wasn't linked or didn't match
-			uc.logger.WarnContext(ctx, "Google auth conflict: Email exists but Google ID did not match or was not linked", "email", extInfo.Email, "existingUserID", userByEmail.ID, "existingProvider", userByEmail.AuthProvider)
-			return "", false, fmt.Errorf("%w: email is already associated with a different account", domain.ErrConflict)
-		} else if !errors.Is(errEmail, domain.ErrNotFound) {
-			// Handle unexpected database errors during email lookup
-			uc.logger.ErrorContext(ctx, "Error finding user by email", "error", errEmail, "email", extInfo.Email)
-			return "", false, fmt.Errorf("database error during authentication: %w", errEmail)
-		}
-		// If errEmail is ErrNotFound, continue to user creation
-		uc.logger.DebugContext(ctx, "Email not found, proceeding to create new Google user", "email", extInfo.Email)
-	} else {
-		// No email provided by Google, can only create user based on Google ID
-		uc.logger.InfoContext(ctx, "Google token verified, but no email provided. Proceeding to create new user based on Google ID only.", "googleID", extInfo.ProviderUserID)
-	}
-
-	// Case 3: User not found by Google ID AND (Email not found OR Email not provided) -> Create new user
-	uc.logger.InfoContext(ctx, "Creating new user via Google authentication", "googleID", extInfo.ProviderUserID, "email", extInfo.Email)
-
-	// Create the new user domain object
-	newUser, err := domain.NewGoogleUser(
-		extInfo.Email, extInfo.Name, extInfo.ProviderUserID, extInfo.PictureURL,
-	)
-	if err != nil {
-		uc.logger.ErrorContext(ctx, "Failed to create new Google user domain object", "error", err, "extInfo", extInfo)
-		return "", false, fmt.Errorf("failed to process user data from Google: %w", err)
-	}
-
-	// Save the new user to the database
-	if err := uc.userRepo.Create(ctx, newUser); err != nil {
-		uc.logger.ErrorContext(ctx, "Failed to save new Google user to repository", "error", err, "googleID", newUser.GoogleID, "email", newUser.Email.String())
-		// Create should handle mapping unique constraints to ErrConflict
-		return "", false, fmt.Errorf("failed to create new user account: %w", err)
-	}
-
-	// Generate JWT for the newly created user
-	uc.logger.InfoContext(ctx, "New user created successfully via Google", "userID", newUser.ID, "email", newUser.Email.String())
-	token, tokenErr := uc.secHelper.GenerateJWT(ctx, newUser.ID, uc.jwtExpiry)
+	// Generate and store tokens for the targetUser (either found or newly created)
+	accessToken, refreshToken, tokenErr := uc.generateAndStoreTokens(ctx, targetUser.ID)
 	if tokenErr != nil {
-		uc.logger.ErrorContext(ctx, "Failed to generate JWT for newly created Google user", "error", tokenErr, "userID", newUser.ID)
-		// Consider if user creation should be rolled back here - depends on transaction strategy
-		return "", true, fmt.Errorf("failed to finalize registration: %w", tokenErr)
+		uc.logger.ErrorContext(ctx, "Failed to generate/store tokens for Google auth", "error", tokenErr, "userID", targetUser.ID)
+		return port.AuthResult{}, fmt.Errorf("failed to finalize authentication session: %w", tokenErr)
 	}
 
-	return token, true, nil // Return token and indicate new user
+	return port.AuthResult{AccessToken: accessToken, RefreshToken: refreshToken, IsNewUser: isNewUser}, nil
+}
+
+// RefreshAccessToken validates a refresh token, revokes it, and issues new access/refresh tokens.
+func (uc *AuthUseCase) RefreshAccessToken(ctx context.Context, refreshTokenValue string) (port.AuthResult, error) {
+	// Ensure repo dependency is available before proceeding
+	if uc.refreshTokenRepo == nil {
+		uc.logger.ErrorContext(ctx, "RefreshTokenRepository is nil, cannot refresh token")
+		return port.AuthResult{}, fmt.Errorf("internal server error: authentication system misconfigured")
+	}
+
+	if refreshTokenValue == "" {
+		return port.AuthResult{}, fmt.Errorf("%w: refresh token is required", domain.ErrAuthenticationFailed)
+	}
+
+	tokenHash := uc.secHelper.HashRefreshTokenValue(refreshTokenValue)
+
+	// Find the token data by hash
+	tokenData, err := uc.refreshTokenRepo.FindByTokenHash(ctx, tokenHash)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			uc.logger.WarnContext(ctx, "Refresh token hash not found in storage during refresh attempt")
+			// It's crucial to return an authentication error here to prevent probing attacks
+			return port.AuthResult{}, domain.ErrAuthenticationFailed
+		}
+		uc.logger.ErrorContext(ctx, "Error finding refresh token by hash", "error", err)
+		return port.AuthResult{}, fmt.Errorf("failed to validate refresh token: %w", err)
+	}
+
+	// Check expiry
+	if time.Now().After(tokenData.ExpiresAt) {
+		uc.logger.WarnContext(ctx, "Expired refresh token presented", "userID", tokenData.UserID, "expiresAt", tokenData.ExpiresAt)
+		// Delete the expired token (best effort)
+		_ = uc.refreshTokenRepo.DeleteByTokenHash(ctx, tokenHash)
+		return port.AuthResult{}, fmt.Errorf("%w: refresh token expired", domain.ErrAuthenticationFailed)
+	}
+
+	// --- Rotation: Invalidate the old token ---
+	delErr := uc.refreshTokenRepo.DeleteByTokenHash(ctx, tokenHash)
+	if delErr != nil && !errors.Is(delErr, domain.ErrNotFound) {
+		// Log the failure but proceed to issue new tokens.
+		// The user presented a valid token, failure to delete shouldn't block refresh.
+		// A background job could clean up orphaned tokens later if needed.
+		uc.logger.ErrorContext(ctx, "Failed to delete used refresh token during rotation, proceeding anyway", "error", delErr, "userID", tokenData.UserID)
+	}
+
+	// --- Issue new tokens ---
+	newAccessToken, newRefreshTokenValue, tokenErr := uc.generateAndStoreTokens(ctx, tokenData.UserID)
+	if tokenErr != nil {
+		uc.logger.ErrorContext(ctx, "Failed to generate/store new tokens during refresh", "error", tokenErr, "userID", tokenData.UserID)
+		// This is a more critical failure. User might be left logged out.
+		return port.AuthResult{}, fmt.Errorf("failed to issue new tokens after validating refresh token: %w", tokenErr)
+	}
+
+	uc.logger.InfoContext(ctx, "Access token refreshed successfully", "userID", tokenData.UserID)
+	return port.AuthResult{AccessToken: newAccessToken, RefreshToken: newRefreshTokenValue}, nil
+}
+
+// Logout invalidates a specific refresh token.
+func (uc *AuthUseCase) Logout(ctx context.Context, refreshTokenValue string) error {
+	// Ensure repo dependency is available before proceeding
+	if uc.refreshTokenRepo == nil {
+		uc.logger.ErrorContext(ctx, "RefreshTokenRepository is nil, cannot logout")
+		return fmt.Errorf("internal server error: authentication system misconfigured")
+	}
+
+	if refreshTokenValue == "" {
+		// Nothing to invalidate if no token is provided.
+		uc.logger.DebugContext(ctx, "Logout called with empty refresh token, nothing to do.")
+		return nil
+	}
+
+	tokenHash := uc.secHelper.HashRefreshTokenValue(refreshTokenValue)
+
+	// Delete the token by hash. ErrNotFound is acceptable.
+	err := uc.refreshTokenRepo.DeleteByTokenHash(ctx, tokenHash)
+	if err != nil && !errors.Is(err, domain.ErrNotFound) {
+		// Log actual errors during deletion
+		uc.logger.ErrorContext(ctx, "Failed to delete refresh token during logout", "error", err)
+		// Return a generic internal error to the client
+		return fmt.Errorf("failed to process logout request: %w", err)
+	}
+
+	if errors.Is(err, domain.ErrNotFound) {
+		uc.logger.InfoContext(ctx, "Logout attempt for a refresh token that was already invalid or deleted.")
+	} else {
+		uc.logger.InfoContext(ctx, "User session logged out (refresh token invalidated).")
+	}
+	return nil
 }
 
 // Compile-time check to ensure AuthUseCase satisfies the port.AuthUseCase interface
@@ -7791,11 +8203,14 @@ definitions:
     type: object
   dto.AuthResponseDTO:
     properties:
+      accessToken:
+        description: The JWT access token
+        type: string
       isNewUser:
         description: Pointer, only included for Google callback if user is new
         type: boolean
-      token:
-        description: The JWT access token
+      refreshToken:
+        description: The refresh token value
         type: string
     type: object
   dto.BatchCompleteUploadInputDTO:
@@ -8018,6 +8433,13 @@ definitions:
     - email
     - password
     type: object
+  dto.LogoutRequestDTO:
+    properties:
+      refreshToken:
+        type: string
+    required:
+    - refreshToken
+    type: object
   dto.PaginatedResponseDTO:
     properties:
       data:
@@ -8061,6 +8483,13 @@ definitions:
     required:
     - progressMs
     - trackId
+    type: object
+  dto.RefreshRequestDTO:
+    properties:
+      refreshToken:
+        type: string
+    required:
+    - refreshToken
     type: object
   dto.RegisterRequestDTO:
     properties:
@@ -8602,7 +9031,8 @@ paths:
       consumes:
       - application/json
       description: Receives the ID token from the frontend after Google sign-in, verifies
-        it, and performs user registration or login, returning a JWT.
+        it, and performs user registration or login, returning access and refresh
+        tokens. // MODIFIED DESCRIPTION
       operationId: google-callback
       parameters:
       - description: Google ID Token
@@ -8615,8 +9045,8 @@ paths:
       - application/json
       responses:
         "200":
-          description: Authentication successful, returns JWT. isNewUser field indicates
-            if a new account was created.
+          description: Authentication successful, returns access/refresh tokens. isNewUser
+            indicates new account creation." // MODIFIED DESCRIPTION
           schema:
             $ref: '#/definitions/dto.AuthResponseDTO'
         "400":
@@ -8642,7 +9072,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Authenticates a user with email and password, returns a JWT token.
+      description: Authenticates a user with email and password, returns access and
+        refresh tokens. // MODIFIED DESCRIPTION
       operationId: login-user
       parameters:
       - description: User Login Credentials
@@ -8655,7 +9086,8 @@ paths:
       - application/json
       responses:
         "200":
-          description: Login successful, returns JWT
+          description: Login successful, returns access and refresh tokens" // MODIFIED
+            DESCRIPTION
           schema:
             $ref: '#/definitions/dto.AuthResponseDTO'
         "400":
@@ -8671,6 +9103,72 @@ paths:
           schema:
             $ref: '#/definitions/httputil.ErrorResponseDTO'
       summary: Login a user
+      tags:
+      - Authentication
+  /auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: Invalidates the provided refresh token, effectively logging the
+        user out of that session/device.
+      operationId: logout-user
+      parameters:
+      - description: Refresh Token to invalidate
+        in: body
+        name: logout
+        required: true
+        schema:
+          $ref: '#/definitions/dto.LogoutRequestDTO'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Logout successful
+        "400":
+          description: Invalid Input (Missing Refresh Token)
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      summary: Logout user
+      tags:
+      - Authentication
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Provides a valid refresh token to get a new pair of access and
+        refresh tokens.
+      operationId: refresh-token
+      parameters:
+      - description: Refresh Token
+        in: body
+        name: refresh
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RefreshRequestDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Tokens refreshed successfully
+          schema:
+            $ref: '#/definitions/dto.AuthResponseDTO'
+        "400":
+          description: Invalid Input (Missing Refresh Token)
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "401":
+          description: Authentication Failed (Invalid or Expired Refresh Token)
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      summary: Refresh access token
       tags:
       - Authentication
   /auth/register:
@@ -8690,13 +9188,12 @@ paths:
       - application/json
       responses:
         "201":
-          description: 'Registration successful, returns JWT" // Success response:
-            code, type, description'
+          description: Registration successful, returns access and refresh tokens"
+            // MODIFIED DESCRIPTION
           schema:
             $ref: '#/definitions/dto.AuthResponseDTO'
         "400":
-          description: 'Invalid Input"                // Failure response: code, type,
-            description'
+          description: Invalid Input
           schema:
             $ref: '#/definitions/httputil.ErrorResponseDTO'
         "409":
@@ -9772,7 +10269,7 @@ const docTemplate = `{
         },
         "/auth/google/callback": {
             "post": {
-                "description": "Receives the ID token from the frontend after Google sign-in, verifies it, and performs user registration or login, returning a JWT.",
+                "description": "Receives the ID token from the frontend after Google sign-in, verifies it, and performs user registration or login, returning access and refresh tokens. // MODIFIED DESCRIPTION",
                 "consumes": [
                     "application/json"
                 ],
@@ -9797,7 +10294,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Authentication successful, returns JWT. isNewUser field indicates if a new account was created.",
+                        "description": "Authentication successful, returns access/refresh tokens. isNewUser indicates new account creation.\" // MODIFIED DESCRIPTION",
                         "schema": {
                             "$ref": "#/definitions/dto.AuthResponseDTO"
                         }
@@ -9831,7 +10328,7 @@ const docTemplate = `{
         },
         "/auth/login": {
             "post": {
-                "description": "Authenticates a user with email and password, returns a JWT token.",
+                "description": "Authenticates a user with email and password, returns access and refresh tokens. // MODIFIED DESCRIPTION",
                 "consumes": [
                     "application/json"
                 ],
@@ -9856,7 +10353,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Login successful, returns JWT",
+                        "description": "Login successful, returns access and refresh tokens\" // MODIFIED DESCRIPTION",
                         "schema": {
                             "$ref": "#/definitions/dto.AuthResponseDTO"
                         }
@@ -9869,6 +10366,103 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Authentication Failed",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/logout": {
+            "post": {
+                "description": "Invalidates the provided refresh token, effectively logging the user out of that session/device.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Logout user",
+                "operationId": "logout-user",
+                "parameters": [
+                    {
+                        "description": "Refresh Token to invalidate",
+                        "name": "logout",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.LogoutRequestDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Logout successful"
+                    },
+                    "400": {
+                        "description": "Invalid Input (Missing Refresh Token)",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/refresh": {
+            "post": {
+                "description": "Provides a valid refresh token to get a new pair of access and refresh tokens.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Refresh access token",
+                "operationId": "refresh-token",
+                "parameters": [
+                    {
+                        "description": "Refresh Token",
+                        "name": "refresh",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.RefreshRequestDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Tokens refreshed successfully",
+                        "schema": {
+                            "$ref": "#/definitions/dto.AuthResponseDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid Input (Missing Refresh Token)",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Authentication Failed (Invalid or Expired Refresh Token)",
                         "schema": {
                             "$ref": "#/definitions/httputil.ErrorResponseDTO"
                         }
@@ -9909,13 +10503,13 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "201": {
-                        "description": "Registration successful, returns JWT\" // Success response: code, type, description",
+                        "description": "Registration successful, returns access and refresh tokens\" // MODIFIED DESCRIPTION",
                         "schema": {
                             "$ref": "#/definitions/dto.AuthResponseDTO"
                         }
                     },
                     "400": {
-                        "description": "Invalid Input\"                // Failure response: code, type, description",
+                        "description": "Invalid Input",
                         "schema": {
                             "$ref": "#/definitions/httputil.ErrorResponseDTO"
                         }
@@ -10632,12 +11226,16 @@ const docTemplate = `{
         "dto.AuthResponseDTO": {
             "type": "object",
             "properties": {
+                "accessToken": {
+                    "description": "The JWT access token",
+                    "type": "string"
+                },
                 "isNewUser": {
                     "description": "Pointer, only included for Google callback if user is new",
                     "type": "boolean"
                 },
-                "token": {
-                    "description": "The JWT access token",
+                "refreshToken": {
+                    "description": "The refresh token value",
                     "type": "string"
                 }
             }
@@ -10957,6 +11555,17 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.LogoutRequestDTO": {
+            "type": "object",
+            "required": [
+                "refreshToken"
+            ],
+            "properties": {
+                "refreshToken": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.PaginatedResponseDTO": {
             "type": "object",
             "properties": {
@@ -11016,6 +11625,17 @@ const docTemplate = `{
                     "minimum": 0
                 },
                 "trackId": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.RefreshRequestDTO": {
+            "type": "object",
+            "required": [
+                "refreshToken"
+            ],
+            "properties": {
+                "refreshToken": {
                     "type": "string"
                 }
             }
@@ -11871,7 +12491,7 @@ func init() {
         },
         "/auth/google/callback": {
             "post": {
-                "description": "Receives the ID token from the frontend after Google sign-in, verifies it, and performs user registration or login, returning a JWT.",
+                "description": "Receives the ID token from the frontend after Google sign-in, verifies it, and performs user registration or login, returning access and refresh tokens. // MODIFIED DESCRIPTION",
                 "consumes": [
                     "application/json"
                 ],
@@ -11896,7 +12516,7 @@ func init() {
                 ],
                 "responses": {
                     "200": {
-                        "description": "Authentication successful, returns JWT. isNewUser field indicates if a new account was created.",
+                        "description": "Authentication successful, returns access/refresh tokens. isNewUser indicates new account creation.\" // MODIFIED DESCRIPTION",
                         "schema": {
                             "$ref": "#/definitions/dto.AuthResponseDTO"
                         }
@@ -11930,7 +12550,7 @@ func init() {
         },
         "/auth/login": {
             "post": {
-                "description": "Authenticates a user with email and password, returns a JWT token.",
+                "description": "Authenticates a user with email and password, returns access and refresh tokens. // MODIFIED DESCRIPTION",
                 "consumes": [
                     "application/json"
                 ],
@@ -11955,7 +12575,7 @@ func init() {
                 ],
                 "responses": {
                     "200": {
-                        "description": "Login successful, returns JWT",
+                        "description": "Login successful, returns access and refresh tokens\" // MODIFIED DESCRIPTION",
                         "schema": {
                             "$ref": "#/definitions/dto.AuthResponseDTO"
                         }
@@ -11968,6 +12588,103 @@ func init() {
                     },
                     "401": {
                         "description": "Authentication Failed",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/logout": {
+            "post": {
+                "description": "Invalidates the provided refresh token, effectively logging the user out of that session/device.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Logout user",
+                "operationId": "logout-user",
+                "parameters": [
+                    {
+                        "description": "Refresh Token to invalidate",
+                        "name": "logout",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.LogoutRequestDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Logout successful"
+                    },
+                    "400": {
+                        "description": "Invalid Input (Missing Refresh Token)",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/refresh": {
+            "post": {
+                "description": "Provides a valid refresh token to get a new pair of access and refresh tokens.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Refresh access token",
+                "operationId": "refresh-token",
+                "parameters": [
+                    {
+                        "description": "Refresh Token",
+                        "name": "refresh",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.RefreshRequestDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Tokens refreshed successfully",
+                        "schema": {
+                            "$ref": "#/definitions/dto.AuthResponseDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid Input (Missing Refresh Token)",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Authentication Failed (Invalid or Expired Refresh Token)",
                         "schema": {
                             "$ref": "#/definitions/httputil.ErrorResponseDTO"
                         }
@@ -12008,13 +12725,13 @@ func init() {
                 ],
                 "responses": {
                     "201": {
-                        "description": "Registration successful, returns JWT\" // Success response: code, type, description",
+                        "description": "Registration successful, returns access and refresh tokens\" // MODIFIED DESCRIPTION",
                         "schema": {
                             "$ref": "#/definitions/dto.AuthResponseDTO"
                         }
                     },
                     "400": {
-                        "description": "Invalid Input\"                // Failure response: code, type, description",
+                        "description": "Invalid Input",
                         "schema": {
                             "$ref": "#/definitions/httputil.ErrorResponseDTO"
                         }
@@ -12731,12 +13448,16 @@ func init() {
         "dto.AuthResponseDTO": {
             "type": "object",
             "properties": {
+                "accessToken": {
+                    "description": "The JWT access token",
+                    "type": "string"
+                },
                 "isNewUser": {
                     "description": "Pointer, only included for Google callback if user is new",
                     "type": "boolean"
                 },
-                "token": {
-                    "description": "The JWT access token",
+                "refreshToken": {
+                    "description": "The refresh token value",
                     "type": "string"
                 }
             }
@@ -13056,6 +13777,17 @@ func init() {
                 }
             }
         },
+        "dto.LogoutRequestDTO": {
+            "type": "object",
+            "required": [
+                "refreshToken"
+            ],
+            "properties": {
+                "refreshToken": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.PaginatedResponseDTO": {
             "type": "object",
             "properties": {
@@ -13115,6 +13847,17 @@ func init() {
                     "minimum": 0
                 },
                 "trackId": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.RefreshRequestDTO": {
+            "type": "object",
+            "required": [
+                "refreshToken"
+            ],
+            "properties": {
+                "refreshToken": {
                     "type": "string"
                 }
             }
@@ -13584,16 +14327,21 @@ func NewLogger(cfg config.LogConfig) *slog.Logger {
 ## `pkg/security/security.go`
 
 ```go
-// pkg/security/security.go
+// ============================================
+// FILE: pkg/security/security.go (MODIFIED)
+// ============================================
 package security
 
 import (
 	"context"
+	"crypto/rand"     // ADDED
+	"encoding/base64" // ADDED
+	"fmt"
 	"log/slog"
 	"time"
 
-	"github.com/yvanyang/language-learning-player-api/internal/domain" // Adjust import path
-	"github.com/yvanyang/language-learning-player-api/internal/port"   // Adjust import path
+	"github.com/yvanyang/language-learning-player-api/internal/domain"
+	"github.com/yvanyang/language-learning-player-api/internal/port"
 )
 
 // Security implements the port.SecurityHelper interface.
@@ -13619,29 +14367,46 @@ func NewSecurity(jwtSecretKey string, logger *slog.Logger) (*Security, error) {
 
 // HashPassword generates a secure hash of the password.
 func (s *Security) HashPassword(ctx context.Context, password string) (string, error) {
-	// Context is not used by bcrypt, but included for interface consistency
 	return s.hasher.HashPassword(password)
 }
 
 // CheckPasswordHash compares a plain password with a stored hash.
 func (s *Security) CheckPasswordHash(ctx context.Context, password, hash string) bool {
-	// Context is not used by bcrypt, but included for interface consistency
 	return s.hasher.CheckPasswordHash(password, hash)
 }
 
 // GenerateJWT creates a signed JWT (Access Token) for the given user ID.
 func (s *Security) GenerateJWT(ctx context.Context, userID domain.UserID, duration time.Duration) (string, error) {
-	// Context could potentially be used for tracing in the future
 	return s.jwt.GenerateJWT(userID, duration)
 }
 
 // VerifyJWT validates a JWT string and returns the UserID contained within.
 func (s *Security) VerifyJWT(ctx context.Context, tokenString string) (domain.UserID, error) {
-	// Context could potentially be used for tracing in the future
 	return s.jwt.VerifyJWT(tokenString)
 }
 
+// GenerateRefreshTokenValue creates a cryptographically secure random string for the refresh token.
+// ADDED METHOD
+func (s *Security) GenerateRefreshTokenValue() (string, error) {
+	numBytes := 32 // Generate a 32-byte random token -> 44 Base64 chars
+	b := make([]byte, numBytes)
+	_, err := rand.Read(b)
+	if err != nil {
+		s.logger.Error("Failed to generate random bytes for refresh token", "error", err)
+		return "", fmt.Errorf("failed to generate refresh token value: %w", err)
+	}
+	// Use URL-safe base64 encoding
+	return base64.URLEncoding.EncodeToString(b), nil
+}
+
+// HashRefreshTokenValue generates a SHA-256 hash of the refresh token value for storage.
+// ADDED METHOD
+func (s *Security) HashRefreshTokenValue(tokenValue string) string {
+	return Sha256Hash(tokenValue) // Use the helper from hasher.go
+}
+
 // Compile-time check to ensure Security satisfies the port.SecurityHelper interface
+// ADDED: New methods to SecurityHelper interface in port/service.go
 var _ port.SecurityHelper = (*Security)(nil)
 ```
 
@@ -13752,10 +14517,14 @@ func (h *JWTHelper) VerifyJWT(tokenString string) (domain.UserID, error) {
 ## `pkg/security/hasher.go`
 
 ```go
-// pkg/security/hasher.go
+// ============================================
+// FILE: pkg/security/hasher.go (MODIFIED)
+// ============================================
 package security
 
 import (
+	"crypto/sha256" // ADDED
+	"encoding/hex"  // ADDED
 	"errors"
 	"fmt"
 	"log/slog"
@@ -13793,15 +14562,23 @@ func (h *BcryptHasher) HashPassword(password string) (string, error) {
 func (h *BcryptHasher) CheckPasswordHash(password, hash string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	if err != nil {
-		// Log mismatch errors only at debug level if desired, other errors as warnings/errors
 		if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
-			h.logger.Debug("Password hash mismatch", "error", err) // Optional: Log mismatch at debug level
+			h.logger.Debug("Password hash mismatch", "error", err)
 		} else {
 			h.logger.Warn("Error comparing password hash", "error", err)
 		}
 		return false
 	}
 	return true
+}
+
+// Sha256Hash generates a SHA-256 hash (hex encoded) for non-password secrets like refresh tokens.
+// ADDED FUNCTION
+func Sha256Hash(value string) string {
+	hasher := sha256.New()
+	hasher.Write([]byte(value)) // Hash the string value
+	hashBytes := hasher.Sum(nil)
+	return hex.EncodeToString(hashBytes) // Return hex string representation
 }
 ```
 
