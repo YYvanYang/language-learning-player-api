@@ -4,8 +4,8 @@
 CREATE TABLE playback_progress (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     track_id UUID NOT NULL REFERENCES audio_tracks(id) ON DELETE CASCADE,
-    -- Progress stored in MILLISECONDS as a BIGINT
-    progress_ms BIGINT NOT NULL DEFAULT 0 CHECK (progress_ms >= 0),
+    -- Progress stored as INTERVAL
+    progress_ms INTERVAL NOT NULL DEFAULT interval '0 seconds' CHECK (progress_ms >= interval '0 seconds'),
     last_listened_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     -- Composite primary key ensures one progress record per user/track pair
     PRIMARY KEY (user_id, track_id)
@@ -20,8 +20,8 @@ CREATE TABLE bookmarks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     track_id UUID NOT NULL REFERENCES audio_tracks(id) ON DELETE CASCADE,
-    -- Timestamp stored in MILLISECONDS as a BIGINT
-    timestamp_ms BIGINT NOT NULL CHECK (timestamp_ms >= 0),
+    -- Timestamp stored as INTERVAL
+    timestamp_ms INTERVAL NOT NULL CHECK (timestamp_ms >= interval '0 seconds'),
     note TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     -- No updated_at needed if bookmarks are immutable once created (except for deletion)

@@ -7,7 +7,7 @@ CREATE TABLE audio_tracks (
     description TEXT,
     language_code VARCHAR(10) NOT NULL, -- e.g., 'en-US', 'zh-CN'
     level VARCHAR(50),                  -- e.g., 'A1', 'B2', 'NATIVE' (Matches domain.AudioLevel)
-    duration_ms BIGINT NOT NULL DEFAULT 0 CHECK (duration_ms >= 0), -- Store duration in BIGINT MILLISECONDS
+    duration_ms INTERVAL NOT NULL DEFAULT interval '0 seconds' CHECK (duration_ms >= interval '0 seconds'),
     minio_bucket VARCHAR(100) NOT NULL,
     minio_object_key VARCHAR(1024) NOT NULL UNIQUE, -- Object key should be unique within bucket
     cover_image_url VARCHAR(1024),
