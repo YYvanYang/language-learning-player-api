@@ -226,9 +226,9 @@ func main() {
 			r.Post("/users/me/progress", activityHandler.RecordProgress)
 			r.Get("/users/me/progress", activityHandler.ListProgress)
 			r.Get("/users/me/progress/{trackId}", activityHandler.GetProgress)
-			r.Post("/bookmarks", activityHandler.CreateBookmark)
-			r.Get("/bookmarks", activityHandler.ListBookmarks)
-			r.Delete("/bookmarks/{bookmarkId}", activityHandler.DeleteBookmark)
+			r.Post("/users/me/bookmarks", activityHandler.CreateBookmark)
+			r.Get("/users/me/bookmarks", activityHandler.ListBookmarks)
+			r.Delete("/users/me/bookmarks/{bookmarkId}", activityHandler.DeleteBookmark)
 
 			// Upload Routes (Require Auth)
 			// Single File

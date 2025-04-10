@@ -823,210 +823,6 @@
                 }
             }
         },
-        "/bookmarks": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Retrieves a paginated list of bookmarks for the authenticated user, optionally filtered by track ID.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "User Activity"
-                ],
-                "summary": "List user's bookmarks",
-                "operationId": "list-bookmarks",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "format": "uuid",
-                        "description": "Filter by Audio Track UUID",
-                        "name": "trackId",
-                        "in": "query"
-                    },
-                    {
-                        "maximum": 100,
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 50,
-                        "description": "Pagination limit",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "minimum": 0,
-                        "type": "integer",
-                        "default": 0,
-                        "description": "Pagination offset",
-                        "name": "offset",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Paginated list of bookmarks (timestampMs in milliseconds)",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/dto.PaginatedResponseDTO"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/dto.BookmarkResponseDTO"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid Track ID Format (if provided)",
-                        "schema": {
-                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Creates a new bookmark at a specific timestamp (in milliseconds) in an audio track for the authenticated user.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "User Activity"
-                ],
-                "summary": "Create a bookmark",
-                "operationId": "create-bookmark",
-                "parameters": [
-                    {
-                        "description": "Bookmark details (timestampMs in milliseconds)",
-                        "name": "bookmark",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.CreateBookmarkRequestDTO"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Bookmark created successfully (timestampMs in milliseconds)",
-                        "schema": {
-                            "$ref": "#/definitions/dto.BookmarkResponseDTO"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid Input / Track ID Format",
-                        "schema": {
-                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
-                        }
-                    },
-                    "404": {
-                        "description": "Track Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
-                        }
-                    }
-                }
-            }
-        },
-        "/bookmarks/{bookmarkId}": {
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth // Apply the security definition defined in main.go": []
-                    }
-                ],
-                "description": "Deletes a specific bookmark owned by the current user.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "User Activity"
-                ],
-                "summary": "Delete a bookmark",
-                "operationId": "delete-bookmark",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "format": "uuid",
-                        "description": "Bookmark UUID",
-                        "name": "bookmarkId",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "Bookmark deleted successfully"
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden (Not Owner)",
-                        "schema": {
-                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
-                        }
-                    },
-                    "404": {
-                        "description": "Bookmark Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
-                        }
-                    }
-                }
-            }
-        },
         "/uploads/audio/batch/request": {
             "post": {
                 "security": [
@@ -1174,6 +970,210 @@
                     },
                     "404": {
                         "description": "User Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/me/bookmarks": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieves a paginated list of bookmarks for the authenticated user, optionally filtered by track ID.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "User Activity"
+                ],
+                "summary": "List user's bookmarks",
+                "operationId": "list-bookmarks",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Filter by Audio Track UUID",
+                        "name": "trackId",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 50,
+                        "description": "Pagination limit",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "default": 0,
+                        "description": "Pagination offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated list of bookmarks (timestampMs in milliseconds)",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/dto.PaginatedResponseDTO"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/dto.BookmarkResponseDTO"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid Track ID Format (if provided)",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a new bookmark at a specific timestamp (in milliseconds) in an audio track for the authenticated user.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "User Activity"
+                ],
+                "summary": "Create a bookmark",
+                "operationId": "create-bookmark",
+                "parameters": [
+                    {
+                        "description": "Bookmark details (timestampMs in milliseconds)",
+                        "name": "bookmark",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreateBookmarkRequestDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Bookmark created successfully (timestampMs in milliseconds)",
+                        "schema": {
+                            "$ref": "#/definitions/dto.BookmarkResponseDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid Input / Track ID Format",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "404": {
+                        "description": "Track Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/me/bookmarks/{bookmarkId}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes a specific bookmark owned by the current user.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "User Activity"
+                ],
+                "summary": "Delete a bookmark",
+                "operationId": "delete-bookmark",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Bookmark UUID",
+                        "name": "bookmarkId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Bookmark deleted successfully"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden (Not Owner)",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "404": {
+                        "description": "Bookmark Not Found",
                         "schema": {
                             "$ref": "#/definitions/httputil.ErrorResponseDTO"
                         }

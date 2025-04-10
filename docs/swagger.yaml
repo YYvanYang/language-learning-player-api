@@ -1026,139 +1026,6 @@ paths:
       summary: Register a new user
       tags:
       - Authentication
-  /bookmarks:
-    get:
-      description: Retrieves a paginated list of bookmarks for the authenticated user,
-        optionally filtered by track ID.
-      operationId: list-bookmarks
-      parameters:
-      - description: Filter by Audio Track UUID
-        format: uuid
-        in: query
-        name: trackId
-        type: string
-      - default: 50
-        description: Pagination limit
-        in: query
-        maximum: 100
-        minimum: 1
-        name: limit
-        type: integer
-      - default: 0
-        description: Pagination offset
-        in: query
-        minimum: 0
-        name: offset
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Paginated list of bookmarks (timestampMs in milliseconds)
-          schema:
-            allOf:
-            - $ref: '#/definitions/dto.PaginatedResponseDTO'
-            - properties:
-                data:
-                  items:
-                    $ref: '#/definitions/dto.BookmarkResponseDTO'
-                  type: array
-              type: object
-        "400":
-          description: Invalid Track ID Format (if provided)
-          schema:
-            $ref: '#/definitions/httputil.ErrorResponseDTO'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/httputil.ErrorResponseDTO'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/httputil.ErrorResponseDTO'
-      security:
-      - BearerAuth: []
-      summary: List user's bookmarks
-      tags:
-      - User Activity
-    post:
-      consumes:
-      - application/json
-      description: Creates a new bookmark at a specific timestamp (in milliseconds)
-        in an audio track for the authenticated user.
-      operationId: create-bookmark
-      parameters:
-      - description: Bookmark details (timestampMs in milliseconds)
-        in: body
-        name: bookmark
-        required: true
-        schema:
-          $ref: '#/definitions/dto.CreateBookmarkRequestDTO'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Bookmark created successfully (timestampMs in milliseconds)
-          schema:
-            $ref: '#/definitions/dto.BookmarkResponseDTO'
-        "400":
-          description: Invalid Input / Track ID Format
-          schema:
-            $ref: '#/definitions/httputil.ErrorResponseDTO'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/httputil.ErrorResponseDTO'
-        "404":
-          description: Track Not Found
-          schema:
-            $ref: '#/definitions/httputil.ErrorResponseDTO'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/httputil.ErrorResponseDTO'
-      security:
-      - BearerAuth: []
-      summary: Create a bookmark
-      tags:
-      - User Activity
-  /bookmarks/{bookmarkId}:
-    delete:
-      description: Deletes a specific bookmark owned by the current user.
-      operationId: delete-bookmark
-      parameters:
-      - description: Bookmark UUID
-        format: uuid
-        in: path
-        name: bookmarkId
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "204":
-          description: Bookmark deleted successfully
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/httputil.ErrorResponseDTO'
-        "403":
-          description: Forbidden (Not Owner)
-          schema:
-            $ref: '#/definitions/httputil.ErrorResponseDTO'
-        "404":
-          description: Bookmark Not Found
-          schema:
-            $ref: '#/definitions/httputil.ErrorResponseDTO'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/httputil.ErrorResponseDTO'
-      security:
-      - BearerAuth // Apply the security definition defined in main.go: []
-      summary: Delete a bookmark
-      tags:
-      - User Activity
   /uploads/audio/batch/request:
     post:
       consumes:
@@ -1265,6 +1132,139 @@ paths:
       summary: Get current user's profile
       tags:
       - Users
+  /users/me/bookmarks:
+    get:
+      description: Retrieves a paginated list of bookmarks for the authenticated user,
+        optionally filtered by track ID.
+      operationId: list-bookmarks
+      parameters:
+      - description: Filter by Audio Track UUID
+        format: uuid
+        in: query
+        name: trackId
+        type: string
+      - default: 50
+        description: Pagination limit
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      - default: 0
+        description: Pagination offset
+        in: query
+        minimum: 0
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated list of bookmarks (timestampMs in milliseconds)
+          schema:
+            allOf:
+            - $ref: '#/definitions/dto.PaginatedResponseDTO'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/dto.BookmarkResponseDTO'
+                  type: array
+              type: object
+        "400":
+          description: Invalid Track ID Format (if provided)
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      security:
+      - BearerAuth: []
+      summary: List user's bookmarks
+      tags:
+      - User Activity
+    post:
+      consumes:
+      - application/json
+      description: Creates a new bookmark at a specific timestamp (in milliseconds)
+        in an audio track for the authenticated user.
+      operationId: create-bookmark
+      parameters:
+      - description: Bookmark details (timestampMs in milliseconds)
+        in: body
+        name: bookmark
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateBookmarkRequestDTO'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Bookmark created successfully (timestampMs in milliseconds)
+          schema:
+            $ref: '#/definitions/dto.BookmarkResponseDTO'
+        "400":
+          description: Invalid Input / Track ID Format
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "404":
+          description: Track Not Found
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      security:
+      - BearerAuth: []
+      summary: Create a bookmark
+      tags:
+      - User Activity
+  /users/me/bookmarks/{bookmarkId}:
+    delete:
+      description: Deletes a specific bookmark owned by the current user.
+      operationId: delete-bookmark
+      parameters:
+      - description: Bookmark UUID
+        format: uuid
+        in: path
+        name: bookmarkId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Bookmark deleted successfully
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "403":
+          description: Forbidden (Not Owner)
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "404":
+          description: Bookmark Not Found
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      security:
+      - BearerAuth: []
+      summary: Delete a bookmark
+      tags:
+      - User Activity
   /users/me/progress:
     get:
       description: Retrieves a paginated list of playback progress records for the

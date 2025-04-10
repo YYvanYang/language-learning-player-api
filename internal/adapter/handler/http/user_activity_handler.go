@@ -188,7 +188,7 @@ func (h *UserActivityHandler) ListProgress(w http.ResponseWriter, r *http.Reques
 
 // --- Bookmark Handlers ---
 
-// CreateBookmark handles POST /api/v1/bookmarks
+// CreateBookmark handles POST /api/v1/users/me/bookmarks
 // @Summary Create a bookmark
 // @Description Creates a new bookmark at a specific timestamp (in milliseconds) in an audio track for the authenticated user.
 // @ID create-bookmark
@@ -202,7 +202,7 @@ func (h *UserActivityHandler) ListProgress(w http.ResponseWriter, r *http.Reques
 // @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
 // @Failure 404 {object} httputil.ErrorResponseDTO "Track Not Found"
 // @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
-// @Router /bookmarks [post]
+// @Router /users/me/bookmarks [post]
 func (h *UserActivityHandler) CreateBookmark(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserIDFromContext(r.Context())
 	if !ok {
@@ -241,7 +241,7 @@ func (h *UserActivityHandler) CreateBookmark(w http.ResponseWriter, r *http.Requ
 	httputil.RespondJSON(w, r, http.StatusCreated, resp) // 201 Created
 }
 
-// ListBookmarks handles GET /api/v1/bookmarks
+// ListBookmarks handles GET /api/v1/users/me/bookmarks
 // @Summary List user's bookmarks
 // @Description Retrieves a paginated list of bookmarks for the authenticated user, optionally filtered by track ID.
 // @ID list-bookmarks
@@ -255,7 +255,7 @@ func (h *UserActivityHandler) CreateBookmark(w http.ResponseWriter, r *http.Requ
 // @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Track ID Format (if provided)"
 // @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
 // @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
-// @Router /bookmarks [get]
+// @Router /users/me/bookmarks [get]
 func (h *UserActivityHandler) ListBookmarks(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserIDFromContext(r.Context())
 	if !ok {
@@ -316,20 +316,20 @@ func (h *UserActivityHandler) ListBookmarks(w http.ResponseWriter, r *http.Reque
 	httputil.RespondJSON(w, r, http.StatusOK, resp)
 }
 
-// DeleteBookmark handles DELETE /api/v1/bookmarks/{bookmarkId}
+// DeleteBookmark handles DELETE /api/v1/users/me/bookmarks/{bookmarkId}
 // @Summary Delete a bookmark
 // @Description Deletes a specific bookmark owned by the current user.
 // @ID delete-bookmark
 // @Tags User Activity
 // @Produce json
-// @Security BearerAuth // Apply the security definition defined in main.go
+// @Security BearerAuth
 // @Param bookmarkId path string true "Bookmark UUID" Format(uuid)
 // @Success 204 "Bookmark deleted successfully"
 // @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
 // @Failure 403 {object} httputil.ErrorResponseDTO "Forbidden (Not Owner)"
 // @Failure 404 {object} httputil.ErrorResponseDTO "Bookmark Not Found"
 // @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
-// @Router /bookmarks/{bookmarkId} [delete]
+// @Router /users/me/bookmarks/{bookmarkId} [delete]
 func (h *UserActivityHandler) DeleteBookmark(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserIDFromContext(r.Context())
 	if !ok {
