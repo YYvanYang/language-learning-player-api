@@ -61,7 +61,7 @@ func (r *BookmarkRepository) Create(ctx context.Context, bookmark *domain.Bookma
 		bookmark.ID,
 		bookmark.UserID,
 		bookmark.TrackID,
-		bookmark.Timestamp.Milliseconds(), // Convert domain's time.Duration to int64 milliseconds
+		bookmark.Timestamp, // Use time.Duration directly, pgx handles INTERVAL
 		bookmark.Note,
 		bookmark.CreatedAt,
 	)
@@ -201,22 +201,19 @@ func (r *BookmarkRepository) Delete(ctx context.Context, id domain.BookmarkID) e
 // It handles the conversion from the database's timestamp_ms (BIGINT) to domain's Timestamp (time.Duration).
 func (r *BookmarkRepository) scanBookmark(ctx context.Context, row RowScanner) (*domain.Bookmark, error) {
 	var b domain.Bookmark
-	var timestampMs int64 // Variable to scan the BIGINT milliseconds value into
+	// Scan directly into time.Duration field
 
 	err := row.Scan(
 		&b.ID,
 		&b.UserID,
 		&b.TrackID,
-		&timestampMs, // Scan the timestamp_ms column into int64
+		&b.Timestamp, // Scan INTERVAL directly into time.Duration
 		&b.Note,
 		&b.CreatedAt,
 	)
 	if err != nil {
 		return nil, err // Propagate scan errors (including pgx.ErrNoRows)
 	}
-
-	// Convert the scanned milliseconds back into time.Duration for the domain object
-	b.Timestamp = time.Duration(timestampMs) * time.Millisecond
 
 	return &b, nil
 }

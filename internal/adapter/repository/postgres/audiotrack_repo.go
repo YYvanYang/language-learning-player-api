@@ -55,7 +55,7 @@ func (r *AudioTrackRepository) Create(ctx context.Context, track *domain.AudioTr
 		track.Description,
 		track.Language.Code(),
 		track.Level,
-		track.Duration.Milliseconds(), // Point 1: Convert domain Duration to int64 ms
+		track.Duration, // Use time.Duration directly, pgx handles INTERVAL
 		track.MinioBucket,
 		track.MinioObjectKey,
 		track.CoverImageURL,
@@ -256,7 +256,7 @@ func (r *AudioTrackRepository) Update(ctx context.Context, track *domain.AudioTr
 		track.ID, track.Title, track.Description,
 		track.Language.Code(),
 		track.Level,
-		track.Duration.Milliseconds(), // Point 1: Convert domain Duration to int64 ms
+		track.Duration, // Use time.Duration directly, pgx handles INTERVAL
 		track.MinioBucket, track.MinioObjectKey, track.CoverImageURL, track.UploaderID,
 		track.IsPublic, pq.Array(track.Tags), track.UpdatedAt,
 	)
@@ -311,7 +311,7 @@ func (r *AudioTrackRepository) scanTrack(ctx context.Context, row RowScanner) (*
 	var track domain.AudioTrack
 	var langCode string
 	var levelStr string
-	var durationMs int64 // Scan into int64
+	// var duration time.Duration // Scan directly into domain field
 	var tags pq.StringArray
 	var uploaderID uuid.NullUUID
 
@@ -319,7 +319,7 @@ func (r *AudioTrackRepository) scanTrack(ctx context.Context, row RowScanner) (*
 		&track.ID, &track.Title, &track.Description,
 		&langCode,
 		&levelStr,
-		&durationMs, // Scan duration_ms column
+		&track.Duration, // Scan INTERVAL directly into time.Duration
 		&track.MinioBucket, &track.MinioObjectKey, &track.CoverImageURL,
 		&uploaderID,
 		&track.IsPublic, &tags, &track.CreatedAt, &track.UpdatedAt,
@@ -340,7 +340,7 @@ func (r *AudioTrackRepository) scanTrack(ctx context.Context, row RowScanner) (*
 		track.Level = domain.LevelUnknown
 	}
 	// Convert scanned milliseconds back to time.Duration
-	track.Duration = time.Duration(durationMs) * time.Millisecond
+	// track.Duration = time.Duration(durationMs) * time.Millisecond
 	track.Tags = tags
 
 	if uploaderID.Valid {

@@ -48,14 +48,14 @@ func (r *PlaybackProgressRepository) Upsert(ctx context.Context, progress *domai
 	_, err := q.Exec(ctx, query,
 		progress.UserID,
 		progress.TrackID,
-		progress.Progress.Milliseconds(), // Point 1: Convert domain Duration to int64 ms
+		progress.Progress, // Use time.Duration directly, pgx handles INTERVAL
 		progress.LastListenedAt,
 	)
 	if err != nil {
 		r.logger.ErrorContext(ctx, "Error upserting playback progress", "error", err, "userID", progress.UserID, "trackID", progress.TrackID)
 		return fmt.Errorf("upserting playback progress: %w", err)
 	}
-	r.logger.DebugContext(ctx, "Playback progress upserted", "userID", progress.UserID, "trackID", progress.TrackID, "progressMs", progress.Progress.Milliseconds())
+	r.logger.DebugContext(ctx, "Playback progress upserted", "userID", progress.UserID, "trackID", progress.TrackID, "progress", progress.Progress)
 	return nil
 }
 
@@ -124,20 +124,17 @@ func (r *PlaybackProgressRepository) ListByUser(ctx context.Context, userID doma
 // Point 1: Updated scanProgress
 func (r *PlaybackProgressRepository) scanProgress(ctx context.Context, row RowScanner) (*domain.PlaybackProgress, error) {
 	var p domain.PlaybackProgress
-	var progressMs int64 // Scan into int64
+	// Scan directly into time.Duration field
 
 	err := row.Scan(
 		&p.UserID,
 		&p.TrackID,
-		&progressMs, // Scan progress_ms column
+		&p.Progress, // Scan INTERVAL directly into time.Duration
 		&p.LastListenedAt,
 	)
 	if err != nil {
 		return nil, err
 	}
-
-	// Convert scanned milliseconds back to time.Duration
-	p.Progress = time.Duration(progressMs) * time.Millisecond
 
 	return &p, nil
 }

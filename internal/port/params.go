@@ -2,6 +2,8 @@
 package port
 
 import (
+	"time"
+
 	"github.com/yvanyang/language-learning-player-api/internal/domain"
 	"github.com/yvanyang/language-learning-player-api/pkg/pagination"
 )
@@ -48,7 +50,7 @@ type CompleteUploadInput struct {
 	Description   string
 	LanguageCode  string
 	Level         string
-	DurationMs    int64
+	Duration      time.Duration // Use time.Duration consistent with domain model
 	IsPublic      bool
 	Tags          []string
 	CoverImageURL *string
@@ -80,7 +82,7 @@ type BatchCompleteItem struct {
 	Description   string
 	LanguageCode  string
 	Level         string
-	DurationMs    int64
+	Duration      time.Duration // Use time.Duration consistent with domain model
 	IsPublic      bool
 	Tags          []string
 	CoverImageURL *string

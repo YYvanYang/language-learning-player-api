@@ -23,7 +23,7 @@ type CompleteUploadInputDTO struct {
 	Description   string   `json:"description"`
 	LanguageCode  string   `json:"languageCode" validate:"required"`
 	Level         string   `json:"level" validate:"omitempty,oneof=A1 A2 B1 B2 C1 C2 NATIVE"` // Allow empty or valid level
-	DurationMs    int64    `json:"durationMs" validate:"required,gt=0"`                       // Duration in Milliseconds, must be positive
+	DurationMs    int64    `json:"durationMs" validate:"required,gt=0" example:"183500"`      // Duration in Milliseconds, must be positive
 	IsPublic      bool     `json:"isPublic"`                                                  // Defaults to false if omitted? Define behavior.
 	Tags          []string `json:"tags"`
 	CoverImageURL *string  `json:"coverImageUrl" validate:"omitempty,url"`
@@ -62,7 +62,7 @@ type BatchCompleteUploadItemDTO struct {
 	Description   string   `json:"description"`
 	LanguageCode  string   `json:"languageCode" validate:"required"`
 	Level         string   `json:"level" validate:"omitempty,oneof=A1 A2 B1 B2 C1 C2 NATIVE"`
-	DurationMs    int64    `json:"durationMs" validate:"required,gt=0"`
+	DurationMs    int64    `json:"durationMs" validate:"required,gt=0"` // Duration in milliseconds
 	IsPublic      bool     `json:"isPublic"`
 	Tags          []string `json:"tags"`
 	CoverImageURL *string  `json:"coverImageUrl" validate:"omitempty,url"`

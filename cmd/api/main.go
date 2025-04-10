@@ -50,11 +50,11 @@ import (
 // @tag.name Users
 // @tag.description Operations related to user profiles.
 // @tag.name Audio Tracks
-// @tag.description Operations related to individual audio tracks, including retrieval and listing.
+// @tag.description Operations related to individual audio tracks, including retrieval and listing. Duration values in responses are in milliseconds.
 // @tag.name Audio Collections
 // @tag.description Operations related to managing audio collections (playlists, courses).
 // @tag.name User Activity
-// @tag.description Operations related to tracking user interactions like playback progress and bookmarks.
+// @tag.description Operations related to tracking user interactions like playback progress and bookmarks. Timestamp/Progress values in requests/responses are in milliseconds.
 // @tag.name Uploads
 // @tag.description Operations related to requesting upload URLs and finalizing uploads.
 // @tag.name Health

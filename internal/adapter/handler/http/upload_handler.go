@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	// Assuming module path is updated
 	"github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http/dto"
@@ -119,7 +120,7 @@ func (h *UploadHandler) CompleteUploadAndCreateTrack(w http.ResponseWriter, r *h
 		Description:   req.Description,
 		LanguageCode:  req.LanguageCode,
 		Level:         req.Level,
-		DurationMs:    req.DurationMs,
+		Duration:      time.Duration(req.DurationMs) * time.Millisecond, // Convert ms to duration
 		IsPublic:      req.IsPublic,
 		Tags:          req.Tags,
 		CoverImageURL: req.CoverImageURL,
@@ -133,7 +134,7 @@ func (h *UploadHandler) CompleteUploadAndCreateTrack(w http.ResponseWriter, r *h
 	}
 
 	// Map domain.AudioTrack to response DTO
-	resp := dto.MapDomainTrackToResponseDTO(track)
+	resp := dto.MapDomainTrackToResponseDTO(track) // Mapper converts duration back to ms
 	httputil.RespondJSON(w, r, http.StatusCreated, resp)
 }
 
@@ -246,7 +247,7 @@ func (h *UploadHandler) CompleteBatchUploadAndCreateTracks(w http.ResponseWriter
 			Description:   t.Description,
 			LanguageCode:  t.LanguageCode,
 			Level:         t.Level,
-			DurationMs:    t.DurationMs,
+			Duration:      time.Duration(t.DurationMs) * time.Millisecond, // Convert ms to duration
 			IsPublic:      t.IsPublic,
 			Tags:          t.Tags,
 			CoverImageURL: t.CoverImageURL,

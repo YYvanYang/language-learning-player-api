@@ -42,7 +42,7 @@ func NewUserActivityHandler(uc port.UserActivityUseCase, v *validation.Validator
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param progress body dto.RecordProgressRequestDTO true "Playback progress details (progressMs in milliseconds)"
+// @Param progress body dto.RecordProgressRequestDTO true "Playback progress details"
 // @Success 204 "Progress recorded successfully"
 // @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Input / Track ID Format"
 // @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
@@ -56,7 +56,7 @@ func (h *UserActivityHandler) RecordProgress(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var req dto.RecordProgressRequestDTO // DTO now uses ProgressMs
+	var req dto.RecordProgressRequestDTO
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.RespondError(w, r, fmt.Errorf("%w: invalid request body", domain.ErrInvalidArgument))
 		return
@@ -94,7 +94,7 @@ func (h *UserActivityHandler) RecordProgress(w http.ResponseWriter, r *http.Requ
 // @Produce json
 // @Security BearerAuth
 // @Param trackId path string true "Audio Track UUID" Format(uuid)
-// @Success 200 {object} dto.PlaybackProgressResponseDTO "Playback progress found (progressMs in milliseconds)"
+// @Success 200 {object} dto.PlaybackProgressResponseDTO "Playback progress found"
 // @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Track ID Format"
 // @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
 // @Failure 404 {object} httputil.ErrorResponseDTO "Progress Not Found (or Track Not Found)"
@@ -121,7 +121,7 @@ func (h *UserActivityHandler) GetProgress(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	resp := dto.MapDomainProgressToResponseDTO(progress) // DTO mapping updated for milliseconds
+	resp := dto.MapDomainProgressToResponseDTO(progress) // Mapper converts duration to ms
 	httputil.RespondJSON(w, r, http.StatusOK, resp)
 }
 
@@ -134,7 +134,7 @@ func (h *UserActivityHandler) GetProgress(w http.ResponseWriter, r *http.Request
 // @Security BearerAuth
 // @Param limit query int false "Pagination limit" default(50) minimum(1) maximum(100)
 // @Param offset query int false "Pagination offset" default(0) minimum(0)
-// @Success 200 {object} dto.PaginatedResponseDTO{data=[]dto.PlaybackProgressResponseDTO} "Paginated list of playback progress (progressMs in milliseconds)"
+// @Success 200 {object} dto.PaginatedResponseDTO{data=[]dto.PlaybackProgressResponseDTO} "Paginated list of playback progress"
 // @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
 // @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
 // @Router /users/me/progress [get]
@@ -167,7 +167,7 @@ func (h *UserActivityHandler) ListProgress(w http.ResponseWriter, r *http.Reques
 
 	respData := make([]dto.PlaybackProgressResponseDTO, len(progressList))
 	for i, p := range progressList {
-		respData[i] = dto.MapDomainProgressToResponseDTO(p) // DTO mapping updated for milliseconds
+		respData[i] = dto.MapDomainProgressToResponseDTO(p) // Mapper converts duration to ms
 	}
 
 	// Use the returned actualPageInfo for the response
@@ -190,14 +190,14 @@ func (h *UserActivityHandler) ListProgress(w http.ResponseWriter, r *http.Reques
 
 // CreateBookmark handles POST /api/v1/users/me/bookmarks
 // @Summary Create a bookmark
-// @Description Creates a new bookmark at a specific timestamp (in milliseconds) in an audio track for the authenticated user.
+// @Description Creates a new bookmark at a specific timestamp in an audio track for the authenticated user.
 // @ID create-bookmark
 // @Tags User Activity
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param bookmark body dto.CreateBookmarkRequestDTO true "Bookmark details (timestampMs in milliseconds)"
-// @Success 201 {object} dto.BookmarkResponseDTO "Bookmark created successfully (timestampMs in milliseconds)"
+// @Param bookmark body dto.CreateBookmarkRequestDTO true "Bookmark details"
+// @Success 201 {object} dto.BookmarkResponseDTO "Bookmark created successfully"
 // @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Input / Track ID Format"
 // @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
 // @Failure 404 {object} httputil.ErrorResponseDTO "Track Not Found"
@@ -210,7 +210,7 @@ func (h *UserActivityHandler) CreateBookmark(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var req dto.CreateBookmarkRequestDTO // DTO now uses TimestampMs
+	var req dto.CreateBookmarkRequestDTO
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.RespondError(w, r, fmt.Errorf("%w: invalid request body", domain.ErrInvalidArgument))
 		return
@@ -237,7 +237,7 @@ func (h *UserActivityHandler) CreateBookmark(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	resp := dto.MapDomainBookmarkToResponseDTO(bookmark) // DTO mapping updated for milliseconds
+	resp := dto.MapDomainBookmarkToResponseDTO(bookmark) // Mapper converts duration to ms
 	httputil.RespondJSON(w, r, http.StatusCreated, resp) // 201 Created
 }
 
@@ -251,7 +251,7 @@ func (h *UserActivityHandler) CreateBookmark(w http.ResponseWriter, r *http.Requ
 // @Param trackId query string false "Filter by Audio Track UUID" Format(uuid)
 // @Param limit query int false "Pagination limit" default(50) minimum(1) maximum(100)
 // @Param offset query int false "Pagination offset" default(0) minimum(0)
-// @Success 200 {object} dto.PaginatedResponseDTO{data=[]dto.BookmarkResponseDTO} "Paginated list of bookmarks (timestampMs in milliseconds)"
+// @Success 200 {object} dto.PaginatedResponseDTO{data=[]dto.BookmarkResponseDTO} "Paginated list of bookmarks"
 // @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Track ID Format (if provided)"
 // @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
 // @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
@@ -297,7 +297,7 @@ func (h *UserActivityHandler) ListBookmarks(w http.ResponseWriter, r *http.Reque
 
 	respData := make([]dto.BookmarkResponseDTO, len(bookmarks))
 	for i, b := range bookmarks {
-		respData[i] = dto.MapDomainBookmarkToResponseDTO(b) // DTO mapping updated for milliseconds
+		respData[i] = dto.MapDomainBookmarkToResponseDTO(b) // Mapper converts duration to ms
 	}
 
 	// Use the returned actualPageInfo for the response

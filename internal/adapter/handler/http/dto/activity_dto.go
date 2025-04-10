@@ -12,13 +12,13 @@ import (
 // RecordProgressRequestDTO defines the JSON body for recording playback progress.
 type RecordProgressRequestDTO struct {
 	TrackID    string `json:"trackId" validate:"required,uuid"`
-	ProgressMs int64  `json:"progressMs" validate:"required,gte=0"` // Point 1: Already uses ms
+	ProgressMs int64  `json:"progressMs" validate:"required,gte=0" example:"30500"` // Progress in milliseconds
 }
 
 // CreateBookmarkRequestDTO defines the JSON body for creating a bookmark.
 type CreateBookmarkRequestDTO struct {
 	TrackID     string `json:"trackId" validate:"required,uuid"`
-	TimestampMs int64  `json:"timestampMs" validate:"required,gte=0"` // Point 1: Already uses ms
+	TimestampMs int64  `json:"timestampMs" validate:"required,gte=0" example:"15250"` // Timestamp in milliseconds
 	Note        string `json:"note"`
 }
 
@@ -28,7 +28,7 @@ type CreateBookmarkRequestDTO struct {
 type PlaybackProgressResponseDTO struct {
 	UserID         string    `json:"userId"`
 	TrackID        string    `json:"trackId"`
-	ProgressMs     int64     `json:"progressMs"` // Point 1: Already uses ms
+	ProgressMs     int64     `json:"progressMs"` // Progress in milliseconds
 	LastListenedAt time.Time `json:"lastListenedAt"`
 }
 
@@ -51,7 +51,7 @@ type BookmarkResponseDTO struct {
 	ID          string    `json:"id"`
 	UserID      string    `json:"userId"`
 	TrackID     string    `json:"trackId"`
-	TimestampMs int64     `json:"timestampMs"`
+	TimestampMs int64     `json:"timestampMs"` // Timestamp in milliseconds
 	Note        string    `json:"note,omitempty"`
 	CreatedAt   time.Time `json:"createdAt"`
 }

@@ -88,7 +88,7 @@ func (uc *UploadUseCase) CompleteUpload(ctx context.Context, userID domain.UserI
 	log := uc.logger.With("userID", userID.String(), "objectKey", input.ObjectKey)
 
 	// CHANGED: Use fields from input
-	if err := uc.validateCompleteUploadRequest(ctx, userID, input.ObjectKey, input.Title, input.LanguageCode, input.DurationMs, input.Level); err != nil {
+	if err := uc.validateCompleteUploadRequest(ctx, userID, input.ObjectKey, input.Title, input.LanguageCode, input.Duration, input.Level); err != nil {
 		return nil, err
 	}
 
@@ -208,7 +208,7 @@ func (uc *UploadUseCase) CompleteBatchUpload(ctx context.Context, userID domain.
 			Success:   false,
 		}
 
-		validationErr := uc.validateCompleteUploadRequest(ctx, userID, trackReq.ObjectKey, trackReq.Title, trackReq.LanguageCode, trackReq.DurationMs, trackReq.Level)
+		validationErr := uc.validateCompleteUploadRequest(ctx, userID, trackReq.ObjectKey, trackReq.Title, trackReq.LanguageCode, trackReq.Duration, trackReq.Level)
 		if validationErr != nil {
 			itemLog.Warn("Pre-validation failed for batch item", "error", validationErr)
 			resultItem.Error = validationErr.Error()
@@ -320,7 +320,7 @@ func (uc *UploadUseCase) generateObjectKey(userID domain.UserID, filename string
 	return fmt.Sprintf("user-uploads/%s/%s%s", userID.String(), randomUUID, extension)
 }
 
-func (uc *UploadUseCase) validateCompleteUploadRequest(ctx context.Context, userID domain.UserID, objectKey, title, langCode string, durationMs int64, level string) error {
+func (uc *UploadUseCase) validateCompleteUploadRequest(ctx context.Context, userID domain.UserID, objectKey, title, langCode string, duration time.Duration, level string) error {
 	log := uc.logger.With("userID", userID.String(), "objectKey", objectKey)
 	if objectKey == "" {
 		return fmt.Errorf("%w: objectKey is required", domain.ErrInvalidArgument)
@@ -331,8 +331,8 @@ func (uc *UploadUseCase) validateCompleteUploadRequest(ctx context.Context, user
 	if langCode == "" {
 		return fmt.Errorf("%w: languageCode is required", domain.ErrInvalidArgument)
 	}
-	if durationMs <= 0 {
-		return fmt.Errorf("%w: valid durationMs is required", domain.ErrInvalidArgument)
+	if duration <= 0 {
+		return fmt.Errorf("%w: valid duration is required", domain.ErrInvalidArgument)
 	}
 	expectedPrefix := fmt.Sprintf("user-uploads/%s/", userID.String())
 	if !strings.HasPrefix(objectKey, expectedPrefix) {
@@ -353,7 +353,7 @@ func (uc *UploadUseCase) validateCompleteUploadRequest(ctx context.Context, user
 // createDomainTrack creates an AudioTrack domain object from the request data.
 func (uc *UploadUseCase) createDomainTrack(ctx context.Context, userID domain.UserID, reqData interface{}) (*domain.AudioTrack, error) {
 	var title, description, objectKey, langCode, levelStr string
-	var durationMs int64
+	var duration time.Duration
 	var isPublic bool
 	var tags []string
 	var coverURL *string
@@ -365,7 +365,7 @@ func (uc *UploadUseCase) createDomainTrack(ctx context.Context, userID domain.Us
 		objectKey = r.ObjectKey
 		langCode = r.LanguageCode
 		levelStr = r.Level
-		durationMs = r.DurationMs
+		duration = r.Duration
 		isPublic = r.IsPublic
 		tags = r.Tags
 		coverURL = r.CoverImageURL
@@ -375,7 +375,7 @@ func (uc *UploadUseCase) createDomainTrack(ctx context.Context, userID domain.Us
 		objectKey = r.ObjectKey
 		langCode = r.LanguageCode
 		levelStr = r.Level
-		durationMs = r.DurationMs
+		duration = r.Duration
 		isPublic = r.IsPublic
 		tags = r.Tags
 		coverURL = r.CoverImageURL
@@ -388,7 +388,6 @@ func (uc *UploadUseCase) createDomainTrack(ctx context.Context, userID domain.Us
 		return nil, err
 	}
 	levelVO := domain.AudioLevel(levelStr)
-	duration := time.Duration(durationMs) * time.Millisecond
 	uploaderID := userID
 
 	track, err := domain.NewAudioTrack(title, description, uc.minioBucket, objectKey, langVO, levelVO, duration, &uploaderID, isPublic, tags, coverURL)

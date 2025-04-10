@@ -51,7 +51,7 @@ type AudioTrackResponseDTO struct {
 	Description   string    `json:"description,omitempty"`
 	LanguageCode  string    `json:"languageCode"`
 	Level         string    `json:"level,omitempty"`
-	DurationMs    int64     `json:"durationMs"` // Point 1: Use milliseconds (int64)
+	DurationMs    int64     `json:"durationMs" example:"125300"` // Duration in milliseconds
 	CoverImageURL *string   `json:"coverImageUrl,omitempty"`
 	UploaderID    *string   `json:"uploaderId,omitempty"`
 	IsPublic      bool      `json:"isPublic"`
@@ -63,9 +63,9 @@ type AudioTrackResponseDTO struct {
 // AudioTrackDetailsResponseDTO includes the track metadata, playback URL, and user-specific info.
 type AudioTrackDetailsResponseDTO struct {
 	AudioTrackResponseDTO                       // Embed basic track info
-	PlayURL               string                `json:"playUrl"`                  // Presigned URL
-	UserProgressMs        *int64                `json:"userProgressMs,omitempty"` // Point 1: User progress in ms
-	UserBookmarks         []BookmarkResponseDTO `json:"userBookmarks,omitempty"`  // Array of user bookmarks for this track
+	PlayURL               string                `json:"playUrl"`                                  // Presigned URL
+	UserProgressMs        *int64                `json:"userProgressMs,omitempty" example:"45000"` // User progress in ms
+	UserBookmarks         []BookmarkResponseDTO `json:"userBookmarks,omitempty"`                  // Array of user bookmarks for this track
 }
 
 // UploaderInfoDTO - embedded within AudioTrackDetailsResponseDTO if needed
@@ -168,9 +168,3 @@ func MapDomainCollectionToResponseDTO(collection *domain.AudioCollection, tracks
 	}
 	return dto
 }
-
-// PaginatedTracksResponseDTO - Using common PaginatedResponseDTO instead
-// type PaginatedTracksResponseDTO struct { ... }
-
-// PaginatedCollectionsResponseDTO - Using common PaginatedResponseDTO instead
-// type PaginatedCollectionsResponseDTO struct { ... }
