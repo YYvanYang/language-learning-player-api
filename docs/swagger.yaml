@@ -56,7 +56,7 @@ definitions:
       userBookmarks:
         description: Array of user bookmarks for this track
         items:
-          $ref: '#/definitions/dto.BookmarkDTO'
+          $ref: '#/definitions/dto.BookmarkResponseDTO'
         type: array
       userProgressMs:
         description: 'Point 1: User progress in ms'
@@ -215,18 +215,6 @@ definitions:
         description: The presigned PUT URL for this file
         type: string
     type: object
-  dto.BookmarkDTO:
-    properties:
-      createdAt:
-        type: string
-      id:
-        type: string
-      note:
-        type: string
-      timestampMs:
-        description: 'Point 1: Use ms'
-        type: integer
-    type: object
   dto.BookmarkResponseDTO:
     properties:
       createdAt:
@@ -236,7 +224,6 @@ definitions:
       note:
         type: string
       timestampMs:
-        description: 'Point 1: Already uses ms'
         type: integer
       trackId:
         type: string

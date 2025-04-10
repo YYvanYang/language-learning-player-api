@@ -46,31 +46,27 @@ func MapDomainProgressToResponseDTO(p *domain.PlaybackProgress) PlaybackProgress
 }
 
 // BookmarkResponseDTO defines the JSON representation of a bookmark.
-// NOTE: Also defined in audio_dto.go for embedding. Ensure consistency.
+// THIS IS NOW THE SINGLE SOURCE OF TRUTH FOR BOOKMARK RESPONSE DTO.
 type BookmarkResponseDTO struct {
 	ID          string    `json:"id"`
 	UserID      string    `json:"userId"`
 	TrackID     string    `json:"trackId"`
-	TimestampMs int64     `json:"timestampMs"` // Point 1: Already uses ms
+	TimestampMs int64     `json:"timestampMs"`
 	Note        string    `json:"note,omitempty"`
 	CreatedAt   time.Time `json:"createdAt"`
 }
 
-// Point 1: MapDomainBookmarkToResponseDTO converts domain bookmark (with time.Duration) to DTO (with int64 ms).
+// MapDomainBookmarkToResponseDTO converts domain bookmark (with time.Duration) to DTO (with int64 ms).
 func MapDomainBookmarkToResponseDTO(b *domain.Bookmark) BookmarkResponseDTO {
 	if b == nil {
 		return BookmarkResponseDTO{}
 	} // Handle nil gracefully
 	return BookmarkResponseDTO{
 		ID:          b.ID.String(),
-		UserID:      b.UserID.String(),
+		UserID:      b.UserID.String(), // Keep UserID here for now
 		TrackID:     b.TrackID.String(),
 		TimestampMs: b.Timestamp.Milliseconds(), // Convert duration to ms
 		Note:        b.Note,
 		CreatedAt:   b.CreatedAt,
 	}
 }
-
-// --- Paginated Response DTOs ---
-// REMOVED PaginatedProgressResponseDTO and PaginatedBookmarksResponseDTO
-// Use common_dto.PaginatedResponseDTO instead.

@@ -1465,7 +1465,7 @@ const docTemplate = `{
                     "description": "Array of user bookmarks for this track",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/dto.BookmarkDTO"
+                        "$ref": "#/definitions/dto.BookmarkResponseDTO"
                     }
                 },
                 "userProgressMs": {
@@ -1695,24 +1695,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.BookmarkDTO": {
-            "type": "object",
-            "properties": {
-                "createdAt": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "note": {
-                    "type": "string"
-                },
-                "timestampMs": {
-                    "description": "Point 1: Use ms",
-                    "type": "integer"
-                }
-            }
-        },
         "dto.BookmarkResponseDTO": {
             "type": "object",
             "properties": {
@@ -1726,7 +1708,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "timestampMs": {
-                    "description": "Point 1: Already uses ms",
                     "type": "integer"
                 },
                 "trackId": {
