@@ -1,0 +1,55 @@
+# .mockery.yaml - Mockery v3+ Configuration
+# See: https://vektra.github.io/mockery/latest/configuration/
+# See: https://vektra.github.io/mockery/latest/template/
+
+# --- Global Output Configuration ---
+
+# The Go package name for all generated mock files.
+# This is a valid top-level key.
+pkgname: mocks
+
+# MOVED dir to per-package config as it uses package-specific template variables.
+# dir: ./internal/mocks/{{base .PackagePath}}
+
+# --- Global Naming Conventions ---
+
+# Customize the generated filename (Default: mock_{{.InterfaceName}}.go)
+# This is a valid top-level key.
+filename: "mock_{{.InterfaceName}}.go"
+
+# Customize the generated mock struct name (Default: Mock{{.InterfaceName}})
+# This is a valid top-level key.
+structname: "Mock{{.InterfaceName}}"
+
+# REMOVED: Invalid top-level key for v3.0.0: header-template
+# Header customization might require a custom template.
+
+# --- Interface Discovery ---
+
+# Specify the packages containing the interfaces to mock.
+packages:
+  # Target the 'port' package where your repository, service, and use case interfaces live.
+  github.com/yvanyang/language-learning-player-api/internal/port:
+    config:
+      # Explicitly tell mockery to generate mocks for ALL interfaces found in this package.
+      all: true
+      # CORRECTED: Specify output dir using the documented `.SrcPackagePath` variable
+      # and the `base` function to get the desired output structure.
+      # Example: For src 'internal/port', output is './internal/mocks/port/'
+      dir: ./internal/mocks/{{base .SrcPackagePath}}
+    # You could override other global settings per-package here if needed, e.g.:
+    # config:
+    #   all: true
+    #   dir: ./internal/mocks/{{base .SrcPackagePath}}
+    #   pkgname: specificmocks
+    #   filename: "iface_{{.InterfaceName}}_mock.go"
+
+# --- Optional Settings ---
+
+# quiet: false # Set to true to suppress informational messages during generation.
+log-level: info # CHANGED BACK: Set log level back to info after successful generation
+# recursive: false # Usually false when using the 'packages' directive.
+# all: false # Usually false, specify packages explicitly.
+# testonly: false # Keep false for shared mocks.
+#keeptree: false # Keep false when using `dir` with templates for central directory.
+#inpackage: false # MUST be false (or omitted) to use 'pkgname' and 'dir' for a central mocks directory.

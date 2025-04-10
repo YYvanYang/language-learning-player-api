@@ -36,26 +36,22 @@ DOCKER_IMAGE_NAME ?= your-dockerhub-username/language-player-api
 DOCKER_IMAGE_TAG ?= latest
 
 # --- Go Tools Installation ---
-# Define paths for Go tools
-# Explicitly use full path to go for shell commands to avoid PATH issues during variable parsing
-GOPATH := $(shell /usr/local/go/bin/go env GOPATH)
-# Define GOBIN, prioritize go env GOBIN, fallback to GOPATH/bin, then $HOME/go/bin
-GOBIN ?= $(firstword $(shell /usr/local/go/bin/go env GOBIN) $(GOPATH)/bin $(HOME)/go/bin)
+GOPATH := $(shell go env GOPATH)
+GOBIN ?= $(firstword $(shell go env GOBIN) $(GOPATH)/bin $(HOME)/go/bin)
 
 # Tool binaries
 MIGRATE := $(GOBIN)/migrate
-# SQLC variable removed
-# SWAG := $(shell go env GOPATH)/bin/swag # Temporarily comment out the dynamic path
-# SWAG := /home/yvan/go/bin/swag # Temporarily hardcode the path - CHANGE IF YOURS IS DIFFERENT!
 SWAG := $(GOBIN)/swag
 GOLANGCILINT := $(GOBIN)/golangci-lint
 GOVULNCHECK := $(GOBIN)/govulncheck
+MOCKERY := $(GOBIN)/mockery # ADDED: Variable for mockery path
 
-.PHONY: tools install-migrate install-swag install-lint install-vulncheck
-# install-sqlc removed from .PHONY
+# MODIFIED .PHONY: Added install-mockery, generate-mocks. Removed install-sqlc.
+.PHONY: tools install-migrate install-swag install-lint install-vulncheck install-mockery generate generate-swag generate-mocks swagger test test-unit test-integration test-cover lint fmt check-vuln docker-build docker-run docker-stop docker-push docker-postgres-run docker-postgres-stop docker-minio-run docker-minio-stop deps-run deps-stop help clean migrate-create migrate-up migrate-down migrate-force check-db-url build run
 
 # Target to install all necessary Go tools
-tools: install-migrate install-swag install-lint install-vulncheck # install-sqlc removed
+# MODIFIED: Added install-mockery dependency
+tools: install-migrate install-swag install-lint install-vulncheck install-mockery
 
 # Check if migrate is installed, if not, install it
 install-migrate:
@@ -70,8 +66,6 @@ install-migrate:
 	else \
 		echo ">>> migrate is already installed."; \
 	fi
-
-# install-sqlc target removed
 
 # Check if swag is installed, if not, install it (Optional, if using swaggo/swag)
 install-swag:
@@ -115,9 +109,21 @@ install-vulncheck:
 		echo ">>> govulncheck is already installed."; \
 	fi
 
-# --- Build ---
-.PHONY: build clean
+# MODIFIED: Install latest mockery v3+
+install-mockery:
+	@if ! command -v mockery &> /dev/null; then \
+		echo ">>> Installing mockery CLI (latest v3+)..."; \
+		if go install github.com/vektra/mockery/v3@v3.0.0; then \
+			echo ">>> mockery installed successfully."; \
+		else \
+			echo ">>> ERROR: Failed to install mockery. Please check Go version (needs 1.18+) and network connectivity."; \
+			exit 1; \
+		fi; \
+	else \
+		echo ">>> mockery is already installed."; \
+	fi
 
+# --- Build ---
 # Build the Go binary
 build: clean tools
 	@echo ">>> Building binary..."
@@ -132,18 +138,12 @@ clean:
 	@rm -f coverage.out
 
 # --- Run ---
-.PHONY: run
-
 # Run the application locally (requires dependencies like DB running)
-# Uses local configuration (e.g., config.development.yaml)
-# Ensure required env vars (like secrets) are set or use tools like direnv
 run: tools
 	@echo ">>> Running application locally (using go run)..."
 	@APP_ENV=development go run $(CMD_PATH)/main.go
 
 # --- Database Migrations ---
-.PHONY: migrate-create migrate-up migrate-down migrate-force check-db-url
-
 # Internal target to check if DATABASE_URL is set
 check-db-url:
 	@if [ -z "$(DATABASE_URL)" ]; then \
@@ -153,7 +153,6 @@ check-db-url:
 	fi
 
 # Create a new migration file
-# Usage: make migrate-create name=your_migration_name
 migrate-create: tools
 	@echo ">>> Creating migration file: $(name)..."
 	@$(MIGRATE) create -ext sql -dir $(MIGRATIONS_PATH) -seq $(name)
@@ -172,7 +171,6 @@ migrate-down: tools check-db-url
 	@echo ">>> Last migration reverted."
 
 # Force set migration version (Use with caution!)
-# Usage: make migrate-force version=YYYYMMDDHHMMSS
 migrate-force: tools check-db-url
 	@echo ">>> Forcing migration version to $(version)..."
 	@$(MIGRATE) -database "$(DATABASE_URL)" -path $(MIGRATIONS_PATH) force $(version)
@@ -180,12 +178,8 @@ migrate-force: tools check-db-url
 
 
 # --- Code Generation ---
-.PHONY: generate generate-swag swagger # generate-sqlc removed
-
-# Target to run all generators
-generate: generate-swag # generate-sqlc removed
-
-# generate-sqlc target removed
+# MODIFIED: Added generate-mocks to generate target
+generate: generate-swag generate-mocks
 
 # Generate OpenAPI docs using swag (Optional)
 generate-swag: tools
@@ -197,25 +191,34 @@ generate-swag: tools
 # Alias for generating OpenAPI docs
 swagger: generate-swag
 
-# --- Testing ---
-.PHONY: test test-unit test-integration test-cover
+# MODIFIED: Generate mocks using mockery (reads .mockery.yaml)
+generate-mocks: tools
+	@echo ">>> Generating mocks using mockery (reading .mockery.yaml)..."
+	@if [ ! -f .mockery.yaml ]; then \
+		echo ">>> ERROR: .mockery.yaml config file not found. Please create it."; \
+		exit 1; \
+	fi
+	@echo ">>> Cleaning existing mocks in internal/mocks/port/..."
+	@rm -rf ./internal/mocks/port
+	@mkdir -p ./internal/mocks/port
+	@echo ">>> Running mockery..."
+	@$(MOCKERY)
+	@echo ">>> Mocks generation complete (check output above for errors)."
 
+
+# --- Testing ---
 # Run all tests (unit + integration, requires Docker for integration)
 test: tools
 	@echo ">>> Running all tests (unit + integration)..."
 	@go test $(GO_TEST_FLAGS)
 	@echo ">>> Tests complete. Coverage report generated at coverage.out"
 
-# Run only unit tests (usually tests not ending in _integration_test.go or in specific packages)
-# This might require better test organization or build tags later.
-# For now, a simple placeholder assuming non-integration tests are faster.
+# Run only unit tests (placeholder)
 test-unit: tools
 	@echo ">>> Running unit tests (placeholder)..."
 	@go test $(GO_TEST_FLAGS) -short # -short flag might skip long-running tests if tests use it
 
 # Run only integration tests (requires Docker)
-# Assuming integration tests are marked with _integration_test.go suffix or specific build tag
-# Requires proper test file naming. Example: go test ./... -tags=integration
 test-integration: tools
 	@echo ">>> Running integration tests (requires Docker)..."
 	@go test ./internal/adapter/repository/postgres/... -v # Run tests specifically in the repo package
@@ -227,8 +230,6 @@ test-cover: test
 	@go tool cover -html=coverage.out
 
 # --- Linting & Formatting ---
-.PHONY: lint fmt check-vuln
-
 # Run golangci-lint
 lint: tools
 	@echo ">>> Running linter..."
@@ -247,9 +248,6 @@ check-vuln: tools
 
 
 # --- Docker ---
-# Update .PHONY to include new MinIO targets
-.PHONY: docker-build docker-run docker-stop docker-push docker-postgres-run docker-postgres-stop docker-minio-run docker-minio-stop
-
 # Build Docker image
 docker-build:
 	@echo ">>> Building Docker image [$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)]..."
@@ -259,8 +257,6 @@ docker-build:
 # Run Docker container locally (using env vars from .env file if present)
 docker-run: docker-build
 	@echo ">>> Running Docker container [$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)]..."
-	@# Docker will read variables directly from .env file using --env-file
-	@# Ensure .env file exists if you rely on it, or pass env vars directly with -e
 	@docker run -d --name $(BINARY_NAME) \
 		-p 8080:8080 \
 		--env-file .env \
@@ -285,7 +281,6 @@ docker-push:
 # Run PostgreSQL in Docker container (Simplified)
 docker-postgres-run:
 	@echo ">>> Ensuring PostgreSQL container [$(PG_CONTAINER_NAME)] is running..."
-	@# Stop and remove existing container if it exists
 	@docker stop $(PG_CONTAINER_NAME) > /dev/null 2>&1 || true
 	@docker rm $(PG_CONTAINER_NAME) > /dev/null 2>&1 || true
 	@echo ">>> Starting PostgreSQL container..."
@@ -309,7 +304,6 @@ docker-postgres-run:
 	@echo ">>> PostgreSQL container [$(PG_CONTAINER_NAME)] started successfully."
 	@echo ">>> Connection string: $(DATABASE_URL)"
 
-
 # Stop and remove PostgreSQL container
 docker-postgres-stop:
 	@echo ">>> Stopping and removing PostgreSQL container [$(PG_CONTAINER_NAME)]..."
@@ -321,7 +315,6 @@ docker-postgres-stop:
 # Run MinIO in Docker container
 docker-minio-run:
 	@echo ">>> Ensuring MinIO container [$(MINIO_CONTAINER_NAME)] is running..."
-	@# Stop and remove existing container if it exists
 	@docker stop $(MINIO_CONTAINER_NAME) > /dev/null 2>&1 || true
 	@docker rm $(MINIO_CONTAINER_NAME) > /dev/null 2>&1 || true
 	@echo ">>> Starting MinIO container..."
@@ -333,7 +326,6 @@ docker-minio-run:
 		-d minio/minio server /data --console-address ":9001" > /dev/null
 	@echo ">>> Waiting for MinIO to be ready (max $(MINIO_READY_TIMEOUT)s)..."
 	@timeout=$(MINIO_READY_TIMEOUT); \
-	# MODIFIED: Use curl --fail to check for 2xx status code instead of grepping body
 	@until curl -s --max-time 1 --output /dev/null --fail "http://localhost:$(MINIO_API_PORT)/minio/health/live"; do \
 		timeout=$$((timeout-1)); \
 		if [ $$timeout -eq 0 ]; then \
@@ -346,12 +338,10 @@ docker-minio-run:
 	@echo ">>> MinIO container [$(MINIO_CONTAINER_NAME)] started successfully."
 	@echo ">>> MinIO API: http://localhost:$(MINIO_API_PORT)"
 	@echo ">>> MinIO Console: http://localhost:$(MINIO_CONSOLE_PORT) (Login: $(MINIO_ROOT_USER)/$(MINIO_ROOT_PASSWORD))"
-	@# Automatically create the bucket if it doesn't exist
 	@echo ">>> Ensuring bucket '$(MINIO_BUCKET_NAME)' exists..."
 	@sleep 5 # Give MinIO extra time before creating bucket
 	@docker exec $(MINIO_CONTAINER_NAME) mc alias set local http://localhost:9000 $(MINIO_ROOT_USER) $(MINIO_ROOT_PASSWORD) > /dev/null || true
 	@docker exec $(MINIO_CONTAINER_NAME) mc mb local/$(MINIO_BUCKET_NAME) > /dev/null || echo ">>> Bucket '$(MINIO_BUCKET_NAME)' likely already exists."
-
 
 # Stop and remove MinIO container
 docker-minio-stop:
@@ -361,8 +351,6 @@ docker-minio-stop:
 	@echo ">>> MinIO container stopped and removed."
 
 # --- Help ---
-.PHONY: help
-
 # Show help message
 help:
 	@echo "Usage: make [target]"
@@ -371,7 +359,7 @@ help:
 	@echo "  run               Run the application locally (requires dependencies: use 'make deps-run')"
 	@echo "  deps-run          Start local PostgreSQL and MinIO containers"
 	@echo "  deps-stop         Stop local PostgreSQL and MinIO containers"
-	@echo "  tools             Install necessary Go CLI tools (migrate, swag, lint, vulncheck)" # Removed sqlc
+	@echo "  tools             Install necessary Go CLI tools (migrate, swag, lint, vulncheck, mockery)" # MODIFIED
 	@echo ""
 	@echo "Database Migrations:"
 	@echo "  migrate-create name=<name> Create a new migration file"
@@ -380,9 +368,9 @@ help:
 	@echo "  migrate-force version=<ver> Force migration version (requires DB running and DATABASE_URL set/exported)"
 	@echo ""
 	@echo "Code Generation & Formatting:"
-	@echo "  generate          Run all code generators (swag)" # Removed sqlc
-	# Removed generate-sqlc help line
+	@echo "  generate          Run all code generators (swag, mockery)" # MODIFIED
 	@echo "  generate-swag     Generate OpenAPI docs using swag"
+	@echo "  generate-mocks    Generate mocks for interfaces using mockery (reads .mockery.yaml)" # ADDED
 	@echo "  fmt               Format Go code using go fmt and goimports"
 	@echo ""
 	@echo "Testing & Linting:"
@@ -414,8 +402,6 @@ help:
 .DEFAULT_GOAL := help
 
 # --- Convenience Targets ---
-.PHONY: deps-run deps-stop
-
 # Start local development dependencies (PostgreSQL + MinIO)
 deps-run: docker-postgres-run docker-minio-run
 
