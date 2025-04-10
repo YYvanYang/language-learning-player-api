@@ -15,9 +15,9 @@ type RequestUploadResponseDTO struct {
 	ObjectKey string `json:"objectKey"` // The key the client should use/report back
 }
 
-// CompleteUploadRequestDTO defines the JSON body for finalizing an upload
+// CompleteUploadInputDTO defines the JSON body for finalizing an upload
 // and creating the audio track metadata record.
-type CompleteUploadRequestDTO struct {
+type CompleteUploadInputDTO struct {
 	ObjectKey     string   `json:"objectKey" validate:"required"`
 	Title         string   `json:"title" validate:"required,max=255"`
 	Description   string   `json:"description"`
@@ -31,19 +31,19 @@ type CompleteUploadRequestDTO struct {
 
 // === Batch Upload DTOs ===
 
-// BatchRequestUploadItemDTO represents a single file in the batch request for URLs.
-type BatchRequestUploadItemDTO struct {
+// BatchRequestUploadInputItemDTO represents a single file in the batch request for URLs.
+type BatchRequestUploadInputItemDTO struct {
 	Filename    string `json:"filename" validate:"required"`
 	ContentType string `json:"contentType" validate:"required"` // e.g., "audio/mpeg"
 }
 
-// BatchRequestUploadRequestDTO is the request body for requesting multiple upload URLs.
-type BatchRequestUploadRequestDTO struct {
-	Files []BatchRequestUploadItemDTO `json:"files" validate:"required,min=1,dive"` // Ensure at least one file, validate each item
+// BatchRequestUploadInputRequestDTO is the request body for requesting multiple upload URLs.
+type BatchRequestUploadInputRequestDTO struct {
+	Files []BatchRequestUploadInputItemDTO `json:"files" validate:"required,min=1,dive"` // Ensure at least one file, validate each item
 }
 
-// BatchRequestUploadResponseItemDTO represents the response for a single file URL request.
-type BatchRequestUploadResponseItemDTO struct {
+// BatchRequestUploadInputResponseItemDTO represents the response for a single file URL request.
+type BatchRequestUploadInputResponseItemDTO struct {
 	OriginalFilename string `json:"originalFilename"` // Helps client match response to request
 	ObjectKey        string `json:"objectKey"`        // The generated object key for this file
 	UploadURL        string `json:"uploadUrl"`        // The presigned PUT URL for this file
@@ -63,8 +63,8 @@ type BatchCompleteUploadItemDTO struct {
 	CoverImageURL *string  `json:"coverImageUrl" validate:"omitempty,url"`
 }
 
-// BatchCompleteUploadRequestDTO is the request body for finalizing multiple uploads.
-type BatchCompleteUploadRequestDTO struct {
+// BatchCompleteUploadInputDTO is the request body for finalizing multiple uploads.
+type BatchCompleteUploadInputDTO struct {
 	Tracks []BatchCompleteUploadItemDTO `json:"tracks" validate:"required,min=1,dive"` // Ensure at least one track, validate each item
 }
 

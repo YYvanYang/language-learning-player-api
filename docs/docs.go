@@ -486,7 +486,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/dto.CompleteUploadRequestDTO"
+                            "$ref": "#/definitions/dto.CompleteUploadInputDTO"
                         }
                     }
                 ],
@@ -1440,7 +1440,7 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.CompleteUploadRequestDTO": {
+        "dto.CompleteUploadInputDTO": {
             "type": "object",
             "required": [
                 "durationMs",

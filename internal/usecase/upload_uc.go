@@ -1,19 +1,20 @@
-// internal/usecase/upload_uc.go
+// ============================================
+// FILE: internal/usecase/upload_uc.go (MODIFIED)
+// ============================================
 package usecase
 
 import (
 	"context"
-	"errors" // Import errors package
+	"errors"
 	"fmt"
 	"log/slog"
 	"path/filepath"
 	"strings"
-	"sync" // Import sync for WaitGroup
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
 
-	// Assuming module path is now updated based on previous discussion
 	"github.com/yvanyang/language-learning-player-api/internal/config"
 	"github.com/yvanyang/language-learning-player-api/internal/domain"
 	"github.com/yvanyang/language-learning-player-api/internal/port"
@@ -52,14 +53,13 @@ func NewUploadUseCase(
 }
 
 // RequestUpload generates a presigned PUT URL for the client to upload a single file.
-// Returns port.RequestUploadResult
 func (uc *UploadUseCase) RequestUpload(ctx context.Context, userID domain.UserID, filename string, contentType string) (*port.RequestUploadResult, error) {
 	log := uc.logger.With("userID", userID.String(), "filename", filename, "contentType", contentType)
 
 	if filename == "" {
 		return nil, fmt.Errorf("%w: filename cannot be empty", domain.ErrInvalidArgument)
 	}
-	_ = uc.validateContentType(contentType) // Validate but ignore error for now
+	_ = uc.validateContentType(contentType)
 
 	objectKey := uc.generateObjectKey(userID, filename)
 	log = log.With("objectKey", objectKey)
@@ -75,7 +75,6 @@ func (uc *UploadUseCase) RequestUpload(ctx context.Context, userID domain.UserID
 	}
 
 	log.Info("Generated presigned URL for file upload")
-	// Return the port-defined struct
 	result := &port.RequestUploadResult{
 		UploadURL: uploadURL,
 		ObjectKey: objectKey,
@@ -84,19 +83,19 @@ func (uc *UploadUseCase) RequestUpload(ctx context.Context, userID domain.UserID
 }
 
 // CompleteUpload finalizes the upload process by creating an AudioTrack record in the database.
-// Accepts port.CompleteUploadParams (renamed from CompleteUploadRequest)
-func (uc *UploadUseCase) CompleteUpload(ctx context.Context, userID domain.UserID, req port.CompleteUploadRequest) (*domain.AudioTrack, error) {
-	log := uc.logger.With("userID", userID.String(), "objectKey", req.ObjectKey)
+// CHANGED: Parameter type to port.CompleteUploadInput
+func (uc *UploadUseCase) CompleteUpload(ctx context.Context, userID domain.UserID, input port.CompleteUploadInput) (*domain.AudioTrack, error) {
+	log := uc.logger.With("userID", userID.String(), "objectKey", input.ObjectKey)
 
-	// Validate using fields from port.CompleteUploadParams
-	if err := uc.validateCompleteUploadRequest(ctx, userID, req.ObjectKey, req.Title, req.LanguageCode, req.DurationMs, req.Level); err != nil {
+	// CHANGED: Use fields from input
+	if err := uc.validateCompleteUploadRequest(ctx, userID, input.ObjectKey, input.Title, input.LanguageCode, input.DurationMs, input.Level); err != nil {
 		return nil, err
 	}
 
 	if uc.storageService == nil {
 		return nil, fmt.Errorf("internal server error: storage service not available")
 	}
-	exists, checkErr := uc.storageService.ObjectExists(ctx, uc.minioBucket, req.ObjectKey)
+	exists, checkErr := uc.storageService.ObjectExists(ctx, uc.minioBucket, input.ObjectKey)
 	if checkErr != nil {
 		log.Error("Failed to check object existence in storage", "error", checkErr)
 		return nil, fmt.Errorf("failed to verify upload status: %w", checkErr)
@@ -106,8 +105,8 @@ func (uc *UploadUseCase) CompleteUpload(ctx context.Context, userID domain.UserI
 		return nil, fmt.Errorf("%w: uploaded file not found in storage for the given key", domain.ErrInvalidArgument)
 	}
 
-	// Create domain track using fields from port.CompleteUploadParams
-	track, err := uc.createDomainTrack(ctx, userID, req) // Pass the port struct
+	// CHANGED: Pass input struct
+	track, err := uc.createDomainTrack(ctx, userID, input)
 	if err != nil {
 		return nil, err
 	}
@@ -116,10 +115,7 @@ func (uc *UploadUseCase) CompleteUpload(ctx context.Context, userID domain.UserI
 	if err != nil {
 		log.Error("Failed to create audio track record in repository", "error", err, "trackID", track.ID)
 		if errors.Is(err, domain.ErrConflict) {
-			// Check if conflict is specifically due to object key
-			// This requires a more specific error type from the repo or checking the error message.
-			// For now, assume any conflict might be the object key.
-			log.Warn("Conflict during track creation, potentially duplicate object key", "objectKey", req.ObjectKey)
+			log.Warn("Conflict during track creation, potentially duplicate object key", "objectKey", input.ObjectKey)
 			return nil, fmt.Errorf("%w: track identifier conflict, possibly duplicate object key", domain.ErrConflict)
 		}
 		return nil, fmt.Errorf("failed to save track information: %w", err) // Internal error
@@ -132,24 +128,24 @@ func (uc *UploadUseCase) CompleteUpload(ctx context.Context, userID domain.UserI
 // --- Batch Upload Methods ---
 
 // RequestBatchUpload generates presigned PUT URLs for multiple files.
-// Accepts port.BatchRequestUpload, returns []port.BatchURLResultItem
-func (uc *UploadUseCase) RequestBatchUpload(ctx context.Context, userID domain.UserID, req port.BatchRequestUpload) ([]port.BatchURLResultItem, error) {
-	log := uc.logger.With("userID", userID.String(), "batchSize", len(req.Files))
+// CHANGED: Parameter type to port.BatchRequestUploadInput
+func (uc *UploadUseCase) RequestBatchUpload(ctx context.Context, userID domain.UserID, input port.BatchRequestUploadInput) ([]port.BatchURLResultItem, error) {
+	log := uc.logger.With("userID", userID.String(), "batchSize", len(input.Files))
 	log.Info("Requesting batch upload URLs")
 
 	if uc.storageService == nil {
 		return nil, fmt.Errorf("internal server error: storage service not available")
 	}
 
-	results := make([]port.BatchURLResultItem, len(req.Files))
+	results := make([]port.BatchURLResultItem, len(input.Files))
 	uploadURLExpiry := 15 * time.Minute
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
-	for i, fileReq := range req.Files {
+	for i, fileReq := range input.Files { // Iterate over input.Files
 		wg.Add(1)
-		go func(index int, f port.BatchRequestUploadItem) {
+		go func(index int, f port.BatchRequestUploadInputItem) {
 			defer wg.Done()
 			itemLog := log.With("originalFilename", f.Filename, "contentType", f.ContentType)
 			responseItem := port.BatchURLResultItem{
@@ -159,7 +155,7 @@ func (uc *UploadUseCase) RequestBatchUpload(ctx context.Context, userID domain.U
 			if f.Filename == "" {
 				responseItem.Error = "filename cannot be empty"
 			}
-			_ = uc.validateContentType(f.ContentType) // Ignore error for now
+			_ = uc.validateContentType(f.ContentType)
 
 			objectKey := uc.generateObjectKey(userID, f.Filename)
 			responseItem.ObjectKey = objectKey
@@ -187,9 +183,9 @@ func (uc *UploadUseCase) RequestBatchUpload(ctx context.Context, userID domain.U
 }
 
 // CompleteBatchUpload finalizes multiple uploads within a single database transaction.
-// Accepts port.BatchCompleteRequest, returns []port.BatchCompleteResultItem
-func (uc *UploadUseCase) CompleteBatchUpload(ctx context.Context, userID domain.UserID, req port.BatchCompleteRequest) ([]port.BatchCompleteResultItem, error) {
-	log := uc.logger.With("userID", userID.String(), "batchSize", len(req.Tracks))
+// CHANGED: Parameter type to port.BatchCompleteInput
+func (uc *UploadUseCase) CompleteBatchUpload(ctx context.Context, userID domain.UserID, input port.BatchCompleteInput) ([]port.BatchCompleteResultItem, error) {
+	log := uc.logger.With("userID", userID.String(), "batchSize", len(input.Tracks))
 	log.Info("Attempting to complete batch upload")
 
 	if uc.txManager == nil {
@@ -199,16 +195,15 @@ func (uc *UploadUseCase) CompleteBatchUpload(ctx context.Context, userID domain.
 		return nil, fmt.Errorf("internal server error: storage service not available")
 	}
 
-	// results := make([]port.BatchCompleteResultItem, len(req.Tracks))
 	var processingErr error
 
 	preCheckFailed := false
-	validatedItems := make([]port.BatchCompleteItem, 0, len(req.Tracks))
-	tempResults := make([]port.BatchCompleteResultItem, len(req.Tracks)) // Use port type
+	validatedItems := make([]port.BatchCompleteItem, 0, len(input.Tracks))
+	tempResults := make([]port.BatchCompleteResultItem, len(input.Tracks))
 
-	for i, trackReq := range req.Tracks { // Iterate over port.BatchCompleteItem
+	for i, trackReq := range input.Tracks { // Iterate over input.Tracks
 		itemLog := log.With("objectKey", trackReq.ObjectKey, "title", trackReq.Title)
-		resultItem := port.BatchCompleteResultItem{ // Use port type
+		resultItem := port.BatchCompleteResultItem{
 			ObjectKey: trackReq.ObjectKey,
 			Success:   false,
 		}
@@ -229,8 +224,8 @@ func (uc *UploadUseCase) CompleteBatchUpload(ctx context.Context, userID domain.
 				resultItem.Error = "uploaded file not found in storage"
 				preCheckFailed = true
 			} else {
-				validatedItems = append(validatedItems, trackReq) // Add port.BatchCompleteItem
-				resultItem.Success = true                         // Tentative
+				validatedItems = append(validatedItems, trackReq)
+				resultItem.Success = true
 			}
 		}
 		tempResults[i] = resultItem
@@ -242,18 +237,19 @@ func (uc *UploadUseCase) CompleteBatchUpload(ctx context.Context, userID domain.
 	}
 
 	log.Info("All items passed pre-checks, proceeding with database transaction.")
-	finalDbResults := make(map[string]*port.BatchCompleteResultItem) // Map key to port type pointer
+	finalDbResults := make(map[string]*port.BatchCompleteResultItem)
 	for i := range tempResults {
 		finalDbResults[tempResults[i].ObjectKey] = &tempResults[i]
 	}
 
 	txErr := uc.txManager.Execute(ctx, func(txCtx context.Context) error {
 		var firstDbErr error
-		for _, trackReq := range validatedItems { // Iterate over port.BatchCompleteItem
+		for _, trackReq := range validatedItems {
 			itemLog := log.With("objectKey", trackReq.ObjectKey, "title", trackReq.Title)
 			resultItemPtr := finalDbResults[trackReq.ObjectKey]
 
-			track, domainErr := uc.createDomainTrack(txCtx, userID, trackReq) // Pass port.BatchCompleteItem
+			// CHANGED: Pass trackReq (port.BatchCompleteItem)
+			track, domainErr := uc.createDomainTrack(txCtx, userID, trackReq)
 			if domainErr != nil {
 				itemLog.Error("Failed to create domain object for batch item (unexpected)", "error", domainErr)
 				resultItemPtr.Success = false
@@ -286,7 +282,7 @@ func (uc *UploadUseCase) CompleteBatchUpload(ctx context.Context, userID domain.
 		return firstDbErr
 	})
 
-	finalResults := make([]port.BatchCompleteResultItem, len(req.Tracks)) // Use port type
+	finalResults := make([]port.BatchCompleteResultItem, len(input.Tracks))
 	for i := range tempResults {
 		finalResults[i] = tempResults[i]
 		if txErr != nil && finalDbResults[finalResults[i].ObjectKey] != nil && finalDbResults[finalResults[i].ObjectKey].Success {
@@ -313,12 +309,14 @@ func (uc *UploadUseCase) validateContentType(contentType string) error {
 	if contentType == "" {
 		return fmt.Errorf("%w: contentType cannot be empty", domain.ErrInvalidArgument)
 	}
+	// Add more specific validation if needed (e.g., allow only audio/*)
 	return nil
 }
 
 func (uc *UploadUseCase) generateObjectKey(userID domain.UserID, filename string) string {
 	extension := filepath.Ext(filename)
 	randomUUID := uuid.NewString()
+	// Ensure consistent path separator
 	return fmt.Sprintf("user-uploads/%s/%s%s", userID.String(), randomUUID, extension)
 }
 
@@ -353,7 +351,6 @@ func (uc *UploadUseCase) validateCompleteUploadRequest(ctx context.Context, user
 }
 
 // createDomainTrack creates an AudioTrack domain object from the request data.
-// Now accepts interface{} and performs type assertion for port structs.
 func (uc *UploadUseCase) createDomainTrack(ctx context.Context, userID domain.UserID, reqData interface{}) (*domain.AudioTrack, error) {
 	var title, description, objectKey, langCode, levelStr string
 	var durationMs int64
@@ -361,9 +358,8 @@ func (uc *UploadUseCase) createDomainTrack(ctx context.Context, userID domain.Us
 	var tags []string
 	var coverURL *string
 
-	// Type assertion for port structs
 	switch r := reqData.(type) {
-	case port.CompleteUploadRequest: // Single upload params from port
+	case port.CompleteUploadInput: // CHANGED: Use Input type
 		title = r.Title
 		description = r.Description
 		objectKey = r.ObjectKey
@@ -373,7 +369,7 @@ func (uc *UploadUseCase) createDomainTrack(ctx context.Context, userID domain.Us
 		isPublic = r.IsPublic
 		tags = r.Tags
 		coverURL = r.CoverImageURL
-	case port.BatchCompleteItem: // Batch item from port
+	case port.BatchCompleteItem:
 		title = r.Title
 		description = r.Description
 		objectKey = r.ObjectKey
@@ -403,5 +399,4 @@ func (uc *UploadUseCase) createDomainTrack(ctx context.Context, userID domain.Us
 	return track, nil
 }
 
-// Compile-time check to ensure implementation satisfies the interface
 var _ port.UploadUseCase = (*UploadUseCase)(nil)

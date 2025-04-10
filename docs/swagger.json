@@ -484,7 +484,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/dto.CompleteUploadRequestDTO"
+                            "$ref": "#/definitions/dto.CompleteUploadInputDTO"
                         }
                     }
                 ],
@@ -1438,7 +1438,7 @@
                 }
             }
         },
-        "dto.CompleteUploadRequestDTO": {
+        "dto.CompleteUploadInputDTO": {
             "type": "object",
             "required": [
                 "durationMs",

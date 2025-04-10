@@ -153,7 +153,7 @@ func (h *UserActivityHandler) ListProgress(w http.ResponseWriter, r *http.Reques
 	pageParams := pagination.NewPageFromOffset(limit, offset)
 
 	// Create use case parameters struct
-	ucParams := port.ListProgressParams{
+	ucParams := port.ListProgressInput{
 		UserID: userID,
 		Page:   pageParams,
 	}
@@ -282,7 +282,7 @@ func (h *UserActivityHandler) ListBookmarks(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Create use case parameters struct
-	ucParams := port.ListBookmarksParams{
+	ucParams := port.ListBookmarksInput{
 		UserID:        userID,
 		TrackIDFilter: trackIDFilter,
 		Page:          pageParams,

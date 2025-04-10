@@ -85,7 +85,7 @@ func (h *UploadHandler) RequestUpload(w http.ResponseWriter, r *http.Request) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param completeUpload body dto.CompleteUploadRequestDTO true "Track metadata and object key"
+// @Param completeUpload body dto.CompleteUploadInputDTO true "Track metadata and object key"
 // @Success 201 {object} dto.AudioTrackResponseDTO "Track metadata created successfully"
 // @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Input (e.g., validation errors, object key not found, file not in storage)"
 // @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
@@ -100,7 +100,7 @@ func (h *UploadHandler) CompleteUploadAndCreateTrack(w http.ResponseWriter, r *h
 		return
 	}
 
-	var req dto.CompleteUploadRequestDTO // DTO from adapter layer
+	var req dto.CompleteUploadInputDTO // DTO from adapter layer
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.RespondError(w, r, fmt.Errorf("%w: invalid request body", domain.ErrInvalidArgument))
 		return
@@ -112,8 +112,8 @@ func (h *UploadHandler) CompleteUploadAndCreateTrack(w http.ResponseWriter, r *h
 		return
 	}
 
-	// Map DTO to port.CompleteUploadRequest
-	portReq := port.CompleteUploadRequest{
+	// Map DTO to port.CompleteUploadInput
+	portReq := port.CompleteUploadInput{
 		ObjectKey:     req.ObjectKey,
 		Title:         req.Title,
 		Description:   req.Description,
@@ -147,8 +147,8 @@ func (h *UploadHandler) CompleteUploadAndCreateTrack(w http.ResponseWriter, r *h
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param batchUploadRequest body dto.BatchRequestUploadRequestDTO true "List of files to request URLs for"
-// @Success 200 {object} dto.BatchRequestUploadResponseDTO "List of generated presigned URLs and object keys, including potential errors per item."
+// @Param batchUploadRequest body dto.BatchRequestUploadInputRequestDTO true "List of files to request URLs for"
+// @Success 200 {object} dto.BatchRequestUploadInputResponseDTO "List of generated presigned URLs and object keys, including potential errors per item."
 // @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Input (e.g., empty file list)"
 // @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
 // @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
@@ -160,7 +160,7 @@ func (h *UploadHandler) RequestBatchUpload(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var req dto.BatchRequestUploadRequestDTO // Use batch DTO
+	var req dto.BatchRequestUploadInputRequestDTO // Use batch DTO
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.RespondError(w, r, fmt.Errorf("%w: invalid request body", domain.ErrInvalidArgument))
 		return
@@ -173,9 +173,9 @@ func (h *UploadHandler) RequestBatchUpload(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Map DTO request to port request
-	portReq := port.BatchRequestUpload{Files: make([]port.BatchRequestUploadItem, len(req.Files))}
+	portReq := port.BatchRequestUploadInput{Files: make([]port.BatchRequestUploadInputItem, len(req.Files))}
 	for i, f := range req.Files {
-		portReq.Files[i] = port.BatchRequestUploadItem{
+		portReq.Files[i] = port.BatchRequestUploadInputItem{
 			Filename:    f.Filename,
 			ContentType: f.ContentType,
 		}
@@ -189,18 +189,18 @@ func (h *UploadHandler) RequestBatchUpload(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Map port results to response DTO results
-	respItems := make([]dto.BatchRequestUploadResponseItemDTO, len(results))
+	respItems := make([]dto.BatchRequestUploadInputResponseItemDTO, len(results))
 	for i, res := range results {
-		respItems[i] = dto.BatchRequestUploadResponseItemDTO{
+		respItems[i] = dto.BatchRequestUploadInputResponseItemDTO{
 			OriginalFilename: res.OriginalFilename,
 			ObjectKey:        res.ObjectKey,
 			UploadURL:        res.UploadURL,
 			Error:            res.Error,
 		}
 	}
-	// Need BatchRequestUploadResponseDTO in dto package
+	// Need BatchRequestUploadInputResponseDTO in dto package
 	resp := struct { // Define anonymous struct for response for now
-		Results []dto.BatchRequestUploadResponseItemDTO `json:"results"`
+		Results []dto.BatchRequestUploadInputResponseItemDTO `json:"results"`
 	}{Results: respItems}
 	httputil.RespondJSON(w, r, http.StatusOK, resp)
 }
@@ -213,7 +213,7 @@ func (h *UploadHandler) RequestBatchUpload(w http.ResponseWriter, r *http.Reques
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param batchCompleteUpload body dto.BatchCompleteUploadRequestDTO true "List of track metadata and object keys for uploaded files"
+// @Param batchCompleteUpload body dto.BatchCompleteUploadInputDTO true "List of track metadata and object keys for uploaded files"
 // @Success 201 {object} dto.BatchCompleteUploadResponseDTO "Batch processing attempted. Results indicate success/failure per item. If overall transaction succeeded, status is 201."
 // @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Input (e.g., validation errors in items, files not in storage)"
 // @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
@@ -228,7 +228,7 @@ func (h *UploadHandler) CompleteBatchUploadAndCreateTracks(w http.ResponseWriter
 		return
 	}
 
-	var req dto.BatchCompleteUploadRequestDTO // Use batch DTO
+	var req dto.BatchCompleteUploadInputDTO // Use batch DTO
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httputil.RespondError(w, r, fmt.Errorf("%w: invalid request body", domain.ErrInvalidArgument))
 		return
@@ -241,7 +241,7 @@ func (h *UploadHandler) CompleteBatchUploadAndCreateTracks(w http.ResponseWriter
 	}
 
 	// Map DTO request to port request
-	portReq := port.BatchCompleteRequest{Tracks: make([]port.BatchCompleteItem, len(req.Tracks))}
+	portReq := port.BatchCompleteInput{Tracks: make([]port.BatchCompleteItem, len(req.Tracks))}
 	for i, t := range req.Tracks {
 		portReq.Tracks[i] = port.BatchCompleteItem{
 			ObjectKey:     t.ObjectKey,

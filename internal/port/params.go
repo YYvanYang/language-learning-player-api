@@ -6,31 +6,30 @@ import (
 	"github.com/yvanyang/language-learning-player-api/pkg/pagination"
 )
 
-// === Use Case Layer Parameter Structs ===
+// === Use Case Layer Input/Result Structs ===
 
-// UseCaseListTracksParams defines parameters for listing/searching tracks at the use case layer.
+// ListTracksInput defines parameters for listing/searching tracks at the use case layer.
 // It embeds pagination.Page.
-// RENAMED from ListTracksParams to avoid conflict with repository params.
-type UseCaseListTracksParams struct {
+type ListTracksInput struct {
 	Query         *string            // Search query (title, description, maybe tags)
 	LanguageCode  *string            // Filter by language code
 	Level         *domain.AudioLevel // Filter by level
 	IsPublic      *bool              // Filter by public status
 	UploaderID    *domain.UserID     // Filter by uploader
 	Tags          []string           // Filter by tags (match any)
-	SortBy        string             // e.g., "createdAt", "title", "duration"
+	SortBy        string             // e.g., "createdAt", "title", "durationMs"
 	SortDirection string             // "asc" or "desc"
 	Page          pagination.Page    // Embed pagination parameters
 }
 
-// ListProgressParams defines parameters for listing user progress at the use case layer.
-type ListProgressParams struct {
+// ListProgressInput defines parameters for listing user progress at the use case layer.
+type ListProgressInput struct {
 	UserID domain.UserID
 	Page   pagination.Page
 }
 
-// ListBookmarksParams defines parameters for listing user bookmarks at the use case layer.
-type ListBookmarksParams struct {
+// ListBookmarksInput defines parameters for listing user bookmarks at the use case layer.
+type ListBookmarksInput struct {
 	UserID        domain.UserID
 	TrackIDFilter *domain.TrackID // Optional filter by track
 	Page          pagination.Page
@@ -42,8 +41,8 @@ type RequestUploadResult struct {
 	ObjectKey string
 }
 
-// CompleteUploadRequest holds the data needed to finalize an upload and create a track record.
-type CompleteUploadRequest struct {
+// CompleteUploadInput holds the data needed to finalize an upload and create a track record.
+type CompleteUploadInput struct {
 	ObjectKey     string
 	Title         string
 	Description   string
@@ -55,24 +54,26 @@ type CompleteUploadRequest struct {
 	CoverImageURL *string
 }
 
-// --- Batch Request ---
-type BatchRequestUploadItem struct {
+// --- Batch Request Input ---
+type BatchRequestUploadInputItem struct {
 	Filename    string
 	ContentType string
 }
-type BatchRequestUpload struct {
-	Files []BatchRequestUploadItem
+type BatchRequestUploadInput struct {
+	Files []BatchRequestUploadInputItem
 }
 
-// --- Batch URL Response ---
+// --- Batch URL Result ---
 type BatchURLResultItem struct {
 	OriginalFilename string
 	ObjectKey        string
 	UploadURL        string
-	Error            string // Keep error string for item-level reporting
+	// Using string for Error is simpler for JSON marshalling in batch results,
+	// though less type-safe internally. Acknowledge this trade-off.
+	Error string
 }
 
-// --- Batch Complete Request ---
+// --- Batch Complete Input ---
 type BatchCompleteItem struct {
 	ObjectKey     string
 	Title         string
@@ -84,22 +85,23 @@ type BatchCompleteItem struct {
 	Tags          []string
 	CoverImageURL *string
 }
-type BatchCompleteRequest struct {
+type BatchCompleteInput struct {
 	Tracks []BatchCompleteItem
 }
 
-// --- Batch Complete Response ---
+// --- Batch Complete Result ---
 type BatchCompleteResultItem struct {
 	ObjectKey string
 	Success   bool
 	TrackID   string // Use string for UUID here as it's just data
-	Error     string
+	// Using string for Error is simpler for JSON marshalling in batch results,
+	// though less type-safe internally. Acknowledge this trade-off.
+	Error string
 }
 
-// === Audio Track Details (Used by AudioContentUseCase) ===
+// === Audio Track Details Result (Used by AudioContentUseCase) ===
 
 // GetAudioTrackDetailsResult holds the combined result for getting track details.
-// MOVED from usecase package to port package.
 type GetAudioTrackDetailsResult struct {
 	Track         *domain.AudioTrack
 	PlayURL       string
