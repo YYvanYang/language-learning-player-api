@@ -3,7 +3,7 @@ import os
 # 需要排除的目录和文件扩展名
 EXCLUDE_DIRS = {'.git', '__pycache__', 'node_modules', 'venv', '.vscode', 'build', 'dist'}
 EXCLUDE_EXTENSIONS = {'.md', '.py'}
-OUTPUT_FILENAME = 'all_code.md'
+OUTPUT_FILENAME = 'all_code_of_backend_api.md'
 
 # 文件扩展名到 Markdown 语言标识符的映射
 # 您可以根据需要扩展这个映射
