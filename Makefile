@@ -10,7 +10,7 @@ GO_TEST_FLAGS=./... -coverprofile=coverage.out
 # DSN for local database operations (Can be overridden by environment variable)
 # Example: export DATABASE_URL="postgresql://user:password@localhost:5432/language_learner_db?sslmode=disable"
 DATABASE_URL ?= postgresql://user:password@localhost:5432/language_learner_db?sslmode=disable
-# PostgreSQL Docker settings
+# PostgreSQL Docker settings (for local 'make deps-run')
 PG_CONTAINER_NAME ?= language-learner-postgres
 PG_USER ?= user
 PG_PASSWORD ?= password
@@ -18,22 +18,25 @@ PG_DB ?= language_learner_db
 PG_PORT ?= 5432
 PG_VERSION ?= 16
 PG_READY_TIMEOUT ?= 30 # Seconds to wait for PostgreSQL to be ready
-# MinIO Docker settings
+# MinIO Docker settings (for local 'make deps-run')
 MINIO_CONTAINER_NAME ?= language-learner-minio
 MINIO_ROOT_USER ?= minioadmin
 MINIO_ROOT_PASSWORD ?= minioadmin
 MINIO_API_PORT ?= 9000
 MINIO_CONSOLE_PORT ?= 9001
-MINIO_BUCKET_NAME ?= language-audio # Ensure this matches config.development.yaml
+MINIO_BUCKET_NAME ?= language-audio # Ensure this matches config.development.yaml AND docker-compose.yml .env
 MINIO_READY_TIMEOUT ?= 30 # Seconds to wait for MinIO to be ready
 # Migrate CLI path relative to project root
 MIGRATIONS_PATH=migrations
 # Swag CLI variables (if using swaggo/swag)
 SWAG_ENTRY_POINT=${CMD_PATH}/main.go
 SWAG_OUTPUT_DIR=./docs
-# Docker image name
-DOCKER_IMAGE_NAME ?= your-dockerhub-username/language-player-api
+# Docker image settings (IMPORTANT: Customize for your Docker Hub/Registry)
+DOCKER_IMAGE_NAME ?= your-dockerhub-username/language-player-api # <<< CHANGE THIS
 DOCKER_IMAGE_TAG ?= latest
+DOCKER_PLATFORM ?= linux/arm64 # Target platform for Raspberry Pi
+DOCKER_BUILDX_PUSH_FLAGS=--platform $(DOCKER_PLATFORM) --push
+DOCKER_BUILDX_BUILD_FLAGS=--platform $(DOCKER_PLATFORM) --load # Use --load to build locally for the target platform
 
 # --- Go Tools Installation ---
 GOPATH := $(shell go env GOPATH)
@@ -44,13 +47,22 @@ MIGRATE := $(GOBIN)/migrate
 SWAG := $(GOBIN)/swag
 GOLANGCILINT := $(GOBIN)/golangci-lint
 GOVULNCHECK := $(GOBIN)/govulncheck
-MOCKERY := $(GOBIN)/mockery # ADDED: Variable for mockery path
+MOCKERY := $(GOBIN)/mockery
 
-# MODIFIED .PHONY: Added install-mockery, generate-mocks. Removed install-sqlc.
-.PHONY: tools install-migrate install-swag install-lint install-vulncheck install-mockery generate generate-swag generate-mocks swagger test test-unit test-integration test-cover lint fmt check-vuln docker-build docker-run docker-stop docker-push docker-postgres-run docker-postgres-stop docker-minio-run docker-minio-stop deps-run deps-stop help clean migrate-create migrate-up migrate-down migrate-force check-db-url build run
+.PHONY: all build clean \
+	tools install-migrate install-swag install-lint install-vulncheck install-mockery \
+	generate generate-swag generate-mocks swagger \
+	run deps-run deps-stop \
+	migrate-create migrate-up migrate-down migrate-force check-db-url \
+	test test-unit test-integration test-cover lint fmt check-vuln \
+	docker-build docker-build-arm64 docker-build-push-arm64 docker-run docker-stop docker-push \
+	docker-postgres-run docker-postgres-stop docker-minio-run docker-minio-stop \
+	help
+
+# Default target (often set to 'all' or 'help')
+all: help
 
 # Target to install all necessary Go tools
-# MODIFIED: Added install-mockery dependency
 tools: install-migrate install-swag install-lint install-vulncheck install-mockery
 
 # Check if migrate is installed, if not, install it
@@ -67,7 +79,7 @@ install-migrate:
 		echo ">>> migrate is already installed."; \
 	fi
 
-# Check if swag is installed, if not, install it (Optional, if using swaggo/swag)
+# Check if swag is installed, if not, install it
 install-swag:
 	@if ! command -v swag &> /dev/null; then \
 		echo ">>> Installing swag CLI..."; \
@@ -109,7 +121,7 @@ install-vulncheck:
 		echo ">>> govulncheck is already installed."; \
 	fi
 
-# MODIFIED: Install latest mockery v3+
+# Install latest mockery v3+
 install-mockery:
 	@if ! command -v mockery &> /dev/null; then \
 		echo ">>> Installing mockery CLI (latest v3+)..."; \
@@ -124,9 +136,9 @@ install-mockery:
 	fi
 
 # --- Build ---
-# Build the Go binary
+# Build the Go binary for linux/amd64 (Standard build for CI/Cloud)
 build: clean tools
-	@echo ">>> Building binary..."
+	@echo ">>> Building binary for linux/amd64..."
 	@mkdir -p $(OUTPUT_DIR)
 	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build $(GO_BUILD_FLAGS) -o $(OUTPUT_DIR)/$(BINARY_NAME) $(CMD_PATH)
 	@echo ">>> Binary built at $(OUTPUT_DIR)/$(BINARY_NAME)"
@@ -138,9 +150,9 @@ clean:
 	@rm -f coverage.out
 
 # --- Run ---
-# Run the application locally (requires dependencies like DB running)
+# Run the application locally using go run (requires dependencies like DB running via 'make deps-run')
 run: tools
-	@echo ">>> Running application locally (using go run)..."
+	@echo ">>> Running application locally (using go run - requires deps-run)..."
 	@APP_ENV=development go run $(CMD_PATH)/main.go
 
 # --- Database Migrations ---
@@ -158,40 +170,37 @@ migrate-create: tools
 	@$(MIGRATE) create -ext sql -dir $(MIGRATIONS_PATH) -seq $(name)
 	@echo ">>> Migration file created."
 
-# Apply all up migrations
+# Apply all up migrations (requires DB running and DATABASE_URL set/exported)
 migrate-up: tools check-db-url
 	@echo ">>> Applying database migrations..."
 	@$(MIGRATE) -database "$(DATABASE_URL)" -path $(MIGRATIONS_PATH) up
 	@echo ">>> Migrations applied."
 
-# Roll back the last migration
+# Roll back the last migration (requires DB running and DATABASE_URL set/exported)
 migrate-down: tools check-db-url
 	@echo ">>> Reverting last database migration..."
 	@$(MIGRATE) -database "$(DATABASE_URL)" -path $(MIGRATIONS_PATH) down 1
 	@echo ">>> Last migration reverted."
 
-# Force set migration version (Use with caution!)
+# Force set migration version (Use with caution!) (requires DB running and DATABASE_URL set/exported)
 migrate-force: tools check-db-url
 	@echo ">>> Forcing migration version to $(version)..."
 	@$(MIGRATE) -database "$(DATABASE_URL)" -path $(MIGRATIONS_PATH) force $(version)
 	@echo ">>> Migration version forced."
 
-
 # --- Code Generation ---
-# MODIFIED: Added generate-mocks to generate target
 generate: generate-swag generate-mocks
 
-# Generate OpenAPI docs using swag (Optional)
+# Generate OpenAPI docs using swag
 generate-swag: tools
 	@echo ">>> Generating OpenAPI docs using swag..."
-	@echo ">>> Using swag command: $(SWAG)"
 	@$(SWAG) init -g $(SWAG_ENTRY_POINT) --output $(SWAG_OUTPUT_DIR)
 	@echo ">>> OpenAPI docs generated in $(SWAG_OUTPUT_DIR)."
 
 # Alias for generating OpenAPI docs
 swagger: generate-swag
 
-# MODIFIED: Generate mocks using mockery (reads .mockery.yaml)
+# Generate mocks using mockery (reads .mockery.yaml)
 generate-mocks: tools
 	@echo ">>> Generating mocks using mockery (reading .mockery.yaml)..."
 	@if [ ! -f .mockery.yaml ]; then \
@@ -205,24 +214,30 @@ generate-mocks: tools
 	@$(MOCKERY)
 	@echo ">>> Mocks generation complete (check output above for errors)."
 
-
 # --- Testing ---
-# Run all tests (unit + integration, requires Docker for integration)
+# Run all tests (unit + integration, integration might require Docker for deps)
 test: tools
 	@echo ">>> Running all tests (unit + integration)..."
 	@go test $(GO_TEST_FLAGS)
 	@echo ">>> Tests complete. Coverage report generated at coverage.out"
 
-# Run only unit tests (placeholder)
+# Run only unit tests (placeholder, assumes tests use -short)
 test-unit: tools
 	@echo ">>> Running unit tests (placeholder)..."
-	@go test $(GO_TEST_FLAGS) -short # -short flag might skip long-running tests if tests use it
+	@go test $(GO_TEST_FLAGS) -short
 
-# Run only integration tests (requires Docker)
-test-integration: tools
+# Run only integration tests (requires Docker for deps)
+test-integration: tools deps-run # Start dependencies for integration tests
 	@echo ">>> Running integration tests (requires Docker)..."
-	@go test ./internal/adapter/repository/postgres/... -v # Run tests specifically in the repo package
-	# Or use build tags: @go test ./... -tags=integration -v
+	@echo ">>> Waiting for dependencies to be fully ready..."
+	@sleep 5 # Give extra time after deps-run checks pass
+	@# Specify integration test package(s) or use build tags
+	@# Example: go test ./internal/adapter/repository/postgres/... -v
+	@# Or: go test ./... -tags=integration -v
+	@echo ">>> Running integration tests (replace with your specific command)..."
+	@go test ./internal/adapter/repository/postgres/... -v
+	@echo ">>> Integration tests finished."
+	@make deps-stop # Stop dependencies after tests
 
 # Show test coverage in browser
 test-cover: test
@@ -246,39 +261,58 @@ check-vuln: tools
 	@echo ">>> Checking for vulnerabilities..."
 	@$(GOVULNCHECK) ./...
 
-
 # --- Docker ---
-# Build Docker image
+# Build Docker image for the host architecture (e.g., amd64 on Surface)
 docker-build:
-	@echo ">>> Building Docker image [$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)]..."
+	@echo ">>> Building Docker image for host architecture [$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)]..."
 	@docker build -t $(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG) .
 	@echo ">>> Docker image built."
 
-# Run Docker container locally (using env vars from .env file if present)
-docker-run: docker-build
-	@echo ">>> Running Docker container [$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)]..."
+# Build Docker image for ARM64 (for Pi), loading it into local Docker daemon (for testing build process)
+docker-build-arm64:
+	@echo ">>> Building Docker image for ARM64 (local load) [$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)]..."
+	@echo ">>> Note: Requires Docker Buildx setup (usually available with Docker Desktop)."
+	@docker buildx build $(DOCKER_BUILDX_BUILD_FLAGS) -t $(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG) .
+	@echo ">>> ARM64 Docker image built and loaded locally."
+
+# Build Docker image for ARM64 AND push to registry (for Pi deployment)
+docker-build-push-arm64:
+	@echo ">>> Building AND PUSHING Docker image for ARM64 [$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)]..."
+	@echo ">>> Note: Ensure DOCKER_IMAGE_NAME is set correctly for your registry (e.g., your Docker Hub username)."
+	@echo ">>> Note: Requires Docker Buildx setup and 'docker login'."
+	@docker buildx build $(DOCKER_BUILDX_PUSH_FLAGS) -t $(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG) .
+	@echo ">>> ARM64 Docker image built and pushed."
+
+# Run Docker container locally (uses image built for host via 'docker-build' or loaded via 'docker-build-arm64')
+# Uses environment variables from a local .env file if present. Requires deps running.
+docker-run:
+	@echo ">>> Running Docker container [$(BINARY_NAME)] using image [$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)]..."
+	@echo ">>> Note: Assumes image for host arch exists. Run 'make docker-build' first."
+	@echo ">>> Note: Requires dependencies (Postgres/MinIO) to be running. Use 'make deps-run'."
 	@docker run -d --name $(BINARY_NAME) \
 		-p 8080:8080 \
+		--network=host \
 		--env-file .env \
 		$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)
 	@echo ">>> Container started. Use 'make docker-stop' to stop."
 
-# Stop and remove the running container
+# Stop and remove the running container started by 'docker-run'
 docker-stop:
 	@echo ">>> Stopping and removing Docker container [$(BINARY_NAME)]..."
 	@docker stop $(BINARY_NAME) || true
 	@docker rm $(BINARY_NAME) || true
 	@echo ">>> Container stopped and removed."
 
-# Push Docker image to registry (requires docker login)
-docker-push:
-	@echo ">>> Pushing Docker image [$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)]..."
+# Push Docker image (built for host architecture) to registry
+docker-push: docker-build
+	@echo ">>> Pushing HOST architecture Docker image [$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)]..."
 	@echo ">>> Note: Ensure DOCKER_IMAGE_NAME variable is set correctly for your registry."
+	@echo ">>> Note: Use 'make docker-build-push-arm64' to push the ARM64 image for Raspberry Pi."
 	@docker push $(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)
 	@echo ">>> Image pushed."
 
-# --- PostgreSQL Docker ---
-# Run PostgreSQL in Docker container (Simplified)
+# --- PostgreSQL Docker (Local Dev Dependency) ---
+# Run PostgreSQL in Docker container
 docker-postgres-run:
 	@echo ">>> Ensuring PostgreSQL container [$(PG_CONTAINER_NAME)] is running..."
 	@docker stop $(PG_CONTAINER_NAME) > /dev/null 2>&1 || true
@@ -302,7 +336,7 @@ docker-postgres-run:
 		sleep 1; \
 	done
 	@echo ">>> PostgreSQL container [$(PG_CONTAINER_NAME)] started successfully."
-	@echo ">>> Connection string: $(DATABASE_URL)"
+	@echo ">>> Connection string for migrations: $(DATABASE_URL)"
 
 # Stop and remove PostgreSQL container
 docker-postgres-stop:
@@ -311,7 +345,7 @@ docker-postgres-stop:
 	@docker rm $(PG_CONTAINER_NAME) || true
 	@echo ">>> PostgreSQL container stopped and removed."
 
-# --- MinIO Docker ---
+# --- MinIO Docker (Local Dev Dependency) ---
 # Run MinIO in Docker container
 docker-minio-run:
 	@echo ">>> Ensuring MinIO container [$(MINIO_CONTAINER_NAME)] is running..."
@@ -326,7 +360,7 @@ docker-minio-run:
 		-d minio/minio server /data --console-address ":9001" > /dev/null
 	@echo ">>> Waiting for MinIO to be ready (max $(MINIO_READY_TIMEOUT)s)..."
 	@timeout=$(MINIO_READY_TIMEOUT); \
-	@until curl -s --max-time 1 --output /dev/null --fail "http://localhost:$(MINIO_API_PORT)/minio/health/live"; do \
+	until curl -s --max-time 1 --output /dev/null --fail "http://localhost:$(MINIO_API_PORT)/minio/health/live"; do \
 		timeout=$$((timeout-1)); \
 		if [ $$timeout -eq 0 ]; then \
 			echo ">>> ERROR: MinIO did not become ready in time."; \
@@ -355,50 +389,70 @@ docker-minio-stop:
 help:
 	@echo "Usage: make [target]"
 	@echo ""
-	@echo "Local Development:"
-	@echo "  run               Run the application locally (requires dependencies: use 'make deps-run')"
+	@echo "Local Development (on your PC/Mac/Surface):"
+	@echo "  run               Run the application using 'go run' (requires dependencies running)"
 	@echo "  deps-run          Start local PostgreSQL and MinIO containers"
 	@echo "  deps-stop         Stop local PostgreSQL and MinIO containers"
-	@echo "  tools             Install necessary Go CLI tools (migrate, swag, lint, vulncheck, mockery)" # MODIFIED
+	@echo "  tools             Install necessary Go CLI tools (migrate, swag, lint, vulncheck, mockery)"
+	@echo "  fmt               Format Go code using go fmt and goimports"
+	@echo "  lint              Run golangci-lint"
+	@echo "  check-vuln        Check for known vulnerabilities"
 	@echo ""
-	@echo "Database Migrations:"
+	@echo "Code Generation:"
+	@echo "  generate          Run all code generators (swag, mockery)"
+	@echo "  generate-swag     Generate OpenAPI docs using swag"
+	@echo "  generate-mocks    Generate mocks for interfaces using mockery (reads .mockery.yaml)"
+	@echo ""
+	@echo "Database Migrations (Local or Remote DB):"
 	@echo "  migrate-create name=<name> Create a new migration file"
 	@echo "  migrate-up        Apply database migrations (requires DB running and DATABASE_URL set/exported)"
 	@echo "  migrate-down      Revert the last database migration (requires DB running and DATABASE_URL set/exported)"
 	@echo "  migrate-force version=<ver> Force migration version (requires DB running and DATABASE_URL set/exported)"
 	@echo ""
-	@echo "Code Generation & Formatting:"
-	@echo "  generate          Run all code generators (swag, mockery)" # MODIFIED
-	@echo "  generate-swag     Generate OpenAPI docs using swag"
-	@echo "  generate-mocks    Generate mocks for interfaces using mockery (reads .mockery.yaml)" # ADDED
-	@echo "  fmt               Format Go code using go fmt and goimports"
-	@echo ""
-	@echo "Testing & Linting:"
+	@echo "Testing (Local):"
 	@echo "  test              Run all tests and generate coverage"
 	@echo "  test-unit         Run unit tests (placeholder)"
-	@echo "  test-integration  Run integration tests (requires Docker)"
+	@echo "  test-integration  Start deps, run integration tests, stop deps"
 	@echo "  test-cover        Show test coverage report in browser"
-	@echo "  lint              Run golangci-lint"
-	@echo "  check-vuln        Check for known vulnerabilities"
 	@echo ""
-	@echo "Docker - Application:"
-	@echo "  docker-build      Build the application Docker image"
-	@echo "  docker-run        Build and run the application container locally (uses .env file)"
-	@echo "  docker-stop       Stop and remove the running application container"
-	@echo "  docker-push       Push the application Docker image to registry (Note: Customize DOCKER_IMAGE_NAME)"
+	@echo "Building:"
+	@echo "  build             Build the Go binary for linux/amd64 (typical CI/Cloud build)"
+	@echo "  clean             Remove build artifacts"
 	@echo ""
-	@echo "Docker - Dependencies:"
-	@echo "  docker-postgres-run Start PostgreSQL in Docker container"
-	@echo "  docker-postgres-stop Stop and remove PostgreSQL Docker container"
-	@echo "  docker-minio-run    Start MinIO in Docker container"
-	@echo "  docker-minio-stop   Stop and remove MinIO Docker container"
+	@echo "Docker (Application Image):"
+	@echo "  docker-build           Build the application Docker image for your current machine's architecture"
+	@echo "  docker-build-arm64     Build the application Docker image for ARM64 (Pi) locally (requires buildx)"
+	@echo "  docker-build-push-arm64 Build the ARM64 image AND PUSH it to Docker Hub/Registry (for Pi deployment)"
+	@echo "  docker-run             Build (host arch) and run the application container locally (uses .env, requires deps-run)"
+	@echo "  docker-stop            Stop and remove the running application container started by 'make docker-run'"
+	@echo "  docker-push            Push the HOST architecture image to Docker Hub/Registry"
+	@echo ""
+	@echo "Docker - Dependencies (Local Dev):"
+	@echo "  docker-postgres-run    Start PostgreSQL in Docker container locally"
+	@echo "  docker-postgres-stop   Stop and remove PostgreSQL Docker container locally"
+	@echo "  docker-minio-run       Start MinIO in Docker container locally"
+	@echo "  docker-minio-stop      Stop and remove MinIO Docker container locally"
+	@echo ""
+	@echo "Raspberry Pi Deployment Workflow:"
+	@echo "  1. (On your Surface) Customize DOCKER_IMAGE_NAME in Makefile (e.g., your Docker Hub username)."
+	@echo "  2. (On your Surface) Run 'docker login' to log in to Docker Hub."
+	@echo "  3. (On your Surface) Run 'make docker-build-push-arm64' to build and push the ARM64 image."
+	@echo "  4. (On your Pi) SSH into your Raspberry Pi."
+	@echo "  5. (On your Pi) Create a deployment directory (e.g., '~/language-player-deployment')."
+	@echo "  6. (On your Pi) Create 'docker-compose.yml' and '.env' files in that directory (see examples/docs)."
+	@echo "     -> IMPORTANT: Update image name in docker-compose.yml to match Step 1."
+	@echo "     -> IMPORTANT: Configure volumes in docker-compose.yml to use your SSD path."
+	@echo "     -> IMPORTANT: Set strong passwords and secrets in .env."
+	@echo "  7. (On your Pi) Run 'cd ~/language-player-deployment && docker compose up -d' to start services."
+	@echo "  8. (On your Pi/Surface) Run database migrations (e.g., 'export DATABASE_URL=... && make migrate-up' from Surface)."
+	@echo "  9. (On your Pi/Surface) Create the MinIO bucket ('language-audio') via console or 'mc'."
+	@echo "  10. (On your Pi) Check logs: 'docker compose logs -f'"
+	@echo "  11. (On your Pi) Stop services: 'docker compose down'"
 	@echo ""
 	@echo "Other:"
-	@echo "  build             Build the Go binary for linux/amd64"
-	@echo "  clean             Remove build artifacts"
 	@echo "  help              Show this help message"
 
-# Default target
+# Default target executed when 'make' is run without arguments
 .DEFAULT_GOAL := help
 
 # --- Convenience Targets ---

@@ -1,0 +1,112 @@
+# docker-compose.yml (Compose V2 / Compose Specification Syntax)
+
+services:
+  # --- API Backend Service ---
+  api:
+    # !! IMPORTANT: Replace with your actual image on Docker Hub !!
+    image: your-dockerhub-username/language-player-api:latest
+    container_name: language_player_api
+    restart: unless-stopped
+    ports:
+      - "8080:8080" # Map host port 8080 to container port 8080
+    environment:
+      # Configuration via environment variables (overrides config files)
+      # Sourced from the .env file in the same directory
+      APP_ENV: production
+      SERVER_PORT: "8080"
+      DATABASE_DSN: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
+      JWT_SECRETKEY: ${JWT_SECRETKEY}        # MUST be set in .env
+      MINIO_ENDPOINT: "minio:9000"          # Service name acts as hostname
+      MINIO_ACCESSKEYID: ${MINIO_ACCESS_KEY}
+      MINIO_SECRETACCESSKEY: ${MINIO_SECRET_KEY}
+      MINIO_BUCKETNAME: ${MINIO_BUCKET_NAME}
+      MINIO_USESSL: "false"
+      GOOGLE_CLIENTID: ${GOOGLE_CLIENTID}      # Optional: if using Google Login
+      GOOGLE_CLIENTSECRET: ${GOOGLE_CLIENTSECRET} # Optional: if using Google Login
+      LOG_LEVEL: "info"
+      LOG_JSON: "true"
+      # CORS_ALLOWEDORIGINS: "http://your-frontend-domain.com" # Adjust as needed
+    depends_on:
+      postgres:
+        condition: service_healthy # Wait for PostgreSQL health check
+      minio:
+        condition: service_healthy # Wait for Minio health check
+    networks:
+      - language_player_net # Connect to the custom network
+
+  # --- PostgreSQL Database Service ---
+  postgres:
+    image: postgres:16-alpine # ARM64 compatible Alpine variant
+    container_name: language_player_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}         # Sourced from .env
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD} # Sourced from .env
+      POSTGRES_DB: ${POSTGRES_DB}             # Sourced from .env
+    volumes:
+      # !! RECOMMENDED for Pi: Map to SSD !!
+      # Example: Mount a directory from your SSD into the container
+      # Ensure the host directory exists and has correct permissions first!
+      # - type: bind
+      #   source: /mnt/ssd/pgdata # <--- CHANGE THIS to your actual SSD mount path/directory
+      #   target: /var/lib/postgresql/data
+      # --- OR ---
+      # Use a Docker named volume (easier setup, stored in /var/lib/docker/volumes)
+      - type: volume
+        source: pgdata # Use the named volume defined below
+        target: /var/lib/postgresql/data
+    # ports: # Optional: Expose port 5432 externally if needed for direct access/migrations
+    #  - "5432:5432"
+    networks:
+      - language_player_net
+    healthcheck: # Ensure PostgreSQL is ready before API starts
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s # Allow 15 seconds for PostgreSQL to start up
+
+  # --- MinIO Object Storage Service ---
+  minio:
+    image: minio/minio:latest # Official image is multi-arch
+    container_name: language_player_minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000" # API Port
+      - "9001:9001" # Console Port
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}     # Sourced from .env
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY} # Sourced from .env
+      # MINIO_SERVER_URL / MINIO_BROWSER_REDIRECT_URL might be needed if using a reverse proxy
+    volumes:
+      # !! RECOMMENDED for Pi: Map to SSD !!
+      # Example: Mount a directory from your SSD into the container
+      # Ensure the host directory exists and has correct permissions first!
+      # - type: bind
+      #   source: /mnt/ssd/miniodata # <--- CHANGE THIS to your actual SSD mount path/directory
+      #   target: /data
+      # --- OR ---
+      # Use a Docker named volume
+      - type: volume
+        source: miniodata # Use the named volume defined below
+        target: /data
+    command: server /data --console-address ":9001" # Start server and enable console
+    networks:
+      - language_player_net
+    healthcheck: # <<< CORRECTED HEALTHCHECK >>>
+      # Use the readiness probe endpoint as per official docs
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/ready"]
+      interval: 10s      # Check every 10 seconds
+      timeout: 5s       # Wait max 5 seconds for response
+      retries: 5        # Retry 5 times before marking as unhealthy
+      start_period: 10s # Allow 10 seconds grace period after start
+
+# --- Define Custom Network ---
+networks:
+  language_player_net:
+    driver: bridge # Default network driver
+
+# --- Define Named Volumes (if not using bind mounts) ---
+volumes:
+  pgdata: # Docker will manage this volume in /var/lib/docker/volumes/
+  miniodata: # Docker will manage this volume
