@@ -15,7 +15,8 @@ import (
 type AuthResult struct {
 	AccessToken  string
 	RefreshToken string
-	IsNewUser    bool // Only relevant for external auth methods like Google sign-in
+	IsNewUser    bool         // Only relevant for external auth methods like Google sign-in
+	User         *domain.User // ADDED: Include the authenticated user
 }
 
 // AuthUseCase defines the methods for the Auth use case layer.

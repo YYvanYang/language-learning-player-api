@@ -35,9 +35,15 @@ func mapAuthResultToDTO(result port.AuthResult) dto.AuthResponseDTO {
 		AccessToken:  result.AccessToken,
 		RefreshToken: result.RefreshToken,
 	}
-	if result.IsNewUser { // Only include if true
+	if result.IsNewUser { // Only include if true for external auth
 		isNewPtr := true
 		resp.IsNewUser = &isNewPtr
+	}
+	// **ADDED**: Map the user if present in the AuthResult
+	if result.User != nil {
+		// Use the existing DTO mapping function
+		userDto := dto.MapDomainUserToResponseDTO(result.User)
+		resp.User = &userDto // Assign the mapped DTO
 	}
 	return resp
 }
@@ -50,7 +56,7 @@ func mapAuthResultToDTO(result port.AuthResult) dto.AuthResponseDTO {
 // @Accept json
 // @Produce json
 // @Param register body dto.RegisterRequestDTO true "User Registration Info"
-// @Success 201 {object} dto.AuthResponseDTO "Registration successful, returns access and refresh tokens" // MODIFIED DESCRIPTION
+// @Success 201 {object} dto.AuthResponseDTO "Registration successful, returns user details, access token, and refresh token."
 // @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Input"
 // @Failure 409 {object} httputil.ErrorResponseDTO "Conflict - Email Exists"
 // @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
@@ -82,13 +88,13 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 // Login handles user login requests.
 // @Summary Login a user
-// @Description Authenticates a user with email and password, returns access and refresh tokens. // MODIFIED DESCRIPTION
+// @Description Authenticates a user with email and password, returns user details, access token, and refresh token.
 // @ID login-user
 // @Tags Authentication
 // @Accept json
 // @Produce json
 // @Param login body dto.LoginRequestDTO true "User Login Credentials"
-// @Success 200 {object} dto.AuthResponseDTO "Login successful, returns access and refresh tokens" // MODIFIED DESCRIPTION
+// @Success 200 {object} dto.AuthResponseDTO "Login successful, returns user details, access token, and refresh token."
 // @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Input"
 // @Failure 401 {object} httputil.ErrorResponseDTO "Authentication Failed"
 // @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
@@ -120,13 +126,13 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 // GoogleCallback handles the callback from Google OAuth flow.
 // @Summary Handle Google OAuth callback
-// @Description Receives the ID token from the frontend after Google sign-in, verifies it, and performs user registration or login, returning access and refresh tokens. // MODIFIED DESCRIPTION
+// @Description Receives the ID token from the frontend after Google sign-in, verifies it, and performs user registration or login, returning user details, access token, and refresh token.
 // @ID google-callback
 // @Tags Authentication
 // @Accept json
 // @Produce json
 // @Param googleCallback body dto.GoogleCallbackRequestDTO true "Google ID Token"
-// @Success 200 {object} dto.AuthResponseDTO "Authentication successful, returns access/refresh tokens. isNewUser indicates new account creation." // MODIFIED DESCRIPTION
+// @Success 200 {object} dto.AuthResponseDTO "Authentication successful, returns user details, access/refresh tokens. isNewUser indicates new account creation."
 // @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Input (Missing or Invalid ID Token)"
 // @Failure 401 {object} httputil.ErrorResponseDTO "Authentication Failed (Invalid Google Token)"
 // @Failure 409 {object} httputil.ErrorResponseDTO "Conflict - Email already exists with a different login method"

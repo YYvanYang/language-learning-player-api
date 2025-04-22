@@ -38,7 +38,8 @@ type LogoutRequestDTO struct {
 // AuthResponseDTO defines the JSON response body for successful authentication/refresh.
 // MODIFIED: Added refreshToken
 type AuthResponseDTO struct {
-	AccessToken  string `json:"accessToken"`         // The JWT access token
-	RefreshToken string `json:"refreshToken"`        // The refresh token value
-	IsNewUser    *bool  `json:"isNewUser,omitempty"` // Pointer, only included for Google callback if user is new
+	AccessToken  string           `json:"accessToken"`         // The JWT access token
+	RefreshToken string           `json:"refreshToken"`        // The refresh token value
+	IsNewUser    *bool            `json:"isNewUser,omitempty"` // Pointer, only included for Google callback if user is new
+	User         *UserResponseDTO `json:"user,omitempty"`      // Pointer to user details DTO
 }

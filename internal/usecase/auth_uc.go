@@ -135,7 +135,15 @@ func (uc *AuthUseCase) RegisterWithPassword(ctx context.Context, emailStr, passw
 	}
 
 	uc.logger.InfoContext(ctx, "User registered successfully via password", "userID", user.ID, "email", emailStr)
-	return user, port.AuthResult{AccessToken: accessToken, RefreshToken: refreshToken}, nil
+	// **MODIFIED RETURN**: Include user in AuthResult as well for consistency? Or just return user separately?
+	// Returning separately is clear, but let's add it to AuthResult too for potential future use cases
+	// and consistency with other methods.
+	authRes := port.AuthResult{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		User:         user,
+	}
+	return user, authRes, nil
 }
 
 // LoginWithPassword handles user login with email and password.
@@ -170,7 +178,11 @@ func (uc *AuthUseCase) LoginWithPassword(ctx context.Context, emailStr, password
 	}
 
 	uc.logger.InfoContext(ctx, "User logged in successfully via password", "userID", user.ID)
-	return port.AuthResult{AccessToken: accessToken, RefreshToken: refreshToken}, nil
+	return port.AuthResult{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		User:         user,
+	}, nil
 }
 
 // AuthenticateWithGoogle handles login or registration via Google ID Token.
@@ -247,7 +259,12 @@ func (uc *AuthUseCase) AuthenticateWithGoogle(ctx context.Context, googleIdToken
 		return port.AuthResult{}, fmt.Errorf("failed to finalize authentication session: %w", tokenErr)
 	}
 
-	return port.AuthResult{AccessToken: accessToken, RefreshToken: refreshToken, IsNewUser: isNewUser}, nil
+	return port.AuthResult{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		IsNewUser:    isNewUser,
+		User:         targetUser,
+	}, nil
 }
 
 // RefreshAccessToken validates a refresh token, revokes it, and issues new access/refresh tokens.

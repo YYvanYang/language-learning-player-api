@@ -662,7 +662,7 @@ const docTemplate = `{
         },
         "/auth/google/callback": {
             "post": {
-                "description": "Receives the ID token from the frontend after Google sign-in, verifies it, and performs user registration or login, returning access and refresh tokens. // MODIFIED DESCRIPTION",
+                "description": "Receives the ID token from the frontend after Google sign-in, verifies it, and performs user registration or login, returning user details, access token, and refresh token.",
                 "consumes": [
                     "application/json"
                 ],
@@ -687,7 +687,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Authentication successful, returns access/refresh tokens. isNewUser indicates new account creation.\" // MODIFIED DESCRIPTION",
+                        "description": "Authentication successful, returns user details, access/refresh tokens. isNewUser indicates new account creation.",
                         "schema": {
                             "$ref": "#/definitions/dto.AuthResponseDTO"
                         }
@@ -721,7 +721,7 @@ const docTemplate = `{
         },
         "/auth/login": {
             "post": {
-                "description": "Authenticates a user with email and password, returns access and refresh tokens. // MODIFIED DESCRIPTION",
+                "description": "Authenticates a user with email and password, returns user details, access token, and refresh token.",
                 "consumes": [
                     "application/json"
                 ],
@@ -746,7 +746,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Login successful, returns access and refresh tokens\" // MODIFIED DESCRIPTION",
+                        "description": "Login successful, returns user details, access token, and refresh token.",
                         "schema": {
                             "$ref": "#/definitions/dto.AuthResponseDTO"
                         }
@@ -896,7 +896,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "201": {
-                        "description": "Registration successful, returns access and refresh tokens\" // MODIFIED DESCRIPTION",
+                        "description": "Registration successful, returns user details, access token, and refresh token.",
                         "schema": {
                             "$ref": "#/definitions/dto.AuthResponseDTO"
                         }
@@ -1126,7 +1126,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Paginated list of bookmarks (timestampMs in milliseconds)",
+                        "description": "Paginated list of bookmarks",
                         "schema": {
                             "allOf": [
                                 {
@@ -1172,7 +1172,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Creates a new bookmark at a specific timestamp (in milliseconds) in an audio track for the authenticated user.",
+                "description": "Creates a new bookmark at a specific timestamp in an audio track for the authenticated user.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1186,7 +1186,7 @@ const docTemplate = `{
                 "operationId": "create-bookmark",
                 "parameters": [
                     {
-                        "description": "Bookmark details (timestampMs in milliseconds)",
+                        "description": "Bookmark details",
                         "name": "bookmark",
                         "in": "body",
                         "required": true,
@@ -1197,7 +1197,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "201": {
-                        "description": "Bookmark created successfully (timestampMs in milliseconds)",
+                        "description": "Bookmark created successfully",
                         "schema": {
                             "$ref": "#/definitions/dto.BookmarkResponseDTO"
                         }
@@ -1323,7 +1323,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Paginated list of playback progress (progressMs in milliseconds)",
+                        "description": "Paginated list of playback progress",
                         "schema": {
                             "allOf": [
                                 {
@@ -1377,7 +1377,7 @@ const docTemplate = `{
                 "operationId": "record-playback-progress",
                 "parameters": [
                     {
-                        "description": "Playback progress details (progressMs in milliseconds)",
+                        "description": "Playback progress details",
                         "name": "progress",
                         "in": "body",
                         "required": true,
@@ -1445,7 +1445,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Playback progress found (progressMs in milliseconds)",
+                        "description": "Playback progress found",
                         "schema": {
                             "$ref": "#/definitions/dto.PlaybackProgressResponseDTO"
                         }
@@ -1524,8 +1524,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "durationMs": {
-                    "description": "Point 1: Use milliseconds (int64)",
-                    "type": "integer"
+                    "description": "Duration in milliseconds",
+                    "type": "integer",
+                    "example": 125300
                 },
                 "id": {
                     "type": "string"
@@ -1566,8 +1567,9 @@ const docTemplate = `{
                     }
                 },
                 "userProgressMs": {
-                    "description": "Point 1: User progress in ms",
-                    "type": "integer"
+                    "description": "User progress in ms",
+                    "type": "integer",
+                    "example": 45000
                 }
             }
         },
@@ -1584,8 +1586,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "durationMs": {
-                    "description": "Point 1: Use milliseconds (int64)",
-                    "type": "integer"
+                    "description": "Duration in milliseconds",
+                    "type": "integer",
+                    "example": 125300
                 },
                 "id": {
                     "type": "string"
@@ -1630,6 +1633,14 @@ const docTemplate = `{
                 "refreshToken": {
                     "description": "The refresh token value",
                     "type": "string"
+                },
+                "user": {
+                    "description": "Pointer to user details DTO",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.UserResponseDTO"
+                        }
+                    ]
                 }
             }
         },
@@ -1665,6 +1676,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "durationMs": {
+                    "description": "Duration in milliseconds",
                     "type": "integer"
                 },
                 "isPublic": {
@@ -1809,6 +1821,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "timestampMs": {
+                    "description": "Timestamp in milliseconds",
                     "type": "integer"
                 },
                 "trackId": {
@@ -1836,7 +1849,8 @@ const docTemplate = `{
                 },
                 "durationMs": {
                     "description": "Duration in Milliseconds, must be positive",
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 183500
                 },
                 "isPublic": {
                     "description": "Defaults to false if omitted? Define behavior.",
@@ -1884,9 +1898,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "timestampMs": {
-                    "description": "Point 1: Already uses ms",
+                    "description": "Timestamp in milliseconds",
                     "type": "integer",
-                    "minimum": 0
+                    "minimum": 0,
+                    "example": 15250
                 },
                 "trackId": {
                     "type": "string"
@@ -1994,7 +2009,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "progressMs": {
-                    "description": "Point 1: Already uses ms",
+                    "description": "Progress in milliseconds",
                     "type": "integer"
                 },
                 "trackId": {
@@ -2013,9 +2028,10 @@ const docTemplate = `{
             ],
             "properties": {
                 "progressMs": {
-                    "description": "Point 1: Already uses ms",
+                    "description": "Progress in milliseconds",
                     "type": "integer",
-                    "minimum": 0
+                    "minimum": 0,
+                    "example": 30500
                 },
                 "trackId": {
                     "type": "string"
@@ -2178,7 +2194,7 @@ const docTemplate = `{
             "name": "Users"
         },
         {
-            "description": "Operations related to individual audio tracks, including retrieval and listing.",
+            "description": "Operations related to individual audio tracks, including retrieval and listing. Duration values in responses are in milliseconds.",
             "name": "Audio Tracks"
         },
         {
@@ -2186,7 +2202,7 @@ const docTemplate = `{
             "name": "Audio Collections"
         },
         {
-            "description": "Operations related to tracking user interactions like playback progress and bookmarks.",
+            "description": "Operations related to tracking user interactions like playback progress and bookmarks. Timestamp/Progress values in requests/responses are in milliseconds.",
             "name": "User Activity"
         },
         {

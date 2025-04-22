@@ -30,7 +30,8 @@ definitions:
       description:
         type: string
       durationMs:
-        description: 'Point 1: Use milliseconds (int64)'
+        description: Duration in milliseconds
+        example: 125300
         type: integer
       id:
         type: string
@@ -59,7 +60,8 @@ definitions:
           $ref: '#/definitions/dto.BookmarkResponseDTO'
         type: array
       userProgressMs:
-        description: 'Point 1: User progress in ms'
+        description: User progress in ms
+        example: 45000
         type: integer
     type: object
   dto.AudioTrackResponseDTO:
@@ -71,7 +73,8 @@ definitions:
       description:
         type: string
       durationMs:
-        description: 'Point 1: Use milliseconds (int64)'
+        description: Duration in milliseconds
+        example: 125300
         type: integer
       id:
         type: string
@@ -103,6 +106,10 @@ definitions:
       refreshToken:
         description: The refresh token value
         type: string
+      user:
+        allOf:
+        - $ref: '#/definitions/dto.UserResponseDTO'
+        description: Pointer to user details DTO
     type: object
   dto.BatchCompleteUploadInputDTO:
     properties:
@@ -122,6 +129,7 @@ definitions:
       description:
         type: string
       durationMs:
+        description: Duration in milliseconds
         type: integer
       isPublic:
         type: boolean
@@ -227,6 +235,7 @@ definitions:
       note:
         type: string
       timestampMs:
+        description: Timestamp in milliseconds
         type: integer
       trackId:
         type: string
@@ -241,6 +250,7 @@ definitions:
         type: string
       durationMs:
         description: Duration in Milliseconds, must be positive
+        example: 183500
         type: integer
       isPublic:
         description: Defaults to false if omitted? Define behavior.
@@ -278,7 +288,8 @@ definitions:
       note:
         type: string
       timestampMs:
-        description: 'Point 1: Already uses ms'
+        description: Timestamp in milliseconds
+        example: 15250
         minimum: 0
         type: integer
       trackId:
@@ -356,7 +367,7 @@ definitions:
       lastListenedAt:
         type: string
       progressMs:
-        description: 'Point 1: Already uses ms'
+        description: Progress in milliseconds
         type: integer
       trackId:
         type: string
@@ -366,7 +377,8 @@ definitions:
   dto.RecordProgressRequestDTO:
     properties:
       progressMs:
-        description: 'Point 1: Already uses ms'
+        description: Progress in milliseconds
+        example: 30500
         minimum: 0
         type: integer
       trackId:
@@ -922,8 +934,8 @@ paths:
       consumes:
       - application/json
       description: Receives the ID token from the frontend after Google sign-in, verifies
-        it, and performs user registration or login, returning access and refresh
-        tokens. // MODIFIED DESCRIPTION
+        it, and performs user registration or login, returning user details, access
+        token, and refresh token.
       operationId: google-callback
       parameters:
       - description: Google ID Token
@@ -936,8 +948,8 @@ paths:
       - application/json
       responses:
         "200":
-          description: Authentication successful, returns access/refresh tokens. isNewUser
-            indicates new account creation." // MODIFIED DESCRIPTION
+          description: Authentication successful, returns user details, access/refresh
+            tokens. isNewUser indicates new account creation.
           schema:
             $ref: '#/definitions/dto.AuthResponseDTO'
         "400":
@@ -963,8 +975,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Authenticates a user with email and password, returns access and
-        refresh tokens. // MODIFIED DESCRIPTION
+      description: Authenticates a user with email and password, returns user details,
+        access token, and refresh token.
       operationId: login-user
       parameters:
       - description: User Login Credentials
@@ -977,8 +989,8 @@ paths:
       - application/json
       responses:
         "200":
-          description: Login successful, returns access and refresh tokens" // MODIFIED
-            DESCRIPTION
+          description: Login successful, returns user details, access token, and refresh
+            token.
           schema:
             $ref: '#/definitions/dto.AuthResponseDTO'
         "400":
@@ -1079,8 +1091,8 @@ paths:
       - application/json
       responses:
         "201":
-          description: Registration successful, returns access and refresh tokens"
-            // MODIFIED DESCRIPTION
+          description: Registration successful, returns user details, access token,
+            and refresh token.
           schema:
             $ref: '#/definitions/dto.AuthResponseDTO'
         "400":
@@ -1232,7 +1244,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: Paginated list of bookmarks (timestampMs in milliseconds)
+          description: Paginated list of bookmarks
           schema:
             allOf:
             - $ref: '#/definitions/dto.PaginatedResponseDTO'
@@ -1262,11 +1274,11 @@ paths:
     post:
       consumes:
       - application/json
-      description: Creates a new bookmark at a specific timestamp (in milliseconds)
-        in an audio track for the authenticated user.
+      description: Creates a new bookmark at a specific timestamp in an audio track
+        for the authenticated user.
       operationId: create-bookmark
       parameters:
-      - description: Bookmark details (timestampMs in milliseconds)
+      - description: Bookmark details
         in: body
         name: bookmark
         required: true
@@ -1276,7 +1288,7 @@ paths:
       - application/json
       responses:
         "201":
-          description: Bookmark created successfully (timestampMs in milliseconds)
+          description: Bookmark created successfully
           schema:
             $ref: '#/definitions/dto.BookmarkResponseDTO'
         "400":
@@ -1360,7 +1372,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: Paginated list of playback progress (progressMs in milliseconds)
+          description: Paginated list of playback progress
           schema:
             allOf:
             - $ref: '#/definitions/dto.PaginatedResponseDTO'
@@ -1390,7 +1402,7 @@ paths:
         for the authenticated user.
       operationId: record-playback-progress
       parameters:
-      - description: Playback progress details (progressMs in milliseconds)
+      - description: Playback progress details
         in: body
         name: progress
         required: true
@@ -1438,7 +1450,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: Playback progress found (progressMs in milliseconds)
+          description: Playback progress found
           schema:
             $ref: '#/definitions/dto.PlaybackProgressResponseDTO'
         "400":
@@ -1480,12 +1492,12 @@ tags:
 - description: Operations related to user profiles.
   name: Users
 - description: Operations related to individual audio tracks, including retrieval
-    and listing.
+    and listing. Duration values in responses are in milliseconds.
   name: Audio Tracks
 - description: Operations related to managing audio collections (playlists, courses).
   name: Audio Collections
 - description: Operations related to tracking user interactions like playback progress
-    and bookmarks.
+    and bookmarks. Timestamp/Progress values in requests/responses are in milliseconds.
   name: User Activity
 - description: Operations related to requesting upload URLs and finalizing uploads.
   name: Uploads
