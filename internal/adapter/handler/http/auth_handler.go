@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http/dto"
+	"github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http/middleware"
 	"github.com/yvanyang/language-learning-player-api/internal/domain"
 	"github.com/yvanyang/language-learning-player-api/internal/port"
 	"github.com/yvanyang/language-learning-player-api/pkg/httputil"
@@ -203,37 +204,33 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 
 // Logout handles user logout requests by invalidating the refresh token.
 // @Summary Logout user
-// @Description Invalidates the provided refresh token, effectively logging the user out of that session/device.
+// @Description Invalidates the current user's session and refresh tokens on the backend.
 // @ID logout-user
 // @Tags Authentication
-// @Accept json
 // @Produce json
-// @Param logout body dto.LogoutRequestDTO true "Refresh Token to invalidate"
+// @Security BearerAuth // Requires a valid access token
 // @Success 204 "Logout successful"
-// @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Input (Missing Refresh Token)"
+// @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized (No valid access token)"
 // @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
-// @Router /auth/logout [post]
-// ADDED METHOD
+// @Router /auth/logout [post] // Keep POST for semantic logout action
+// MODIFIED: No request body needed
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	var req dto.LogoutRequestDTO
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httputil.RespondError(w, r, fmt.Errorf("%w: %v", domain.ErrInvalidArgument, "invalid request body"))
-		return
-	}
-	defer r.Body.Close()
-
-	if err := h.validator.ValidateStruct(req); err != nil {
-		httputil.RespondError(w, r, fmt.Errorf("%w: %v", domain.ErrInvalidArgument, err))
+	// Get UserID from the context (validated by Authenticator middleware)
+	userID, ok := middleware.GetUserIDFromContext(r.Context())
+	if !ok {
+		// This shouldn't happen if Authenticator runs first, but handle defensively
+		httputil.RespondError(w, r, domain.ErrUnauthenticated)
 		return
 	}
 
-	err := h.authUseCase.Logout(r.Context(), req.RefreshToken)
+	// Call use case with UserID
+	err := h.authUseCase.Logout(r.Context(), userID)
 	if err != nil {
-		// Logout use case should generally not return client errors unless input is bad,
-		// but handle potential internal errors.
+		// Logout use case should generally return nil even if DB cleanup fails,
+		// but handle potential configuration errors etc.
 		httputil.RespondError(w, r, err)
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent) // 204 No Content for successful logout
+	w.WriteHeader(http.StatusNoContent) // 204 No Content for successful logout initiation
 }

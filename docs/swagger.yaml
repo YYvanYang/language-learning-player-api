@@ -335,13 +335,6 @@ definitions:
     - email
     - password
     type: object
-  dto.LogoutRequestDTO:
-    properties:
-      refreshToken:
-        type: string
-    required:
-    - refreshToken
-    type: object
   dto.PaginatedResponseDTO:
     properties:
       data:
@@ -1020,31 +1013,24 @@ paths:
       - Authentication
   /auth/logout:
     post:
-      consumes:
-      - application/json
-      description: Invalidates the provided refresh token, effectively logging the
-        user out of that session/device.
+      description: Invalidates the current user's session and refresh tokens on the
+        backend.
       operationId: logout-user
-      parameters:
-      - description: Refresh Token to invalidate
-        in: body
-        name: logout
-        required: true
-        schema:
-          $ref: '#/definitions/dto.LogoutRequestDTO'
       produces:
       - application/json
       responses:
         "204":
           description: Logout successful
-        "400":
-          description: Invalid Input (Missing Refresh Token)
+        "401":
+          description: Unauthorized (No valid access token)
           schema:
             $ref: '#/definitions/httputil.ErrorResponseDTO'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/httputil.ErrorResponseDTO'
+      security:
+      - BearerAuth // Requires a valid access token: []
       summary: Logout user
       tags:
       - Authentication

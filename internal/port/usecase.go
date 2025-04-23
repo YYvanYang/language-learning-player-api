@@ -38,7 +38,7 @@ type AuthUseCase interface {
 	RefreshAccessToken(ctx context.Context, refreshTokenValue string) (AuthResult, error)
 
 	// Logout invalidates the provided refresh token.
-	Logout(ctx context.Context, refreshTokenValue string) error
+	Logout(ctx context.Context, userID domain.UserID) error
 }
 
 // AudioContentUseCase defines the methods for the Audio Content use case layer.

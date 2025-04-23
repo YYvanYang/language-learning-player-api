@@ -791,10 +791,12 @@ const docTemplate = `{
         },
         "/auth/logout": {
             "post": {
-                "description": "Invalidates the provided refresh token, effectively logging the user out of that session/device.",
-                "consumes": [
-                    "application/json"
+                "security": [
+                    {
+                        "BearerAuth // Requires a valid access token": []
+                    }
                 ],
+                "description": "Invalidates the current user's session and refresh tokens on the backend.",
                 "produces": [
                     "application/json"
                 ],
@@ -803,23 +805,12 @@ const docTemplate = `{
                 ],
                 "summary": "Logout user",
                 "operationId": "logout-user",
-                "parameters": [
-                    {
-                        "description": "Refresh Token to invalidate",
-                        "name": "logout",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.LogoutRequestDTO"
-                        }
-                    }
-                ],
                 "responses": {
                     "204": {
                         "description": "Logout successful"
                     },
-                    "400": {
-                        "description": "Invalid Input (Missing Refresh Token)",
+                    "401": {
+                        "description": "Unauthorized (No valid access token)",
                         "schema": {
                             "$ref": "#/definitions/httputil.ErrorResponseDTO"
                         }
@@ -2072,17 +2063,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "password": {
-                    "type": "string"
-                }
-            }
-        },
-        "dto.LogoutRequestDTO": {
-            "type": "object",
-            "required": [
-                "refreshToken"
-            ],
-            "properties": {
-                "refreshToken": {
                     "type": "string"
                 }
             }

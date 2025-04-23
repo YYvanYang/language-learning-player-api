@@ -322,36 +322,29 @@ func (uc *AuthUseCase) RefreshAccessToken(ctx context.Context, refreshTokenValue
 	return port.AuthResult{AccessToken: newAccessToken, RefreshToken: newRefreshTokenValue}, nil
 }
 
-// Logout invalidates a specific refresh token.
-func (uc *AuthUseCase) Logout(ctx context.Context, refreshTokenValue string) error {
+// Logout invalidates all refresh tokens for the given user ID.
+// MODIFIED: Now operates based on UserID derived from access token.
+func (uc *AuthUseCase) Logout(ctx context.Context, userID domain.UserID) error {
 	// Ensure repo dependency is available before proceeding
 	if uc.refreshTokenRepo == nil {
-		uc.logger.ErrorContext(ctx, "RefreshTokenRepository is nil, cannot logout")
+		uc.logger.ErrorContext(ctx, "RefreshTokenRepository is nil, cannot logout user", "userID", userID)
+		// Still proceed to attempt clearing client-side cookies, but log server error
 		return fmt.Errorf("internal server error: authentication system misconfigured")
 	}
 
-	if refreshTokenValue == "" {
-		// Nothing to invalidate if no token is provided.
-		uc.logger.DebugContext(ctx, "Logout called with empty refresh token, nothing to do.")
+	// Delete all tokens associated with the user ID
+	deletedCount, err := uc.refreshTokenRepo.DeleteByUser(ctx, userID)
+	if err != nil {
+		// Log actual errors during deletion but don't necessarily fail the logout flow for the client
+		uc.logger.ErrorContext(ctx, "Failed to delete refresh tokens during logout", "error", err, "userID", userID)
+		// Return nil so the client-side logout can proceed? Or return the error?
+		// Let's return nil, as the main goal is logging the user out on the frontend.
+		// The backend cleanup failure is logged.
 		return nil
+		// return fmt.Errorf("failed to process logout request fully: %w", err)
 	}
 
-	tokenHash := uc.secHelper.HashRefreshTokenValue(refreshTokenValue)
-
-	// Delete the token by hash. ErrNotFound is acceptable.
-	err := uc.refreshTokenRepo.DeleteByTokenHash(ctx, tokenHash)
-	if err != nil && !errors.Is(err, domain.ErrNotFound) {
-		// Log actual errors during deletion
-		uc.logger.ErrorContext(ctx, "Failed to delete refresh token during logout", "error", err)
-		// Return a generic internal error to the client
-		return fmt.Errorf("failed to process logout request: %w", err)
-	}
-
-	if errors.Is(err, domain.ErrNotFound) {
-		uc.logger.InfoContext(ctx, "Logout attempt for a refresh token that was already invalid or deleted.")
-	} else {
-		uc.logger.InfoContext(ctx, "User session logged out (refresh token invalidated).")
-	}
+	uc.logger.InfoContext(ctx, "User sessions logged out (all refresh tokens invalidated)", "userID", userID, "count", deletedCount)
 	return nil
 }
 
