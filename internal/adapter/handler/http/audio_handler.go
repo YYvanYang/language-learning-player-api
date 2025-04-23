@@ -1,4 +1,6 @@
-// internal/adapter/handler/http/audio_handler.go
+// ============================================
+// FILE: internal/adapter/handler/http/audio_handler.go (MODIFIED)
+// ============================================
 package http
 
 import (
@@ -10,7 +12,8 @@ import (
 	"strings" // Import strings
 
 	"github.com/go-chi/chi/v5"
-	"github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http/dto" // Import for GetUserIDFromContext
+	"github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http/dto"        // Import for GetUserIDFromContext
+	"github.com/yvanyang/language-learning-player-api/internal/adapter/handler/http/middleware" // Correct middleware import path
 	"github.com/yvanyang/language-learning-player-api/internal/domain"
 	"github.com/yvanyang/language-learning-player-api/internal/port"
 	"github.com/yvanyang/language-learning-player-api/pkg/httputil"
@@ -82,7 +85,7 @@ func parseListTracksInput(r *http.Request) (port.ListTracksInput, error) {
 	if lang := q.Get("lang"); lang != "" {
 		input.LanguageCode = &lang
 	}
-	input.Tags = q["tags"]
+	input.Tags = q["tags"] // Already handles empty slice
 
 	// Parse Level (and validate)
 	if levelStr := q.Get("level"); levelStr != "" {
@@ -178,6 +181,76 @@ func (h *AudioHandler) ListTracks(w http.ResponseWriter, r *http.Request) {
 
 // --- Collection Handlers ---
 
+// ListMyCollections handles GET /api/v1/users/me/collections
+// @Summary List my audio collections
+// @Description Retrieves a paginated list of audio collections owned by the currently authenticated user.
+// @ID list-my-collections
+// @Tags Audio Collections
+// @Produce json
+// @Security BearerAuth
+// @Param sortBy query string false "Sort field (e.g., createdAt, title, updatedAt)" default(updatedAt)
+// @Param sortDir query string false "Sort direction (asc or desc)" default(desc) Enums(asc, desc)
+// @Param limit query int false "Pagination limit" default(20) minimum(1) maximum(100)
+// @Param offset query int false "Pagination offset" default(0) minimum(0)
+// @Success 200 {object} dto.PaginatedResponseDTO{data=[]dto.AudioCollectionResponseDTO} "Paginated list of user's audio collections"
+// @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Query Parameter Format"
+// @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized"
+// @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error"
+// @Router /users/me/collections [get]
+// ADDED: New handler method
+func (h *AudioHandler) ListMyCollections(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserIDFromContext(r.Context())
+	if !ok {
+		httputil.RespondError(w, r, domain.ErrUnauthenticated)
+		return
+	}
+
+	q := r.URL.Query()
+	limitStr := q.Get("limit")
+	offsetStr := q.Get("offset")
+	limit, errLimit := strconv.Atoi(limitStr)
+	offset, errOffset := strconv.Atoi(offsetStr)
+	if (limitStr != "" && errLimit != nil) || (offsetStr != "" && errOffset != nil) {
+		httputil.RespondError(w, r, fmt.Errorf("%w: invalid limit or offset query parameter", domain.ErrInvalidArgument))
+		return
+	}
+
+	// Create params struct for use case
+	ucParams := port.ListUserCollectionsParams{
+		UserID:        userID,
+		SortBy:        q.Get("sortBy"),
+		SortDirection: q.Get("sortDir"),
+		Page:          pagination.Page{Limit: limit, Offset: offset}, // Let use case validate/default pagination
+	}
+
+	// Call use case
+	collections, total, actualPageInfo, err := h.audioUseCase.ListUserCollections(r.Context(), ucParams)
+	if err != nil {
+		httputil.RespondError(w, r, err)
+		return
+	}
+
+	// Map domain collections to response DTOs (without detailed tracks for list view)
+	respData := make([]dto.AudioCollectionResponseDTO, len(collections))
+	for i, col := range collections {
+		// Pass nil for tracks slice to indicate it's a list view
+		respData[i] = dto.MapDomainCollectionToResponseDTO(col, nil)
+	}
+
+	// Construct paginated response using actual page info from use case
+	paginatedResult := pagination.NewPaginatedResponse(respData, total, actualPageInfo)
+	resp := dto.PaginatedResponseDTO{
+		Data:       paginatedResult.Data,
+		Total:      paginatedResult.Total,
+		Limit:      paginatedResult.Limit,
+		Offset:     paginatedResult.Offset,
+		Page:       paginatedResult.Page,
+		TotalPages: paginatedResult.TotalPages,
+	}
+
+	httputil.RespondJSON(w, r, http.StatusOK, resp)
+}
+
 // CreateCollection handles POST /api/v1/audio/collections
 // @Summary Create an audio collection
 // @Description Creates a new audio collection (playlist or course) for the authenticated user.
@@ -222,19 +295,23 @@ func (h *AudioHandler) CreateCollection(w http.ResponseWriter, r *http.Request) 
 		httputil.RespondError(w, r, err)
 		return
 	}
-	resp := dto.MapDomainCollectionToResponseDTO(collection, nil)
+	// Map the created collection (potentially with initial track IDs, but not full track details)
+	resp := dto.MapDomainCollectionToResponseDTO(collection, nil) // Pass nil for tracks here
 	httputil.RespondJSON(w, r, http.StatusCreated, resp)
 }
 
 // GetCollectionDetails handles GET /api/v1/audio/collections/{collectionId}
 // @Summary Get audio collection details
-// @Description Retrieves details for a specific audio collection, including its metadata and ordered list of tracks.
+// @Description Retrieves details for a specific audio collection, including its metadata and ordered list of tracks. Backend verifies if user can view it.
 // @ID get-collection-details
 // @Tags Audio Collections
 // @Produce json
 // @Param collectionId path string true "Audio Collection UUID" Format(uuid)
+// @Security BearerAuth // Indicate auth might affect response or access
 // @Success 200 {object} dto.AudioCollectionResponseDTO "Audio collection details found"
 // @Failure 400 {object} httputil.ErrorResponseDTO "Invalid Collection ID Format"
+// @Failure 401 {object} httputil.ErrorResponseDTO "Unauthorized (if collection is private and not owned)"
+// @Failure 403 {object} httputil.ErrorResponseDTO "Forbidden (if user cannot access)"
 // @Failure 404 {object} httputil.ErrorResponseDTO "Collection Not Found"
 // @Failure 500 {object} httputil.ErrorResponseDTO "Internal Server Error (e.g., failed to fetch tracks)"
 // @Router /audio/collections/{collectionId} [get]
@@ -246,21 +323,23 @@ func (h *AudioHandler) GetCollectionDetails(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Use case should perform permission checks internally based on context userId
 	collection, err := h.audioUseCase.GetCollectionDetails(r.Context(), collectionID)
 	if err != nil {
-		httputil.RespondError(w, r, err)
+		httputil.RespondError(w, r, err) // Handles NotFound, PermissionDenied etc.
 		return
 	}
 
-	// Fetch tracks separately (Usecase GetCollectionDetails returns the collection metadata + IDs)
-	// If the usecase returned full tracks, this call wouldn't be needed.
+	// Fetch tracks associated with the collection
 	tracks, err := h.audioUseCase.GetCollectionTracks(r.Context(), collectionID)
 	if err != nil {
+		// Log error but might still return collection metadata
 		slog.Default().ErrorContext(r.Context(), "Failed to fetch tracks for collection details", "error", err, "collectionID", collectionID)
-		httputil.RespondError(w, r, fmt.Errorf("failed to retrieve collection tracks: %w", err))
-		return
+		// Depending on requirements, could return error here or just the collection without tracks
+		// Let's return the collection metadata anyway
 	}
 
+	// Map collection and its tracks to the response DTO
 	resp := dto.MapDomainCollectionToResponseDTO(collection, tracks)
 	httputil.RespondJSON(w, r, http.StatusOK, resp)
 }
@@ -299,6 +378,7 @@ func (h *AudioHandler) UpdateCollectionMetadata(w http.ResponseWriter, r *http.R
 		httputil.RespondError(w, r, fmt.Errorf("%w: %v", domain.ErrInvalidArgument, err))
 		return
 	}
+	// Use case handles ownership check
 	err = h.audioUseCase.UpdateCollectionMetadata(r.Context(), collectionID, req.Title, req.Description)
 	if err != nil {
 		httputil.RespondError(w, r, err)
@@ -350,6 +430,7 @@ func (h *AudioHandler) UpdateCollectionTracks(w http.ResponseWriter, r *http.Req
 		}
 		orderedTrackIDs = append(orderedTrackIDs, id)
 	}
+	// Use case handles ownership check
 	err = h.audioUseCase.UpdateCollectionTracks(r.Context(), collectionID, orderedTrackIDs)
 	if err != nil {
 		httputil.RespondError(w, r, err)
@@ -379,6 +460,7 @@ func (h *AudioHandler) DeleteCollection(w http.ResponseWriter, r *http.Request) 
 		httputil.RespondError(w, r, fmt.Errorf("%w: invalid collection ID format", domain.ErrInvalidArgument))
 		return
 	}
+	// Use case handles ownership check
 	err = h.audioUseCase.DeleteCollection(r.Context(), collectionID)
 	if err != nil {
 		httputil.RespondError(w, r, err)

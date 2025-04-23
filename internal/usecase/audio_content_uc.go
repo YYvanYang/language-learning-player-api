@@ -1,4 +1,6 @@
-// internal/usecase/audio_content_uc.go
+// ============================================
+// FILE: internal/usecase/audio_content_uc.go (MODIFIED)
+// ============================================
 package usecase
 
 import (
@@ -228,29 +230,78 @@ func (uc *AudioContentUseCase) CreateCollection(ctx context.Context, title, desc
 	return collection, nil
 }
 
+// ListUserCollections retrieves collections owned by a specific user.
+// ADDED: New method implementation
+func (uc *AudioContentUseCase) ListUserCollections(ctx context.Context, params port.ListUserCollectionsParams) ([]*domain.AudioCollection, int, pagination.Page, error) {
+	// Validate/default pagination
+	pageParams := pagination.NewPageFromOffset(params.Page.Limit, params.Page.Offset)
+
+	// TODO: Implement sorting logic if needed based on params.SortBy/SortDirection
+	// This would involve mapping use case sort fields to repository sort fields if different.
+	// For now, we rely on the repository's default sort (likely creation date).
+
+	collections, total, err := uc.collectionRepo.ListByOwner(ctx, params.UserID, pageParams)
+	if err != nil {
+		uc.logger.ErrorContext(ctx, "Failed to list collections by owner", "error", err, "ownerID", params.UserID, "page", pageParams)
+		return nil, 0, pageParams, fmt.Errorf("failed to retrieve collection list: %w", err)
+	}
+
+	uc.logger.InfoContext(ctx, "Successfully listed user collections", "ownerID", params.UserID, "count", len(collections), "total", total)
+	return collections, total, pageParams, nil
+}
+
 func (uc *AudioContentUseCase) GetCollectionDetails(ctx context.Context, collectionID domain.CollectionID) (*domain.AudioCollection, error) {
 	userID, userAuthenticated := middleware.GetUserIDFromContext(ctx)
 	collection, err := uc.collectionRepo.FindWithTracks(ctx, collectionID)
-	if err != nil { /* Handle NotFound, log other errors */
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			uc.logger.WarnContext(ctx, "Collection not found", "collectionID", collectionID)
+		} else {
+			uc.logger.ErrorContext(ctx, "Failed to get collection details with tracks", "error", err, "collectionID", collectionID)
+		}
 		return nil, err
 	}
-	if !userAuthenticated || collection.OwnerID != userID { /* Log, return permission denied */
-		return nil, domain.ErrPermissionDenied
+	// Check ownership AFTER fetching
+	if !userAuthenticated || collection.OwnerID != userID {
+		uc.logger.WarnContext(ctx, "Permission denied for accessing collection details", "collectionID", collectionID, "ownerID", collection.OwnerID, "requestUserID", userID, "authenticated", userAuthenticated)
+		return nil, domain.ErrPermissionDenied // Return PermissionDenied instead of NotFound if found but not owner
 	}
 	uc.logger.InfoContext(ctx, "Successfully retrieved collection details", "collectionID", collectionID, "trackCount", len(collection.TrackIDs))
 	return collection, nil
 }
 
 func (uc *AudioContentUseCase) GetCollectionTracks(ctx context.Context, collectionID domain.CollectionID) ([]*domain.AudioTrack, error) {
-	collection, err := uc.collectionRepo.FindWithTracks(ctx, collectionID)
+	// First, verify the requesting user owns the collection before fetching tracks
+	userID, userAuthenticated := middleware.GetUserIDFromContext(ctx)
+	collection, err := uc.collectionRepo.FindByID(ctx, collectionID) // Fetch metadata only for ownership check
 	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			uc.logger.WarnContext(ctx, "Collection not found for track listing", "collectionID", collectionID)
+		} else {
+			uc.logger.ErrorContext(ctx, "Failed to get collection metadata for track listing", "error", err, "collectionID", collectionID)
+		}
 		return nil, err
 	}
-	if len(collection.TrackIDs) == 0 {
+	if !userAuthenticated || collection.OwnerID != userID {
+		uc.logger.WarnContext(ctx, "Permission denied for listing collection tracks", "collectionID", collectionID, "ownerID", collection.OwnerID, "requestUserID", userID, "authenticated", userAuthenticated)
+		return nil, domain.ErrPermissionDenied
+	}
+
+	// Now fetch the tracks using the IDs from the collection object (or refetch with FindWithTracks)
+	collectionWithTracks, err := uc.collectionRepo.FindWithTracks(ctx, collectionID)
+	if err != nil {
+		// This shouldn't fail if the previous FindByID succeeded, but handle defensively
+		uc.logger.ErrorContext(ctx, "Failed to get track IDs for collection after ownership check", "error", err, "collectionID", collectionID)
+		return nil, fmt.Errorf("failed to retrieve track IDs for collection: %w", err)
+	}
+
+	if len(collectionWithTracks.TrackIDs) == 0 {
 		return []*domain.AudioTrack{}, nil
 	}
-	tracks, err := uc.trackRepo.ListByIDs(ctx, collection.TrackIDs)
-	if err != nil { /* Log, return wrapped error */
+
+	tracks, err := uc.trackRepo.ListByIDs(ctx, collectionWithTracks.TrackIDs)
+	if err != nil {
+		uc.logger.ErrorContext(ctx, "Failed to list track details for collection", "error", err, "collectionID", collectionID)
 		return nil, fmt.Errorf("failed to retrieve track details for collection: %w", err)
 	}
 	uc.logger.InfoContext(ctx, "Successfully retrieved tracks for collection", "collectionID", collectionID, "trackCount", len(tracks))
@@ -265,9 +316,19 @@ func (uc *AudioContentUseCase) UpdateCollectionMetadata(ctx context.Context, col
 	if title == "" {
 		return fmt.Errorf("%w: collection title cannot be empty", domain.ErrInvalidArgument)
 	}
+	// The repository layer `UpdateMetadata` now includes an ownership check in the WHERE clause.
+	// We pass the ownerID from the context to ensure only the owner can update.
 	tempCollection := &domain.AudioCollection{ID: collectionID, OwnerID: userID, Title: title, Description: description}
 	err := uc.collectionRepo.UpdateMetadata(ctx, tempCollection)
-	if err != nil { /* Log if not NotFound/PermissionDenied, return err */
+	if err != nil {
+		// Repository maps "0 rows affected" to domain.ErrNotFound or domain.ErrPermissionDenied
+		if errors.Is(err, domain.ErrNotFound) {
+			uc.logger.WarnContext(ctx, "Update collection metadata failed: Not found", "collectionID", collectionID, "userID", userID)
+		} else if errors.Is(err, domain.ErrPermissionDenied) {
+			uc.logger.WarnContext(ctx, "Update collection metadata failed: Permission denied", "collectionID", collectionID, "userID", userID)
+		} else {
+			uc.logger.ErrorContext(ctx, "Failed to update collection metadata in repository", "error", err, "collectionID", collectionID, "userID", userID)
+		}
 		return err
 	}
 	uc.logger.InfoContext(ctx, "Collection metadata updated", "collectionID", collectionID, "userID", userID)
@@ -286,7 +347,7 @@ func (uc *AudioContentUseCase) UpdateCollectionTracks(ctx context.Context, colle
 	finalErr := uc.txManager.Execute(ctx, func(txCtx context.Context) error {
 		collection, err := uc.collectionRepo.FindByID(txCtx, collectionID)
 		if err != nil {
-			return err
+			return err // Handles NotFound
 		}
 		if collection.OwnerID != userID {
 			return domain.ErrPermissionDenied
@@ -300,13 +361,23 @@ func (uc *AudioContentUseCase) UpdateCollectionTracks(ctx context.Context, colle
 				return fmt.Errorf("%w: one or more track IDs do not exist", domain.ErrInvalidArgument)
 			}
 		}
+		// ManageTracks handles delete/insert/timestamp update within the transaction context
 		if err := uc.collectionRepo.ManageTracks(txCtx, collectionID, orderedTrackIDs); err != nil {
 			return fmt.Errorf("updating collection tracks in repository: %w", err)
 		}
 		return nil
 	})
 
-	if finalErr != nil { /* Log, return wrapped error */
+	if finalErr != nil {
+		if errors.Is(finalErr, domain.ErrNotFound) {
+			uc.logger.WarnContext(ctx, "Update collection tracks failed: Collection not found", "collectionID", collectionID, "userID", userID)
+		} else if errors.Is(finalErr, domain.ErrPermissionDenied) {
+			uc.logger.WarnContext(ctx, "Update collection tracks failed: Permission denied", "collectionID", collectionID, "userID", userID)
+		} else if errors.Is(finalErr, domain.ErrInvalidArgument) {
+			uc.logger.WarnContext(ctx, "Update collection tracks failed: Invalid argument", "collectionID", collectionID, "userID", userID, "error", finalErr)
+		} else {
+			uc.logger.ErrorContext(ctx, "Transaction failed during collection tracks update", "error", finalErr, "collectionID", collectionID, "userID", userID)
+		}
 		return fmt.Errorf("failed to update collection tracks: %w", finalErr)
 	}
 	uc.logger.InfoContext(ctx, "Collection tracks updated", "collectionID", collectionID, "userID", userID, "trackCount", len(orderedTrackIDs))
@@ -318,16 +389,28 @@ func (uc *AudioContentUseCase) DeleteCollection(ctx context.Context, collectionI
 	if !ok {
 		return domain.ErrUnauthenticated
 	}
+	// Check ownership BEFORE attempting delete
 	collection, err := uc.collectionRepo.FindByID(ctx, collectionID)
 	if err != nil {
+		// Log appropriately but return the original error (NotFound or other)
+		if !errors.Is(err, domain.ErrNotFound) {
+			uc.logger.ErrorContext(ctx, "Failed to find collection for deletion check", "error", err, "collectionID", collectionID, "userID", userID)
+		}
 		return err
 	}
 	if collection.OwnerID != userID {
+		uc.logger.WarnContext(ctx, "Permission denied for deleting collection", "collectionID", collectionID, "ownerID", collection.OwnerID, "userID", userID)
 		return domain.ErrPermissionDenied
 	}
+
+	// If ownership confirmed, proceed with delete
 	err = uc.collectionRepo.Delete(ctx, collectionID)
-	if err != nil { /* Log if not NotFound, return err */
-		return err
+	if err != nil {
+		// Log if not NotFound (e.g., unexpected DB error during delete)
+		if !errors.Is(err, domain.ErrNotFound) {
+			uc.logger.ErrorContext(ctx, "Failed to delete collection from repository", "error", err, "collectionID", collectionID, "userID", userID)
+		}
+		return err // Return NotFound if it happened (e.g., deleted between check and delete)
 	}
 	uc.logger.InfoContext(ctx, "Collection deleted", "collectionID", collectionID, "userID", userID)
 	return nil
@@ -343,7 +426,19 @@ func (uc *AudioContentUseCase) validateTrackIDsExist(ctx context.Context, trackI
 		uc.logger.ErrorContext(ctx, "Failed to validate track IDs existence", "error", err)
 		return false, fmt.Errorf("failed to verify tracks: %w", err)
 	}
-	if len(existingTracks) != len(trackIDs) { /* Log missing IDs */
+	if len(existingTracks) != len(trackIDs) {
+		// Find missing IDs for better logging/debugging
+		foundSet := make(map[domain.TrackID]struct{}, len(existingTracks))
+		for _, t := range existingTracks {
+			foundSet[t.ID] = struct{}{}
+		}
+		missing := make([]domain.TrackID, 0)
+		for _, requestedID := range trackIDs {
+			if _, found := foundSet[requestedID]; !found {
+				missing = append(missing, requestedID)
+			}
+		}
+		uc.logger.WarnContext(ctx, "Track ID validation failed: Some requested tracks do not exist", "missingIDs", missing)
 		return false, nil
 	}
 	return true, nil

@@ -48,7 +48,7 @@ import (
 // @tag.name Authentication
 // @tag.description Operations related to user signup, login, and external authentication (e.g., Google).
 // @tag.name Users
-// @tag.description Operations related to user profiles.
+// @tag.description Operations related to user profiles and their specific resources. // MODIFIED Tag description
 // @tag.name Audio Tracks
 // @tag.description Operations related to individual audio tracks, including retrieval and listing. Duration values in responses are in milliseconds.
 // @tag.name Audio Collections
@@ -193,47 +193,64 @@ func main() {
 
 		// Public API routes (Still get ApiSecurityHeaders)
 		r.Group(func(r chi.Router) {
+			// Authentication
 			r.Post("/auth/register", authHandler.Register)
 			r.Post("/auth/login", authHandler.Login)
 			r.Post("/auth/google/callback", authHandler.GoogleCallback)
-			r.Post("/auth/refresh", authHandler.Refresh) // ADDED Refresh route
-			r.Post("/auth/logout", authHandler.Logout)   // ADDED Logout route
+			r.Post("/auth/refresh", authHandler.Refresh)
+			r.Post("/auth/logout", authHandler.Logout)
 
-			r.Get("/audio/tracks", audioHandler.ListTracks)
-			r.Get("/audio/tracks/{trackId}", audioHandler.GetTrackDetails)
-			r.Get("/audio/collections/{collectionId}", audioHandler.GetCollectionDetails)
+			// Public Audio Content Retrieval
+			r.Get("/audio/tracks", audioHandler.ListTracks)                               // List public tracks
+			r.Get("/audio/tracks/{trackId}", audioHandler.GetTrackDetails)                // Get track details (handles public/private logic)
+			r.Get("/audio/collections/{collectionId}", audioHandler.GetCollectionDetails) // Get collection details (handles public/private logic)
 		})
 
 		// Protected API routes (Apply Authenticator middleware + ApiSecurityHeaders)
 		r.Group(func(r chi.Router) {
-			// IMPORTANT: Authenticator middleware ONLY checks the ACCESS token.
-			// Refresh/Logout routes should NOT be in this group.
 			r.Use(middleware.Authenticator(secHelper))
 
-			// User Profile
-			r.Get("/users/me", userHandler.GetMyProfile)
+			// --- User Profile ---
+			r.Route("/users/me", func(r chi.Router) {
+				r.Get("/", userHandler.GetMyProfile)
+				// NEW ROUTE: List collections owned by the current user
+				r.Get("/collections", audioHandler.ListMyCollections)
+				// User Activity (Progress and Bookmarks)
+				r.Route("/progress", func(r chi.Router) {
+					r.Get("/", activityHandler.ListProgress)
+					r.Post("/", activityHandler.RecordProgress)
+					r.Get("/{trackId}", activityHandler.GetProgress)
+				})
+				r.Route("/bookmarks", func(r chi.Router) {
+					r.Get("/", activityHandler.ListBookmarks)
+					r.Post("/", activityHandler.CreateBookmark)
+					r.Delete("/{bookmarkId}", activityHandler.DeleteBookmark)
+				})
+			})
 
-			// Audio Collections
-			r.Post("/audio/collections", audioHandler.CreateCollection)
-			r.Put("/audio/collections/{collectionId}", audioHandler.UpdateCollectionMetadata)
-			r.Delete("/audio/collections/{collectionId}", audioHandler.DeleteCollection)
-			r.Put("/audio/collections/{collectionId}/tracks", audioHandler.UpdateCollectionTracks)
+			// --- Audio Collections (Management) ---
+			r.Route("/audio/collections", func(r chi.Router) {
+				r.Post("/", audioHandler.CreateCollection) // Create a new collection
+				r.Route("/{collectionId}", func(r chi.Router) {
+					// Note: GET /{collectionId} is public above, GET here could potentially show *only* owned
+					r.Put("/", audioHandler.UpdateCollectionMetadata)     // Update title/desc
+					r.Delete("/", audioHandler.DeleteCollection)          // Delete collection
+					r.Put("/tracks", audioHandler.UpdateCollectionTracks) // Update tracks within collection
+				})
+			})
 
-			// User Activity
-			r.Post("/users/me/progress", activityHandler.RecordProgress)
-			r.Get("/users/me/progress", activityHandler.ListProgress)
-			r.Get("/users/me/progress/{trackId}", activityHandler.GetProgress)
-			r.Post("/users/me/bookmarks", activityHandler.CreateBookmark)
-			r.Get("/users/me/bookmarks", activityHandler.ListBookmarks)
-			r.Delete("/users/me/bookmarks/{bookmarkId}", activityHandler.DeleteBookmark)
-
-			// Upload Routes (Require Auth)
-			// Single File
-			r.Post("/uploads/audio/request", uploadHandler.RequestUpload)
-			r.Post("/audio/tracks", uploadHandler.CompleteUploadAndCreateTrack)
-			// Batch Files
-			r.Post("/uploads/audio/batch/request", uploadHandler.RequestBatchUpload)                 // ADDED
-			r.Post("/audio/tracks/batch/complete", uploadHandler.CompleteBatchUploadAndCreateTracks) // ADDED
+			// --- Upload Routes (Require Auth) ---
+			r.Route("/uploads/audio", func(r chi.Router) {
+				// Single File
+				r.Post("/request", uploadHandler.RequestUpload)
+				// Batch Files
+				r.Post("/batch/request", uploadHandler.RequestBatchUpload)
+			})
+			// Complete Upload Routes (Create Track Metadata)
+			r.Route("/audio/tracks", func(r chi.Router) {
+				r.Post("/", uploadHandler.CompleteUploadAndCreateTrack)                     // Single file completion
+				r.Post("/batch/complete", uploadHandler.CompleteBatchUploadAndCreateTracks) // Batch completion
+			})
 		})
 	})
 

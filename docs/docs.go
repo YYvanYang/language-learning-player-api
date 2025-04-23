@@ -84,7 +84,12 @@ const docTemplate = `{
         },
         "/audio/collections/{collectionId}": {
             "get": {
-                "description": "Retrieves details for a specific audio collection, including its metadata and ordered list of tracks.",
+                "security": [
+                    {
+                        "BearerAuth // Indicate auth might affect response or access": []
+                    }
+                ],
+                "description": "Retrieves details for a specific audio collection, including its metadata and ordered list of tracks. Backend verifies if user can view it.",
                 "produces": [
                     "application/json"
                 ],
@@ -112,6 +117,18 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Invalid Collection ID Format",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized (if collection is private and not owned)",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden (if user cannot access)",
                         "schema": {
                             "$ref": "#/definitions/httputil.ErrorResponseDTO"
                         }
@@ -1286,6 +1303,102 @@ const docTemplate = `{
                 }
             }
         },
+        "/users/me/collections": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieves a paginated list of audio collections owned by the currently authenticated user.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Audio Collections"
+                ],
+                "summary": "List my audio collections",
+                "operationId": "list-my-collections",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "default": "updatedAt",
+                        "description": "Sort field (e.g., createdAt, title, updatedAt)",
+                        "name": "sortBy",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "default": "desc",
+                        "description": "Sort direction (asc or desc)",
+                        "name": "sortDir",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Pagination limit",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "default": 0,
+                        "description": "Pagination offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated list of user's audio collections",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/dto.PaginatedResponseDTO"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/dto.AudioCollectionResponseDTO"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid Query Parameter Format",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponseDTO"
+                        }
+                    }
+                }
+            }
+        },
         "/users/me/progress": {
             "get": {
                 "security": [
@@ -2190,7 +2303,7 @@ const docTemplate = `{
             "name": "Authentication"
         },
         {
-            "description": "Operations related to user profiles.",
+            "description": "Operations related to user profiles and their specific resources. // MODIFIED Tag description",
             "name": "Users"
         },
         {

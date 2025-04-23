@@ -1,4 +1,6 @@
-// internal/port/params.go
+// ============================================
+// FILE: internal/port/params.go (MODIFIED)
+// ============================================
 package port
 
 import (
@@ -22,6 +24,14 @@ type ListTracksInput struct {
 	SortBy        string             // e.g., "createdAt", "title", "durationMs"
 	SortDirection string             // "asc" or "desc"
 	Page          pagination.Page    // Embed pagination parameters
+}
+
+// ADDED: Parameters for listing current user's collections
+type ListUserCollectionsParams struct {
+	UserID        domain.UserID
+	SortBy        string // e.g., "createdAt", "title", "updatedAt"
+	SortDirection string // "asc" or "desc"
+	Page          pagination.Page
 }
 
 // ListProgressInput defines parameters for listing user progress at the use case layer.

@@ -575,7 +575,7 @@ paths:
       - Audio Collections
     get:
       description: Retrieves details for a specific audio collection, including its
-        metadata and ordered list of tracks.
+        metadata and ordered list of tracks. Backend verifies if user can view it.
       operationId: get-collection-details
       parameters:
       - description: Audio Collection UUID
@@ -595,6 +595,14 @@ paths:
           description: Invalid Collection ID Format
           schema:
             $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "401":
+          description: Unauthorized (if collection is private and not owned)
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "403":
+          description: Forbidden (if user cannot access)
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
         "404":
           description: Collection Not Found
           schema:
@@ -603,6 +611,8 @@ paths:
           description: Internal Server Error (e.g., failed to fetch tracks)
           schema:
             $ref: '#/definitions/httputil.ErrorResponseDTO'
+      security:
+      - BearerAuth // Indicate auth might affect response or access: []
       summary: Get audio collection details
       tags:
       - Audio Collections
@@ -1349,6 +1359,69 @@ paths:
       summary: Delete a bookmark
       tags:
       - User Activity
+  /users/me/collections:
+    get:
+      description: Retrieves a paginated list of audio collections owned by the currently
+        authenticated user.
+      operationId: list-my-collections
+      parameters:
+      - default: updatedAt
+        description: Sort field (e.g., createdAt, title, updatedAt)
+        in: query
+        name: sortBy
+        type: string
+      - default: desc
+        description: Sort direction (asc or desc)
+        enum:
+        - asc
+        - desc
+        in: query
+        name: sortDir
+        type: string
+      - default: 20
+        description: Pagination limit
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      - default: 0
+        description: Pagination offset
+        in: query
+        minimum: 0
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated list of user's audio collections
+          schema:
+            allOf:
+            - $ref: '#/definitions/dto.PaginatedResponseDTO'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/dto.AudioCollectionResponseDTO'
+                  type: array
+              type: object
+        "400":
+          description: Invalid Query Parameter Format
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponseDTO'
+      security:
+      - BearerAuth: []
+      summary: List my audio collections
+      tags:
+      - Audio Collections
   /users/me/progress:
     get:
       description: Retrieves a paginated list of playback progress records for the
@@ -1489,7 +1562,8 @@ tags:
 - description: Operations related to user signup, login, and external authentication
     (e.g., Google).
   name: Authentication
-- description: Operations related to user profiles.
+- description: Operations related to user profiles and their specific resources. //
+    MODIFIED Tag description
   name: Users
 - description: Operations related to individual audio tracks, including retrieval
     and listing. Duration values in responses are in milliseconds.

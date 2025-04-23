@@ -51,6 +51,8 @@ type AudioContentUseCase interface {
 	UpdateCollectionMetadata(ctx context.Context, collectionID domain.CollectionID, title, description string) error
 	UpdateCollectionTracks(ctx context.Context, collectionID domain.CollectionID, orderedTrackIDs []domain.TrackID) error
 	DeleteCollection(ctx context.Context, collectionID domain.CollectionID) error
+	// ADDED: List collections for the authenticated user
+	ListUserCollections(ctx context.Context, params ListUserCollectionsParams) ([]*domain.AudioCollection, int, pagination.Page, error)
 }
 
 // UserActivityUseCase defines the methods for the User Activity use case layer.
