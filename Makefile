@@ -10,6 +10,8 @@ GO_TEST_FLAGS=./... -coverprofile=coverage.out
 # DSN for local database operations (Can be overridden by environment variable)
 # Example: export DATABASE_URL="postgresql://user:password@localhost:5432/language_learner_db?sslmode=disable"
 DATABASE_URL ?= postgresql://user:password@localhost:5432/language_learner_db?sslmode=disable
+# Network name (used by dependencies and optionally by docker-run if not using host network)
+DOCKER_NETWORK_NAME ?= language_player_net
 # PostgreSQL Docker settings (for local 'make deps-run')
 PG_CONTAINER_NAME ?= language-learner-postgres
 PG_USER ?= user
@@ -17,26 +19,49 @@ PG_PASSWORD ?= password
 PG_DB ?= language_learner_db
 PG_PORT ?= 5432
 PG_VERSION ?= 16
-PG_READY_TIMEOUT ?= 30 # Seconds to wait for PostgreSQL to be ready
+# Seconds to wait for PostgreSQL to be ready
+PG_READY_TIMEOUT ?= 30
+# Docker volume for postgres persistent data
+PG_VOLUME_NAME ?= pgdata
 # MinIO Docker settings (for local 'make deps-run')
 MINIO_CONTAINER_NAME ?= language-learner-minio
 MINIO_ROOT_USER ?= minioadmin
 MINIO_ROOT_PASSWORD ?= minioadmin
 MINIO_API_PORT ?= 9000
 MINIO_CONSOLE_PORT ?= 9001
-MINIO_BUCKET_NAME ?= language-audio # Ensure this matches config.development.yaml AND docker-compose.yml .env
-MINIO_READY_TIMEOUT ?= 30 # Seconds to wait for MinIO to be ready
+# Ensure this matches config.development.yaml AND docker-compose.yml .env
+MINIO_BUCKET_NAME ?= language-audio
+# Seconds to wait for MinIO to be ready
+MINIO_READY_TIMEOUT ?= 30
+# Docker volume for minio persistent data
+MINIO_VOLUME_NAME ?= miniodata
+# pgAdmin Docker settings (for local 'make deps-run')
+PGADMIN_CONTAINER_NAME ?= language-player-pgadmin
+# Use the latest pgAdmin 4 image
+PGADMIN_IMAGE_TAG ?= latest
+# Host port for pgAdmin web interface
+PGADMIN_PORT ?= 5050
+# Docker volume for pgAdmin persistent data
+PGADMIN_VOLUME_NAME ?= pgadmin_data
+# !! IMPORTANT: Set these in your .env file for security !!
+# Default initial login email for pgAdmin
+PGADMIN_DEFAULT_EMAIL ?= admin@example.com
+# Default initial login password for pgAdmin (OVERRIDE IN .env!)
+PGADMIN_DEFAULT_PASSWORD ?= admin
 # Migrate CLI path relative to project root
 MIGRATIONS_PATH=migrations
 # Swag CLI variables (if using swaggo/swag)
 SWAG_ENTRY_POINT=${CMD_PATH}/main.go
 SWAG_OUTPUT_DIR=./docs
 # Docker image settings (IMPORTANT: Customize for your Docker Hub/Registry)
-DOCKER_IMAGE_NAME ?= your-dockerhub-username/language-player-api # <<< CHANGE THIS
+# <<< CHANGE THIS
+DOCKER_IMAGE_NAME ?= your-dockerhub-username/language-player-api
 DOCKER_IMAGE_TAG ?= latest
-DOCKER_PLATFORM ?= linux/arm64 # Target platform for Raspberry Pi
+# Target platform for Raspberry Pi
+DOCKER_PLATFORM ?= linux/arm64
 DOCKER_BUILDX_PUSH_FLAGS=--platform $(DOCKER_PLATFORM) --push
-DOCKER_BUILDX_BUILD_FLAGS=--platform $(DOCKER_PLATFORM) --load # Use --load to build locally for the target platform
+# Use --load to build locally for the target platform
+DOCKER_BUILDX_BUILD_FLAGS=--platform $(DOCKER_PLATFORM) --load
 
 # --- Go Tools Installation ---
 GOPATH := $(shell go env GOPATH)
@@ -57,6 +82,7 @@ MOCKERY := $(GOBIN)/mockery
 	test test-unit test-integration test-cover lint fmt check-vuln \
 	docker-build docker-build-arm64 docker-build-push-arm64 docker-run docker-stop docker-push \
 	docker-postgres-run docker-postgres-stop docker-minio-run docker-minio-stop \
+	docker-pgadmin-run docker-pgadmin-stop \
 	help
 
 # Default target (often set to 'all' or 'help')
@@ -227,7 +253,7 @@ test-unit: tools
 	@go test $(GO_TEST_FLAGS) -short
 
 # Run only integration tests (requires Docker for deps)
-test-integration: tools deps-run # Start dependencies for integration tests
+test-integration: tools deps-run
 	@echo ">>> Running integration tests (requires Docker)..."
 	@echo ">>> Waiting for dependencies to be fully ready..."
 	@sleep 5 # Give extra time after deps-run checks pass
@@ -237,7 +263,7 @@ test-integration: tools deps-run # Start dependencies for integration tests
 	@echo ">>> Running integration tests (replace with your specific command)..."
 	@go test ./internal/adapter/repository/postgres/... -v
 	@echo ">>> Integration tests finished."
-	@make deps-stop # Stop dependencies after tests
+	@make deps-stop
 
 # Show test coverage in browser
 test-cover: test
@@ -254,7 +280,8 @@ lint: tools
 fmt:
 	@echo ">>> Formatting Go code..."
 	@go fmt ./...
-	@goimports -w . # Optional: run goimports if installed and preferred
+	# Optional: run goimports if installed and preferred
+	@goimports -w .
 
 # Check for known vulnerabilities
 check-vuln: tools
@@ -288,7 +315,7 @@ docker-build-push-arm64:
 docker-run:
 	@echo ">>> Running Docker container [$(BINARY_NAME)] using image [$(DOCKER_IMAGE_NAME):$(DOCKER_IMAGE_TAG)]..."
 	@echo ">>> Note: Assumes image for host arch exists. Run 'make docker-build' first."
-	@echo ">>> Note: Requires dependencies (Postgres/MinIO) to be running. Use 'make deps-run'."
+	@echo ">>> Note: Requires dependencies (Postgres/MinIO/pgAdmin) to be running. Use 'make deps-run'."
 	@docker run -d --name $(BINARY_NAME) \
 		-p 8080:8080 \
 		--network=host \
@@ -318,11 +345,23 @@ docker-postgres-run:
 	@docker stop $(PG_CONTAINER_NAME) > /dev/null 2>&1 || true
 	@docker rm $(PG_CONTAINER_NAME) > /dev/null 2>&1 || true
 	@echo ">>> Starting PostgreSQL container..."
+	@# Ensure the volume exists
+	@echo ">>> Ensuring volume [$(PG_VOLUME_NAME)] exists..."
+	@docker volume create $(PG_VOLUME_NAME) > /dev/null
+	@# Check if network exists, create if not
+	@echo ">>> Ensuring network [$(DOCKER_NETWORK_NAME)] exists..."
+	@docker network inspect $(DOCKER_NETWORK_NAME) > /dev/null 2>&1 || \
+		(echo ">>> Network $(DOCKER_NETWORK_NAME) not found, attempting to create..." && \
+		docker network create $(DOCKER_NETWORK_NAME) > /dev/null)
+	@# Run the container
+	@echo ">>> Running PostgreSQL container..."
 	@docker run --name $(PG_CONTAINER_NAME) \
 		-e POSTGRES_USER=$(PG_USER) \
 		-e POSTGRES_PASSWORD=$(PG_PASSWORD) \
 		-e POSTGRES_DB=$(PG_DB) \
 		-p $(PG_PORT):5432 \
+		--network=$(DOCKER_NETWORK_NAME) \
+		-v $(PG_VOLUME_NAME):/var/lib/postgresql/data \
 		-d postgres:$(PG_VERSION)-alpine > /dev/null
 	@echo ">>> Waiting for PostgreSQL to be ready (max $(PG_READY_TIMEOUT)s)..."
 	@timeout=$(PG_READY_TIMEOUT); \
@@ -335,7 +374,7 @@ docker-postgres-run:
 		fi; \
 		sleep 1; \
 	done
-	@echo ">>> PostgreSQL container [$(PG_CONTAINER_NAME)] started successfully."
+	@echo ">>> PostgreSQL container [$(PG_CONTAINER_NAME)] started successfully on network [$(DOCKER_NETWORK_NAME)]."
 	@echo ">>> Connection string for migrations: $(DATABASE_URL)"
 
 # Stop and remove PostgreSQL container
@@ -344,6 +383,9 @@ docker-postgres-stop:
 	@docker stop $(PG_CONTAINER_NAME) || true
 	@docker rm $(PG_CONTAINER_NAME) || true
 	@echo ">>> PostgreSQL container stopped and removed."
+	@# Optionally remove the volume if desired, typically kept for persistence
+	@# docker volume rm $(PG_VOLUME_NAME) || true
+
 
 # --- MinIO Docker (Local Dev Dependency) ---
 # Run MinIO in Docker container
@@ -352,11 +394,23 @@ docker-minio-run:
 	@docker stop $(MINIO_CONTAINER_NAME) > /dev/null 2>&1 || true
 	@docker rm $(MINIO_CONTAINER_NAME) > /dev/null 2>&1 || true
 	@echo ">>> Starting MinIO container..."
+	@# Ensure the volume exists
+	@echo ">>> Ensuring volume [$(MINIO_VOLUME_NAME)] exists..."
+	@docker volume create $(MINIO_VOLUME_NAME) > /dev/null
+	@# Check if network exists, create if not
+	@echo ">>> Ensuring network [$(DOCKER_NETWORK_NAME)] exists..."
+	@docker network inspect $(DOCKER_NETWORK_NAME) > /dev/null 2>&1 || \
+		(echo ">>> Network $(DOCKER_NETWORK_NAME) not found, attempting to create..." && \
+		docker network create $(DOCKER_NETWORK_NAME) > /dev/null)
+	@# Run the container
+	@echo ">>> Running MinIO container..."
 	@docker run --name $(MINIO_CONTAINER_NAME) \
 		-p $(MINIO_API_PORT):9000 \
 		-p $(MINIO_CONSOLE_PORT):9001 \
+		--network=$(DOCKER_NETWORK_NAME) \
 		-e MINIO_ROOT_USER=$(MINIO_ROOT_USER) \
 		-e MINIO_ROOT_PASSWORD=$(MINIO_ROOT_PASSWORD) \
+		-v $(MINIO_VOLUME_NAME):/data \
 		-d minio/minio server /data --console-address ":9001" > /dev/null
 	@echo ">>> Waiting for MinIO to be ready (max $(MINIO_READY_TIMEOUT)s)..."
 	@timeout=$(MINIO_READY_TIMEOUT); \
@@ -369,7 +423,7 @@ docker-minio-run:
 		fi; \
 		sleep 1; \
 	done
-	@echo ">>> MinIO container [$(MINIO_CONTAINER_NAME)] started successfully."
+	@echo ">>> MinIO container [$(MINIO_CONTAINER_NAME)] started successfully on network [$(DOCKER_NETWORK_NAME)]."
 	@echo ">>> MinIO API: http://localhost:$(MINIO_API_PORT)"
 	@echo ">>> MinIO Console: http://localhost:$(MINIO_CONSOLE_PORT) (Login: $(MINIO_ROOT_USER)/$(MINIO_ROOT_PASSWORD))"
 	@echo ">>> Ensuring bucket '$(MINIO_BUCKET_NAME)' exists..."
@@ -383,6 +437,58 @@ docker-minio-stop:
 	@docker stop $(MINIO_CONTAINER_NAME) || true
 	@docker rm $(MINIO_CONTAINER_NAME) || true
 	@echo ">>> MinIO container stopped and removed."
+	@# Optionally remove the volume if desired, typically kept for persistence
+	@# docker volume rm $(MINIO_VOLUME_NAME) || true
+
+# --- pgAdmin Docker (Local Dev Dependency) ---
+# Run pgAdmin 4 in Docker container
+docker-pgadmin-run:
+	@echo ">>> Ensuring pgAdmin container [$(PGADMIN_CONTAINER_NAME)] is running..."
+	@docker stop $(PGADMIN_CONTAINER_NAME) > /dev/null 2>&1 || true
+	@docker rm $(PGADMIN_CONTAINER_NAME) > /dev/null 2>&1 || true
+	@echo ">>> Starting pgAdmin container..."
+	@# Ensure the volume exists
+	@echo ">>> Ensuring volume [$(PGADMIN_VOLUME_NAME)] exists..."
+	@docker volume create $(PGADMIN_VOLUME_NAME) > /dev/null
+	@# Check if network exists, create if not
+	@echo ">>> Ensuring network [$(DOCKER_NETWORK_NAME)] exists..."
+	@docker network inspect $(DOCKER_NETWORK_NAME) > /dev/null 2>&1 || \
+		(echo ">>> Network $(DOCKER_NETWORK_NAME) not found, attempting to create..." && \
+		docker network create $(DOCKER_NETWORK_NAME) > /dev/null)
+	@# Check and warn if default password is used
+	@if [ "$(PGADMIN_DEFAULT_PASSWORD)" = "admin" ]; then \
+		echo ""; \
+		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"; \
+		echo "!! WARNING: Using default pgAdmin password ('admin').                 !!"; \
+		echo "!!          Set PGADMIN_DEFAULT_PASSWORD in your .env file for security! !!"; \
+		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"; \
+		echo ""; \
+	fi
+	@# Run the container
+	@echo ">>> Running pgAdmin container..."
+	@docker run --name $(PGADMIN_CONTAINER_NAME) \
+		-p $(PGADMIN_PORT):80 \
+		-e PGADMIN_DEFAULT_EMAIL=$(PGADMIN_DEFAULT_EMAIL) \
+		-e PGADMIN_DEFAULT_PASSWORD=$(PGADMIN_DEFAULT_PASSWORD) \
+		-v $(PGADMIN_VOLUME_NAME):/var/lib/pgadmin \
+		--network=$(DOCKER_NETWORK_NAME) \
+		-d dpage/pgadmin4:$(PGADMIN_IMAGE_TAG) > /dev/null
+	@echo ">>> Waiting briefly for pgAdmin to initialize..."
+	@sleep 5 # pgAdmin takes a moment to start, simple delay is often sufficient
+	@echo ">>> pgAdmin container [$(PGADMIN_CONTAINER_NAME)] started on network [$(DOCKER_NETWORK_NAME)]."
+	@echo ">>> Access pgAdmin at: http://localhost:$(PGADMIN_PORT)"
+	@echo ">>> Login with Email: $(PGADMIN_DEFAULT_EMAIL) / Password: [Check .env or default]"
+	@echo ">>> Connect to database using Hostname: '$(PG_CONTAINER_NAME)', Port: 5432, DB: '$(PG_DB)', User: '$(PG_USER)'"
+
+# Stop and remove pgAdmin container
+docker-pgadmin-stop:
+	@echo ">>> Stopping and removing pgAdmin container [$(PGADMIN_CONTAINER_NAME)]..."
+	@docker stop $(PGADMIN_CONTAINER_NAME) || true
+	@docker rm $(PGADMIN_CONTAINER_NAME) || true
+	@echo ">>> pgAdmin container stopped and removed."
+	@# Optionally remove the volume if desired, typically kept for persistence
+	@# docker volume rm $(PGADMIN_VOLUME_NAME) || true
+
 
 # --- Help ---
 # Show help message
@@ -391,8 +497,8 @@ help:
 	@echo ""
 	@echo "Local Development (on your PC/Mac/Surface):"
 	@echo "  run               Run the application using 'go run' (requires dependencies running)"
-	@echo "  deps-run          Start local PostgreSQL and MinIO containers"
-	@echo "  deps-stop         Stop local PostgreSQL and MinIO containers"
+	@echo "  deps-run          Start local PostgreSQL, MinIO, and pgAdmin containers"
+	@echo "  deps-stop         Stop local PostgreSQL, MinIO, and pgAdmin containers"
 	@echo "  tools             Install necessary Go CLI tools (migrate, swag, lint, vulncheck, mockery)"
 	@echo "  fmt               Format Go code using go fmt and goimports"
 	@echo "  lint              Run golangci-lint"
@@ -432,6 +538,8 @@ help:
 	@echo "  docker-postgres-stop   Stop and remove PostgreSQL Docker container locally"
 	@echo "  docker-minio-run       Start MinIO in Docker container locally"
 	@echo "  docker-minio-stop      Stop and remove MinIO Docker container locally"
+	@echo "  docker-pgadmin-run     Start pgAdmin 4 in Docker container locally (requires .env for secure password)"
+	@echo "  docker-pgadmin-stop    Stop and remove pgAdmin 4 Docker container locally"
 	@echo ""
 	@echo "Raspberry Pi Deployment Workflow:"
 	@echo "  1. (On your Surface) Customize DOCKER_IMAGE_NAME in Makefile (e.g., your Docker Hub username)."
@@ -442,12 +550,20 @@ help:
 	@echo "  6. (On your Pi) Create 'docker-compose.yml' and '.env' files in that directory (see examples/docs)."
 	@echo "     -> IMPORTANT: Update image name in docker-compose.yml to match Step 1."
 	@echo "     -> IMPORTANT: Configure volumes in docker-compose.yml to use your SSD path."
-	@echo "     -> IMPORTANT: Set strong passwords and secrets in .env."
+	@echo "     -> IMPORTANT: Set strong passwords and secrets in .env (incl. PGADMIN_*)."
 	@echo "  7. (On your Pi) Run 'cd ~/language-player-deployment && docker compose up -d' to start services."
 	@echo "  8. (On your Pi/Surface) Run database migrations (e.g., 'export DATABASE_URL=... && make migrate-up' from Surface)."
 	@echo "  9. (On your Pi/Surface) Create the MinIO bucket ('language-audio') via console or 'mc'."
 	@echo "  10. (On your Pi) Check logs: 'docker compose logs -f'"
 	@echo "  11. (On your Pi) Stop services: 'docker compose down'"
+	@echo ""
+	@echo "Environment Variables (Set in .env file for local runs):"
+	@echo "  DATABASE_URL           Required for 'make migrate-*' commands"
+	@echo "  JWT_SECRETKEY          Required for 'make run' or 'make docker-run'"
+	@echo "  MINIO_*                Required for 'make run' or 'make docker-run'"
+	@echo "  GOOGLE_*               Required for 'make run' or 'make docker-run' if using Google Login"
+	@echo "  PGADMIN_DEFAULT_EMAIL  Required for 'make deps-run' (default: admin@example.com)"
+	@echo "  PGADMIN_DEFAULT_PASSWORD Required for 'make deps-run' (default: admin - OVERRIDE!)"
 	@echo ""
 	@echo "Other:"
 	@echo "  help              Show this help message"
@@ -456,8 +572,8 @@ help:
 .DEFAULT_GOAL := help
 
 # --- Convenience Targets ---
-# Start local development dependencies (PostgreSQL + MinIO)
-deps-run: docker-postgres-run docker-minio-run
+# Start local development dependencies (PostgreSQL + MinIO + pgAdmin)
+deps-run: docker-postgres-run docker-minio-run docker-pgadmin-run
 
 # Stop local development dependencies
-deps-stop: docker-postgres-stop docker-minio-stop
+deps-stop: docker-postgres-stop docker-minio-stop docker-pgadmin-stop
