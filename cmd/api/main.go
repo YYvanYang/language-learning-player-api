@@ -1,5 +1,5 @@
 // ============================================
-// FILE: cmd/api/main.go (REFINED)
+// FILE: cmd/api/main.go (FINAL VERIFIED VERSION with COMMENTS)
 // ============================================
 package main
 
@@ -198,69 +198,76 @@ func main() {
 		// No specific middleware for this group, inherits from parent
 		r.Group(func(public chi.Router) {
 			// Authentication Endpoints (Public actions)
+			// Uses authHandler
 			public.Post("/auth/register", authHandler.Register)
 			public.Post("/auth/login", authHandler.Login)
 			public.Post("/auth/google/callback", authHandler.GoogleCallback)
-			public.Post("/auth/refresh", authHandler.Refresh) // Refresh token endpoint is typically public
+			public.Post("/auth/refresh", authHandler.Refresh)
 
 			// Public Audio Content Retrieval
-			// Uses the `audioHandler.ListTracks` function
+			// Uses audioHandler
 			public.Get("/audio/tracks", audioHandler.ListTracks)
-			// Uses the `audioHandler.GetTrackDetails` function (handler checks auth internally for extra data)
-			public.Get("/audio/tracks/{trackId}", audioHandler.GetTrackDetails)
-			// Uses the `audioHandler.GetCollectionDetails` function (handler checks auth internally)
-			public.Get("/audio/collections/{collectionId}", audioHandler.GetCollectionDetails)
+			public.Get("/audio/tracks/{trackId}", audioHandler.GetTrackDetails) // Track detail potentially public
 		})
 
 		// --- Protected API Routes (Authentication Required) ---
 		// Apply the authentication middleware to all routes in this group
 		r.Group(func(protected chi.Router) {
-			protected.Use(middleware.Authenticator(secHelper))
+			protected.Use(middleware.Authenticator(secHelper)) // Apply JWT authentication
 
-			// --- Logout (Requires knowing *who* is logging out) ---
+			// --- Logout (Requires auth to know *who* is logging out) ---
+			// Uses authHandler
 			protected.Post("/auth/logout", authHandler.Logout)
 
 			// --- User Profile Routes ---
+			// Uses userHandler and audioHandler
 			protected.Route("/users/me", func(me chi.Router) {
-				me.Get("/", userHandler.GetMyProfile)
-				me.Get("/collections", audioHandler.ListMyCollections) // List user's own collections
-				// User Activity (Progress)
+				me.Get("/", userHandler.GetMyProfile)                  // Uses userHandler
+				me.Get("/collections", audioHandler.ListMyCollections) // Uses audioHandler (List OWN collections)
+				// User Activity (Progress) - Uses activityHandler
 				me.Route("/progress", func(progress chi.Router) {
-					progress.Get("/", activityHandler.ListProgress)         // List user's progress
-					progress.Post("/", activityHandler.RecordProgress)      // Record progress for a track
-					progress.Get("/{trackId}", activityHandler.GetProgress) // Get specific track progress
+					progress.Get("/", activityHandler.ListProgress)
+					progress.Post("/", activityHandler.RecordProgress)
+					progress.Get("/{trackId}", activityHandler.GetProgress)
 				})
-				// User Activity (Bookmarks)
+				// User Activity (Bookmarks) - Uses activityHandler
 				me.Route("/bookmarks", func(bookmarks chi.Router) {
-					bookmarks.Get("/", activityHandler.ListBookmarks)                 // List user's bookmarks
-					bookmarks.Post("/", activityHandler.CreateBookmark)               // Create a bookmark
-					bookmarks.Delete("/{bookmarkId}", activityHandler.DeleteBookmark) // Delete a specific bookmark
+					bookmarks.Get("/", activityHandler.ListBookmarks)
+					bookmarks.Post("/", activityHandler.CreateBookmark)
+					bookmarks.Delete("/{bookmarkId}", activityHandler.DeleteBookmark)
 				})
 			})
 
 			// --- Audio Collection Management Routes ---
+			// Uses audioHandler
 			protected.Route("/audio/collections", func(collections chi.Router) {
 				collections.Post("/", audioHandler.CreateCollection) // Create new collection
-				// Routes for a specific collection (owned by user)
+				// Routes for a specific collection
 				collections.Route("/{collectionId}", func(collection chi.Router) {
-					// GET /{collectionId} is public (defined above)
-					collection.Put("/", audioHandler.UpdateCollectionMetadata)     // Update metadata
-					collection.Delete("/", audioHandler.DeleteCollection)          // Delete collection
-					collection.Put("/tracks", audioHandler.UpdateCollectionTracks) // Update tracks list
+					collection.Get("/", audioHandler.GetCollectionDetails)
+					collection.Put("/", audioHandler.UpdateCollectionMetadata)
+					collection.Delete("/", audioHandler.DeleteCollection)
+					collection.Put("/tracks", audioHandler.UpdateCollectionTracks)
 				})
 			})
 
 			// --- Upload Request Routes (Need auth to know who is uploading) ---
+			// Uses uploadHandler
 			protected.Route("/uploads/audio", func(upload chi.Router) {
-				upload.Post("/request", uploadHandler.RequestUpload)            // Request URL for single file
-				upload.Post("/batch/request", uploadHandler.RequestBatchUpload) // Request URLs for multiple files
+				upload.Post("/request", uploadHandler.RequestUpload)
+				upload.Post("/batch/request", uploadHandler.RequestBatchUpload)
 			})
 
 			// --- Upload Completion / Track Creation Routes (Need auth for ownership) ---
-			// POST to create a new track resource *after* upload
+			// Uses uploadHandler
 			protected.Post("/audio/tracks", uploadHandler.CompleteUploadAndCreateTrack)
-			// POST to create multiple track resources *after* batch upload
 			protected.Post("/audio/tracks/batch/complete", uploadHandler.CompleteBatchUploadAndCreateTracks)
+
+			// --- Admin Routes Placeholder (Could be further nested or have dedicated middleware) ---
+			// protected.Route("/admin", func(admin chi.Router) {
+			// 	admin.Use(middleware.RequireAdminRole) // Example Admin Role Check Middleware
+			// 	// admin.Get("/users", ...)
+			// })
 		})
 	})
 
@@ -281,29 +288,32 @@ func main() {
 
 	go func() {
 		appLogger.Info("Starting server", "address", srv.Addr)
-		serverErrors <- srv.ListenAndServe()
+		serverErrors <- srv.ListenAndServe() // This blocks until server stops
 	}()
 
 	// Block until a signal is received or server exits unexpectedly
 	select {
 	case err := <-serverErrors:
+		// Server exited unexpectedly (e.g., port conflict, listener error)
 		if !errors.Is(err, http.ErrServerClosed) {
 			appLogger.Error("Server failed to start or encountered an error", "error", err)
 			// Optional: Attempt cleanup before forceful exit
 			dbPool.Close()
-			os.Exit(1)
+			os.Exit(1) // Exit with error code
 		}
-		// If ErrServerClosed, it means Shutdown was called, proceed normally
+		// If ErrServerClosed, it means Shutdown was called, proceed normally below
 	case <-ctx.Done():
-		// Shutdown signal received
+		// Shutdown signal received (SIGINT or SIGTERM)
 		stop() // Prevent context cancellation from multiple signals
 		appLogger.Info("Shutting down server gracefully, press Ctrl+C again to force")
 
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second) // Context for shutdown
+		// Create a context with a timeout for the shutdown process
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
 		// Attempt graceful server shutdown
 		if err := srv.Shutdown(shutdownCtx); err != nil {
+			// Error during shutdown (e.g., timeout exceeded)
 			appLogger.Error("Server forced to shutdown", "error", err)
 		}
 
